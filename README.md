@@ -4,16 +4,13 @@ A GUI-based study and quiz application built in Go, inspired by suckless sent. D
 
 ## Install
 
-Ensure you have Go installed on your system.
+Requires Go.
 
 ```bash
-./install.sh
+make clean install
 ```
 
-This builds the binary and copies it to `~/.local/bin/study`. Then run it with:
-```bash
-study path/to/your/deck.deck
-```
+Installs to `~/.local/bin` by default. Override with `PREFIX=/usr/local sudo make clean install`.
 
 ## Creating a `.deck` File
 
