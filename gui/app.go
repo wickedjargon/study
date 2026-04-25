@@ -273,13 +273,13 @@ func (a *App) handleKey(ev xevent.KeyPressEvent) {
 				a.saveProgress()
 			}
 			a.render()
-		case "q":
+		case "Escape":
 			a.quit()
 		}
 
 	case quiz.Done:
 		switch key {
-		case "q", "Return":
+		case "Escape", "Return":
 			a.quit()
 		}
 	}
@@ -302,7 +302,7 @@ func (a *App) handleChoiceKey(key string) {
 			}
 		}
 		a.render()
-	case "q":
+	case "Escape":
 		a.quit()
 	}
 }
@@ -472,7 +472,7 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 		}
 
 		// Help.
-		help := fmt.Sprintf("1-%d: answer  |  q: quit", len(opts))
+		help := fmt.Sprintf("1-%d: answer  |  esc: quit", len(opts))
 		a.drawTextCentered(canvas, help, a.height-padding, a.fontSmall, dimColor)
 	}
 }
@@ -546,7 +546,7 @@ func (a *App) renderResult(canvas *image.RGBA) {
 	}
 
 	// Help.
-	a.drawTextCentered(canvas, "enter: continue  •  q: quit", a.height-padding, a.fontSmall, dimColor)
+	a.drawTextCentered(canvas, "enter: continue  •  esc: quit", a.height-padding, a.fontSmall, dimColor)
 }
 
 func (a *App) renderSummary(canvas *image.RGBA) {
@@ -607,7 +607,7 @@ func (a *App) renderSummary(canvas *image.RGBA) {
 		y += 32
 	}
 
-	a.drawTextCentered(canvas, "q: exit", a.height-padding, a.fontSmall, dimColor)
+	a.drawTextCentered(canvas, "esc: exit", a.height-padding, a.fontSmall, dimColor)
 }
 
 // ── Drawing Helpers ─────────────────────────────────────────────────

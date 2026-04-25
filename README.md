@@ -198,8 +198,7 @@ Name the 4 tones in Mandarin
 | Type + `Enter`   | Submit answer (type mode)       |
 | `Backspace`      | Delete character (type mode)    |
 | `Enter` / `Space`| Continue after result           |
-| `q`              | Quit (choice mode / result)     |
-| `Escape`         | Quit (type mode)                |
+| `Escape`         | Quit                            |
 
 ## How It Works
 
