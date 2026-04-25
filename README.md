@@ -1,6 +1,6 @@
 # study
 
-A suckless quiz tool. Plain-text deck files, X11 GUI, spaced repetition.
+A quiz tool inspired by suckless sent. Plain-text deck files, X11 GUI, spaced repetition.
 
 ## Install
 
