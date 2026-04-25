@@ -105,7 +105,6 @@ Mix choice and type-in cards in the same deck:
 
 ```
 # mode: choice
-
 What is 1 + 1?
 ---
 2
@@ -124,7 +123,6 @@ Override how many options appear for a specific card:
 
 ```
 # choices: 3
-
 What is 5 - 1?
 ---
 4
