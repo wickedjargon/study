@@ -1,21 +1,18 @@
 # study
 
-A GUI-based study and quiz application built in Go, inspired by suckless sent. Features support for custom `.deck` files, multiple choice and type-in questions, and spaced repetition progress tracking.
+A GUI-based study and quiz application built in Go, inspired by suckless sent. Deck files are plain text. Both multiple choice and type-in question modes are supported.
 
-## Building and Running
+## Install
 
 Ensure you have Go installed on your system.
 
-### Build
-To build the project into an executable binary:
 ```bash
-go build -o study
+./install.sh
 ```
 
-### Run
-To run the study application, provide it with the path to a `.deck` file:
+This builds the binary and copies it to `~/.local/bin/study`. Then run it with:
 ```bash
-./study path/to/your/deck.deck
+study path/to/your/deck.deck
 ```
 
 ## Creating a `.deck` File
