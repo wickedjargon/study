@@ -189,3 +189,32 @@ func TestCardIDStable(t *testing.T) {
 		t.Error("different content should produce different IDs")
 	}
 }
+
+func TestParsePerCardChoices(t *testing.T) {
+	content := `# choices: 4
+
+q1
+---
+a1
+
+# choices: 6
+q2
+---
+a2
+`
+	path := writeTempDeck(t, content)
+	d, err := Parse(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(d.Cards) != 2 {
+		t.Fatalf("expected 2 cards, got %d", len(d.Cards))
+	}
+	if d.Cards[0].Choices != 0 {
+		t.Errorf("expected card 0 choices=0 (deck default), got %d", d.Cards[0].Choices)
+	}
+	if d.Cards[1].Choices != 6 {
+		t.Errorf("expected card 1 choices=6, got %d", d.Cards[1].Choices)
+	}
+}

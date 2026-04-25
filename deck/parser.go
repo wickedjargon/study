@@ -46,6 +46,7 @@ type Card struct {
 	AnswerText  string    // plain text of the answer (for choice generation)
 	Distractors []string  // optional custom wrong answers
 	Mode        QuizMode  // per-card mode (choice or type)
+	Choices     int       // per-card choice count (0 = use deck default)
 }
 
 // QuizMode determines how answers are submitted.
@@ -173,6 +174,7 @@ func splitBlocks(lines []string) [][]string {
 func parseCard(block []string, baseDir string, defaultMode QuizMode) (*Card, error) {
 	// Check for per-card metadata before filtering comments.
 	cardMode := defaultMode
+	cardChoices := 0
 	for _, line := range block {
 		trimmed := strings.TrimSpace(line)
 		if after, ok := strings.CutPrefix(trimmed, "# mode:"); ok {
@@ -181,6 +183,12 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode) (*Card, err
 				cardMode = ModeType
 			case "choice":
 				cardMode = ModeChoice
+			}
+		}
+		if after, ok := strings.CutPrefix(trimmed, "# choices:"); ok {
+			n, err := strconv.Atoi(strings.TrimSpace(after))
+			if err == nil && n >= 2 {
+				cardChoices = n
 			}
 		}
 	}
@@ -261,6 +269,7 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode) (*Card, err
 		AnswerText:  answerText,
 		Distractors: distractors,
 		Mode:        cardMode,
+		Choices:     cardChoices,
 	}
 
 	return card, nil

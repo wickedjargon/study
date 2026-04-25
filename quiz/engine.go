@@ -334,13 +334,18 @@ func (e *Engine) requeueCard(card *deck.Card) {
 
 // generateChoices builds the multiple choice options for a card.
 func (e *Engine) generateChoices(card *deck.Card) ([]string, int) {
-	choices := make([]string, 0, e.choices)
+	numChoices := e.choices
+	if card.Choices > 0 {
+		numChoices = card.Choices
+	}
+
+	choices := make([]string, 0, numChoices)
 	choices = append(choices, card.AnswerText)
 	used := map[string]bool{card.AnswerText: true}
 
 	// Use custom distractors first.
 	for _, d := range card.Distractors {
-		if len(choices) >= e.choices {
+		if len(choices) >= numChoices {
 			break
 		}
 		if !used[d] {
@@ -350,7 +355,7 @@ func (e *Engine) generateChoices(card *deck.Card) ([]string, int) {
 	}
 
 	// Fill remaining from other cards' answers.
-	if len(choices) < e.choices {
+	if len(choices) < numChoices {
 		// Build pool of other answers, shuffled.
 		pool := make([]string, 0)
 		for _, c := range e.allCards {
@@ -362,7 +367,7 @@ func (e *Engine) generateChoices(card *deck.Card) ([]string, int) {
 			pool[i], pool[j] = pool[j], pool[i]
 		})
 		for _, p := range pool {
-			if len(choices) >= e.choices {
+			if len(choices) >= numChoices {
 				break
 			}
 			choices = append(choices, p)
