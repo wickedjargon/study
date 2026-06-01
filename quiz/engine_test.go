@@ -158,6 +158,71 @@ func TestEngineRetryGraduation(t *testing.T) {
 	}
 }
 
+func TestEngineTimeLimit(t *testing.T) {
+	d := testDeck(3)
+	d.TimeLimit = 12          // deck-global default
+	d.Cards[1].TimeLimit = 5  // per-card override
+	d.Cards[2].TimeLimit = -1 // explicitly unlimited
+
+	e := NewEngine(d, false, 0, nil) // sequential order preserved
+
+	answerCorrectly := func() {
+		opts := e.Options()
+		for i, o := range opts {
+			if o == e.Current().AnswerText {
+				e.Answer(i)
+				return
+			}
+		}
+		t.Fatal("correct answer not in options")
+	}
+
+	// Card 0 inherits the deck default.
+	if got := e.TimeLimit(); got != 12 {
+		t.Errorf("card 0: expected 12, got %d", got)
+	}
+
+	// Advance to card 1 (override) and card 2 (unlimited). Answering
+	// correctly re-queues each card to the back, so order is preserved.
+	answerCorrectly()
+	e.Next()
+	if got := e.TimeLimit(); got != 5 {
+		t.Errorf("card 1: expected 5, got %d", got)
+	}
+	answerCorrectly()
+	e.Next()
+	if got := e.TimeLimit(); got != 0 {
+		t.Errorf("card 2: expected 0 (unlimited), got %d", got)
+	}
+}
+
+func TestEngineAnswerTimeout(t *testing.T) {
+	d := testDeck(4)
+	e := NewEngine(d, false, 0, nil)
+
+	card := e.Current()
+	result := e.AnswerTimeout()
+	if result == nil {
+		t.Fatal("expected a result")
+	}
+	if result.Correct {
+		t.Error("timeout should never be correct")
+	}
+	if !result.TimedOut {
+		t.Error("expected TimedOut to be true")
+	}
+	if e.State() != ShowResult {
+		t.Error("expected ShowResult state")
+	}
+	if e.TotalWrong != 1 {
+		t.Errorf("expected 1 wrong, got %d", e.TotalWrong)
+	}
+	// A timed-out card is queued for retry, like any wrong answer.
+	if len(e.retry) != 1 || e.retry[0].card.ID != card.ID {
+		t.Error("expected timed-out card in retry queue")
+	}
+}
+
 func TestEngineChoiceCountClamped(t *testing.T) {
 	d := testDeck(2)
 	e := NewEngine(d, false, 10, nil) // request 10 choices but only 2 cards

@@ -190,6 +190,83 @@ func TestCardIDStable(t *testing.T) {
 	}
 }
 
+func TestParseTimeLimitMetadata(t *testing.T) {
+	content := `# time: 15
+
+q1
+---
+a1
+
+# time: 30s
+q2
+---
+a2
+
+# time: none
+q3
+---
+a3
+
+q4
+---
+a4
+`
+	path := writeTempDeck(t, content)
+	d, err := Parse(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if d.TimeLimit != 15 {
+		t.Errorf("expected deck TimeLimit=15, got %d", d.TimeLimit)
+	}
+	if len(d.Cards) != 4 {
+		t.Fatalf("expected 4 cards, got %d", len(d.Cards))
+	}
+
+	// Card 0: no per-card line → inherits deck default (0 = inherit).
+	if d.Cards[0].TimeLimit != 0 {
+		t.Errorf("card 0: expected TimeLimit=0 (inherit), got %d", d.Cards[0].TimeLimit)
+	}
+	if got := d.Cards[0].EffectiveTimeLimit(d.TimeLimit); got != 15 {
+		t.Errorf("card 0: expected effective 15, got %d", got)
+	}
+
+	// Card 1: per-card override "30s".
+	if d.Cards[1].TimeLimit != 30 {
+		t.Errorf("card 1: expected TimeLimit=30, got %d", d.Cards[1].TimeLimit)
+	}
+	if got := d.Cards[1].EffectiveTimeLimit(d.TimeLimit); got != 30 {
+		t.Errorf("card 1: expected effective 30, got %d", got)
+	}
+
+	// Card 2: "none" → explicitly unlimited (-1), effective 0 despite deck default.
+	if d.Cards[2].TimeLimit != -1 {
+		t.Errorf("card 2: expected TimeLimit=-1 (none), got %d", d.Cards[2].TimeLimit)
+	}
+	if got := d.Cards[2].EffectiveTimeLimit(d.TimeLimit); got != 0 {
+		t.Errorf("card 2: expected effective 0 (unlimited), got %d", got)
+	}
+
+	// Card 3: no line, inherits deck default.
+	if got := d.Cards[3].EffectiveTimeLimit(d.TimeLimit); got != 15 {
+		t.Errorf("card 3: expected effective 15, got %d", got)
+	}
+}
+
+func TestEffectiveTimeLimitNoDeckDefault(t *testing.T) {
+	// With no deck-global limit, an un-annotated card has no limit.
+	c := Card{TimeLimit: 0}
+	if got := c.EffectiveTimeLimit(0); got != 0 {
+		t.Errorf("expected 0, got %d", got)
+	}
+	// A per-card limit still applies even without a deck default.
+	c2 := Card{TimeLimit: 20}
+	if got := c2.EffectiveTimeLimit(0); got != 20 {
+		t.Errorf("expected 20, got %d", got)
+	}
+}
+
 func TestParsePerCardChoices(t *testing.T) {
 	content := `# choices: 4
 

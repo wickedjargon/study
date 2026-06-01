@@ -19,11 +19,12 @@ const (
 
 // Result records the outcome of answering a single card.
 type Result struct {
-	Card    *deck.Card
-	Chosen  int    // index of chosen answer (0-based, -1 for type mode)
-	Correct bool
-	Answer  string // the correct answer text
-	Typed   string // what the user typed (type mode only)
+	Card     *deck.Card
+	Chosen   int    // index of chosen answer (0-based, -1 for type mode/timeout)
+	Correct  bool
+	Answer   string // the correct answer text
+	Typed    string // what the user typed (type mode only)
+	TimedOut bool   // true if the card's time limit expired before answering
 }
 
 // Engine drives the quiz session.
@@ -209,6 +210,39 @@ func (e *Engine) AnswerTyped(input string) *Result {
 		e.TotalWrong++
 		e.handleWrong()
 	}
+
+	e.state = ShowResult
+	return result
+}
+
+// TimeLimit returns the time limit in seconds for the current card, taking
+// the deck-global limit and any per-card override into account. A return of
+// 0 means the current card has no time limit.
+func (e *Engine) TimeLimit() int {
+	if e.current == nil {
+		return 0
+	}
+	return e.current.EffectiveTimeLimit(e.deck.TimeLimit)
+}
+
+// AnswerTimeout records the current card as wrong because its time limit
+// expired before the user answered. Transitions to ShowResult.
+func (e *Engine) AnswerTimeout() *Result {
+	if e.state != ShowQuestion || e.current == nil {
+		return nil
+	}
+
+	result := &Result{
+		Card:     e.current,
+		Chosen:   -1,
+		Correct:  false,
+		Answer:   e.current.AnswerText,
+		TimedOut: true,
+	}
+
+	e.TotalSeen++
+	e.TotalWrong++
+	e.handleWrong()
 
 	e.state = ShowResult
 	return result

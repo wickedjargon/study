@@ -21,6 +21,7 @@ study [flags] <deck-file>
 | Flag             | Description                              |
 |------------------|------------------------------------------|
 | `--choices N`    | Number of answer choices (overrides deck) |
+| `--time N`       | Per-question time limit in seconds, `0` to disable (overrides deck) |
 | `--sequential`   | Present cards in deck order (default: shuffled) |
 | `--reset`        | Clear progress for this deck             |
 | `--help`         | Show help                                |
@@ -46,6 +47,7 @@ Comments at the top of the file configure deck-wide settings:
 # mode: choice
 # choices: 4
 # case: insensitive
+# time: 20
 ```
 
 | Header           | Values                  | Default       |
@@ -53,6 +55,7 @@ Comments at the top of the file configure deck-wide settings:
 | `# mode:`        | `choice`, `type`        | `choice`      |
 | `# choices:`     | any integer ≥ 2         | `4`           |
 | `# case:`        | `sensitive`, `insensitive` | `sensitive` |
+| `# time:`        | seconds (e.g. `20`, `20s`), or `none` | none (no limit) |
 
 ## Features
 
@@ -135,6 +138,46 @@ What is 9 + 9?
 
 The first card shows 3 options (deck default). The second card shows 6.
 
+### Time limits
+
+Give every question a countdown with the deck-level `# time:` header (seconds).
+When the timer runs out, the card is counted as wrong and queued for retry — just
+like an incorrect answer. A live countdown is shown in the top-right corner.
+
+```
+# time: 15
+
+What is the capital of France?
+---
+Paris
+```
+
+Any card can override the deck-wide limit with its own `# time:` line. Use a
+number to set a different limit, or `none` (or `0`) to remove the limit for that
+one card:
+
+```
+# time: 10
+
+Quick: 2 + 2?
+---
+4
+
+# time: 30
+Take your time — explain photosynthesis in one word.
+---
+light
+
+# time: none
+No rush on this one.
+---
+ok
+```
+
+The first card uses the deck default (10s), the second allows 30s, and the third
+has no limit. The `--time N` flag overrides the deck-wide default from the command
+line (`--time 0` disables it); per-card overrides still apply.
+
 ### Images
 
 Show an image as part of the question with `@img`:
@@ -200,7 +243,7 @@ Name the 4 tones in Mandarin
 
 ## How It Works
 
-- Wrong answers are repeated immediately, then re-queued for 3 additional correct attempts before graduating.
+- Wrong answers (including questions that hit their time limit) are repeated immediately, then re-queued for 3 additional correct attempts before graduating.
 - Confidence scores are tracked per card. High-confidence cards appear less often.
 - Progress is saved to `~/.local/share/study/` and persists between sessions.
 - Theme is detected automatically (dark/light) via gsettings or `~/.config/theme-mode`.

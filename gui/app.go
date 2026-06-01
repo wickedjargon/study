@@ -133,6 +133,10 @@ type App struct {
 	width  int
 	height int
 
+	// deadline is when the current question's timer expires.
+	// Zero means the current card has no time limit.
+	deadline time.Time
+
 	// Fonts.
 	fontRegular font.Face
 	fontBold    font.Face
@@ -219,6 +223,9 @@ func Run(engine *quiz.Engine, viewer *media.Viewer, store *progress.Store) error
 	// Play audio if any.
 	app.playQuestionAudio()
 
+	// Start the countdown for the first card (if it has a time limit).
+	app.startTimer()
+
 	// Set up event handlers.
 	keybind.Initialize(xu)
 
@@ -239,9 +246,68 @@ func Run(engine *quiz.Engine, viewer *media.Viewer, store *progress.Store) error
 	// Initial render.
 	app.render()
 
-	// Main event loop.
-	xevent.Main(xu)
-	return nil
+	// Main event loop. We use MainPing instead of the simpler xevent.Main so
+	// we can interleave a periodic timer tick that drives the per-question
+	// countdown. The pingBefore/pingAfter handshake guarantees that X event
+	// callbacks (key presses, etc.) never run concurrently with a timer tick.
+	pingBefore, pingAfter, pingQuit := xevent.MainPing(xu)
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-pingBefore:
+			<-pingAfter
+		case <-ticker.C:
+			app.tick()
+		case <-pingQuit:
+			return nil
+		}
+	}
+}
+
+// startTimer arms the countdown for the current question. If the current card
+// has no time limit, the deadline is cleared.
+func (a *App) startTimer() {
+	secs := a.engine.TimeLimit()
+	if secs > 0 {
+		a.deadline = time.Now().Add(time.Duration(secs) * time.Second)
+	} else {
+		a.deadline = time.Time{}
+	}
+}
+
+// tick is called periodically from the event loop. While a question with a
+// time limit is showing, it re-renders the countdown and, once the deadline
+// passes, records the card as wrong.
+func (a *App) tick() {
+	if a.deadline.IsZero() || a.engine.State() != quiz.ShowQuestion {
+		return
+	}
+	if time.Now().Before(a.deadline) {
+		a.render() // update the on-screen countdown
+		return
+	}
+	// Time's up — count the card as wrong, just like an incorrect answer.
+	a.deadline = time.Time{}
+	a.result = a.engine.AnswerTimeout()
+	if a.result != nil {
+		a.store.RecordWrong(a.result.Card.ID)
+	}
+	a.render()
+}
+
+// secondsLeft returns the whole seconds remaining on the current question's
+// timer, or -1 if there is no active time limit.
+func (a *App) secondsLeft() int {
+	if a.deadline.IsZero() {
+		return -1
+	}
+	d := time.Until(a.deadline)
+	if d < 0 {
+		return 0
+	}
+	// Round up so the display counts N..1 rather than N-1..0.
+	return int((d + time.Second - 1) / time.Second)
 }
 
 // ── Event Handling ──────────────────────────────────────────────────
@@ -268,7 +334,9 @@ func (a *App) handleKey(ev xevent.KeyPressEvent) {
 			if a.engine.State() == quiz.ShowQuestion {
 				a.loadQuestionImage()
 				a.playQuestionAudio()
+				a.startTimer()
 			} else if a.engine.State() == quiz.Done {
+				a.deadline = time.Time{}
 				a.viewer.CloseAll()
 				a.saveProgress()
 			}
@@ -436,6 +504,15 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 		prog += "  ↻ retry"
 	}
 	a.drawText(canvas, prog, padding, y, a.fontSmall, dimColor)
+
+	// Countdown timer (top-right), if the card has a time limit.
+	if secs := a.secondsLeft(); secs >= 0 {
+		timerColor := yellowColor
+		if secs <= 3 {
+			timerColor = redColor
+		}
+		a.drawTextRight(canvas, fmt.Sprintf("%ds", secs), a.width-padding, y, a.fontSmall, timerColor)
+	}
 	y += 30
 
 	// Question image.
@@ -540,6 +617,9 @@ func (a *App) renderResult(canvas *image.RGBA) {
 	// Result message.
 	if a.result.Correct {
 		a.drawTextCentered(canvas, "✓  Correct!", y, a.fontBold, greenColor)
+	} else if a.result.TimedOut {
+		msg := "Time's up! — answer: " + a.result.Answer
+		a.drawTextCentered(canvas, msg, y, a.fontBold, redColor)
 	} else {
 		msg := "X  Wrong — answer: " + a.result.Answer
 		a.drawTextCentered(canvas, msg, y, a.fontBold, redColor)
@@ -619,6 +699,22 @@ func (a *App) drawText(canvas *image.RGBA, text string, x, y int, face font.Face
 		Face: face,
 		Dot:  fixed.P(x, y),
 	}
+	d.DrawString(text)
+}
+
+// drawTextRight draws text so that its right edge sits at xRight.
+func (a *App) drawTextRight(canvas *image.RGBA, text string, xRight, y int, face font.Face, c color.RGBA) {
+	d := &font.Drawer{
+		Dst:  canvas,
+		Src:  image.NewUniform(c),
+		Face: face,
+	}
+	width := d.MeasureString(text)
+	x := xRight - width.Round()
+	if x < padding {
+		x = padding
+	}
+	d.Dot = fixed.P(x, y)
 	d.DrawString(text)
 }
 

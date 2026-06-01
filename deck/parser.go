@@ -40,13 +40,27 @@ type Media struct {
 
 // Card represents a single question/answer pair.
 type Card struct {
-	ID          string    // stable hash of question content
-	Question    []Media   // question side elements
-	Answer      []Media   // answer side elements
-	AnswerText  string    // plain text of the answer (for choice generation)
-	Distractors []string  // optional custom wrong answers
-	Mode        QuizMode  // per-card mode (choice or type)
-	Choices     int       // per-card choice count (0 = use deck default)
+	ID          string   // stable hash of question content
+	Question    []Media  // question side elements
+	Answer      []Media  // answer side elements
+	AnswerText  string   // plain text of the answer (for choice generation)
+	Distractors []string // optional custom wrong answers
+	Mode        QuizMode // per-card mode (choice or type)
+	Choices     int      // per-card choice count (0 = use deck default)
+	TimeLimit   int      // per-card time limit in seconds
+	// (0 = inherit deck default, -1 = explicitly unlimited)
+}
+
+// EffectiveTimeLimit returns the time limit in seconds that applies to this
+// card, given the deck's global limit. A return of 0 means no limit.
+func (c *Card) EffectiveTimeLimit(deckLimit int) int {
+	if c.TimeLimit < 0 {
+		return 0 // explicitly unlimited
+	}
+	if c.TimeLimit > 0 {
+		return c.TimeLimit // per-card override
+	}
+	return deckLimit // inherit deck default
 }
 
 // QuizMode determines how answers are submitted.
@@ -64,6 +78,7 @@ type Deck struct {
 	Choices       int      // number of answer choices (default 4)
 	Mode          QuizMode // choice or type
 	CaseSensitive bool     // case-sensitive matching for type mode
+	TimeLimit     int      // global per-question time limit in seconds (0 = none)
 	Cards         []Card
 }
 
@@ -124,6 +139,11 @@ func Parse(path string) (*Deck, error) {
 				deck.CaseSensitive = false
 			}
 		}
+		if after, ok := strings.CutPrefix(trimmed, "# time:"); ok {
+			if n, ok := parseTimeLimit(after); ok && n > 0 {
+				deck.TimeLimit = n
+			}
+		}
 	}
 
 	// Split lines into card blocks separated by blank lines.
@@ -175,6 +195,7 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode) (*Card, err
 	// Check for per-card metadata before filtering comments.
 	cardMode := defaultMode
 	cardChoices := 0
+	cardTime := 0
 	for _, line := range block {
 		trimmed := strings.TrimSpace(line)
 		if after, ok := strings.CutPrefix(trimmed, "# mode:"); ok {
@@ -189,6 +210,15 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode) (*Card, err
 			n, err := strconv.Atoi(strings.TrimSpace(after))
 			if err == nil && n >= 2 {
 				cardChoices = n
+			}
+		}
+		if after, ok := strings.CutPrefix(trimmed, "# time:"); ok {
+			if n, ok := parseTimeLimit(after); ok {
+				if n <= 0 {
+					cardTime = -1 // explicitly unlimited
+				} else {
+					cardTime = n
+				}
 			}
 		}
 	}
@@ -270,9 +300,28 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode) (*Card, err
 		Distractors: distractors,
 		Mode:        cardMode,
 		Choices:     cardChoices,
+		TimeLimit:   cardTime,
 	}
 
 	return card, nil
+}
+
+// parseTimeLimit parses a time-limit metadata value. It accepts a plain
+// integer number of seconds, an optional trailing "s" (e.g. "30s"), or the
+// words "none"/"off"/"0" to mean no limit (returned as 0). The bool reports
+// whether the value was understood.
+func parseTimeLimit(s string) (int, bool) {
+	s = strings.TrimSpace(s)
+	switch strings.ToLower(s) {
+	case "none", "off", "unlimited":
+		return 0, true
+	}
+	s = strings.TrimSuffix(s, "s")
+	n, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil {
+		return 0, false
+	}
+	return n, true
 }
 
 // parseMediaLines converts raw text lines into Media elements.

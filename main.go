@@ -23,6 +23,8 @@ usage: study [flags] <deck-file>
 
 flags:
   --choices N       number of answer choices (overrides deck header)
+  --time N          per-question time limit in seconds, 0 to disable
+                    (overrides deck header)
   --sequential      present cards in deck order (default: shuffled)
   --reset           clear progress for this deck
   --help            show this help
@@ -33,15 +35,16 @@ deck format:
   @img <path>       image on question/answer side
   @audio <path>     audio on question/answer side
   ~ <text>          custom wrong answer (distractor)
-  # comment         comment or metadata (# choices: N)
+  # comment         comment or metadata (# choices: N, # time: N)
 
 examples:
   study japanese.deck
   study --choices 3 mahjong.deck
-  study --sequential --reset vocab.deck`
+  study --time 10 --sequential vocab.deck`
 
 func main() {
 	choices := flag.Int("choices", 0, "number of answer choices (overrides deck header)")
+	timeLimit := flag.Int("time", -1, "per-question time limit in seconds, 0 to disable (overrides deck header)")
 	sequential := flag.Bool("sequential", false, "present cards in deck order")
 	reset := flag.Bool("reset", false, "clear progress for this deck")
 	help := flag.Bool("help", false, "show help")
@@ -82,6 +85,12 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Println("✓ progress reset for", d.Name)
+	}
+
+	// A --time flag overrides the deck's global time limit (per-card
+	// overrides in the deck still apply). -1 means the flag was not set.
+	if *timeLimit >= 0 {
+		d.TimeLimit = *timeLimit
 	}
 
 	// Prioritize cards based on past performance.
