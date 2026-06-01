@@ -773,6 +773,9 @@ var systemFontPaths = []string{
 	"/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
 	"/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc",
 	"/usr/share/fonts/OTF/NotoSansCJK-Regular.ttc",
+	// Same, but installed under /usr/local (e.g. manual installs).
+	"/usr/local/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+	"/usr/local/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
 	// WenQuanYi — good CJK + Latin coverage.
 	"/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
 	"/usr/share/fonts/wenquanyi/wqy-zenhei/wqy-zenhei.ttc",
@@ -787,6 +790,21 @@ func (a *App) loadFonts() error {
 		if data, err := os.ReadFile(path); err == nil {
 			sysFontData = data
 			break
+		}
+	}
+
+	// Fall back to asking fontconfig where a CJK font lives, so a font in a
+	// non-standard prefix (e.g. /usr/local) is still found. Try specific
+	// families: the generic "Noto Sans CJK" often resolves to a Latin-only
+	// fallback, whereas the per-language names match the real CJK font.
+	if sysFontData == nil {
+		for _, fam := range []string{"Noto Sans CJK JP", "Noto Sans CJK SC", "WenQuanYi Zen Hei"} {
+			if path := fcMatchFile(fam); path != "" {
+				if data, err := os.ReadFile(path); err == nil {
+					sysFontData = data
+					break
+				}
+			}
 		}
 	}
 
@@ -823,6 +841,23 @@ func (a *App) loadFonts() error {
 	a.fontLarge = large
 
 	return nil
+}
+
+// fcMatchFile asks fontconfig for the file path of the best match for the
+// given family pattern, e.g. "Noto Sans CJK". Returns "" if fontconfig is
+// unavailable or finds nothing usable.
+func fcMatchFile(pattern string) string {
+	out, err := exec.Command("fc-match", "--format=%{file}", pattern).Output()
+	if err != nil {
+		return ""
+	}
+	path := strings.TrimSpace(string(out))
+	// fc-match always returns *some* font; only accept a CJK match so we don't
+	// pick a Latin-only fallback that lacks the symbol glyphs.
+	if path == "" || !strings.Contains(strings.ToLower(path), "cjk") {
+		return ""
+	}
+	return path
 }
 
 func parseFontFace(ttfData []byte, size float64) (font.Face, error) {
