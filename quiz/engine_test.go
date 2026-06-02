@@ -281,3 +281,47 @@ func TestEngineCustomDistractors(t *testing.T) {
 		}
 	}
 }
+
+// TestEngineIsRetryTimingInvariant locks in the contract the gui relies on to
+// keep drill repetitions invisible to persisted stats: right after an answer
+// is submitted, IsRetry() must report whether the card just answered came from
+// the retry queue. The first (cold) miss must read false so it is recorded;
+// every subsequent drill rep must read true so it is skipped.
+func TestEngineIsRetryTimingInvariant(t *testing.T) {
+	d := testDeck(4)
+	e := NewEngine(d, false, 0, nil)
+
+	if e.IsRetry() {
+		t.Fatal("first card comes from the main queue; IsRetry must be false")
+	}
+
+	// Answer the first card wrong. IsRetry must still be false immediately
+	// after Answer() returns — this is when the gui records the cold miss.
+	for i, o := range e.Options() {
+		if o != e.Current().AnswerText {
+			e.Answer(i)
+			break
+		}
+	}
+	if e.IsRetry() {
+		t.Error("IsRetry must stay false right after the first cold miss")
+	}
+
+	// Advancing replays the same card, now as a retry drill rep.
+	e.Next()
+	if !e.IsRetry() {
+		t.Error("the replayed card after a wrong answer must be a retry rep")
+	}
+
+	// A correct drill rep stays a retry rep (still invisible to stats) until
+	// the card graduates.
+	for i, o := range e.Options() {
+		if o == e.Current().AnswerText {
+			e.Answer(i)
+			break
+		}
+	}
+	if !e.IsRetry() {
+		t.Error("a correct drill rep must still report IsRetry true")
+	}
+}

@@ -308,7 +308,10 @@ func (a *App) tick() {
 	// Time's up — count the card as wrong, just like an incorrect answer.
 	a.deadline = time.Time{}
 	a.result = a.engine.AnswerTimeout()
-	if a.result != nil {
+	// Retry-queue reps are drill repetitions, not cold recall, so they stay
+	// invisible to persisted stats. The first miss was already recorded when
+	// the card came from the main queue.
+	if a.result != nil && !a.engine.IsRetry() {
 		a.store.RecordWrong(a.result.Card.ID)
 	}
 	a.render()
@@ -380,7 +383,8 @@ func (a *App) handleChoiceKey(key string) {
 			return
 		}
 		a.result = a.engine.Answer(idx)
-		if a.result != nil {
+		// Skip stat recording for retry-queue reps (see tick()).
+		if a.result != nil && !a.engine.IsRetry() {
 			if a.result.Correct {
 				a.store.RecordCorrect(a.result.Card.ID)
 			} else {
@@ -397,7 +401,8 @@ func (a *App) handleTypeKey(key string, ev xevent.KeyPressEvent) {
 	switch key {
 	case "Return":
 		a.result = a.engine.AnswerTyped(a.inputBuf)
-		if a.result != nil {
+		// Skip stat recording for retry-queue reps (see tick()).
+		if a.result != nil && !a.engine.IsRetry() {
 			if a.result.Correct {
 				a.store.RecordCorrect(a.result.Card.ID)
 			} else {
