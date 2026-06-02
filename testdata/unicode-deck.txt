@@ -1,0 +1,40 @@
+# mode: type
+# case: insensitive
+#
+# Manual test deck for Unicode text input (#5) and clipboard paste (#11).
+# Each question shows the exact string to enter; copy the matching line from
+# testdata/unicode-answers.txt and paste it with Ctrl+V (or middle-click).
+# Cards cover: hiragana, kanji, Mandarin, accented Latin, German, Cyrillic,
+# Greek, and an astral-plane emoji.
+
+Card 1 — Japanese hiragana. Enter: こんにちは
+---
+こんにちは
+
+Card 2 — Japanese. Enter: ありがとう
+---
+ありがとう
+
+Card 3 — Mandarin. Enter: 你好
+---
+你好
+
+Card 4 — Accented Latin. Enter: café
+---
+café
+
+Card 5 — German. Enter: Grüße
+---
+Grüße
+
+Card 6 — Cyrillic. Enter: спасибо
+---
+спасибо
+
+Card 7 — Greek. Enter: ευχαριστώ
+---
+ευχαριστώ
+
+Card 8 — Emoji (astral plane). Enter: 😀
+---
+😀
