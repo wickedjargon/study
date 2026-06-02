@@ -13,6 +13,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/BurntSushi/xgb/xproto"
 	"github.com/BurntSushi/xgbutil"
@@ -22,9 +24,9 @@ import (
 	"github.com/BurntSushi/xgbutil/xwindow"
 
 	"golang.org/x/image/font"
-	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/font/gofont/gobold"
 	"golang.org/x/image/font/gofont/goregular"
+	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
 
 	imgdraw "golang.org/x/image/draw"
@@ -38,13 +40,13 @@ import (
 // ── Colors ──────────────────────────────────────────────────────────
 
 type colorScheme struct {
-	bg      color.RGBA
-	text    color.RGBA
-	dim     color.RGBA
-	green   color.RGBA
-	red     color.RGBA
-	yellow  color.RGBA
-	accent  color.RGBA
+	bg     color.RGBA
+	text   color.RGBA
+	dim    color.RGBA
+	green  color.RGBA
+	red    color.RGBA
+	yellow color.RGBA
+	accent color.RGBA
 }
 
 var darkScheme = colorScheme{
@@ -318,7 +320,7 @@ func (a *App) handleKey(ev xevent.KeyPressEvent) {
 	switch a.engine.State() {
 	case quiz.ShowQuestion:
 		if a.engine.Mode() == deck.ModeType {
-			a.handleTypeKey(key)
+			a.handleTypeKey(key, ev)
 		} else {
 			a.handleChoiceKey(key)
 		}
@@ -375,7 +377,7 @@ func (a *App) handleChoiceKey(key string) {
 	}
 }
 
-func (a *App) handleTypeKey(key string) {
+func (a *App) handleTypeKey(key string, ev xevent.KeyPressEvent) {
 	switch key {
 	case "Return":
 		a.result = a.engine.AnswerTyped(a.inputBuf)
@@ -396,16 +398,54 @@ func (a *App) handleTypeKey(key string) {
 		}
 	case "Escape":
 		a.quit()
-	case "space":
-		a.inputBuf += " "
-		a.render()
 	default:
-		// Single printable character.
-		if len(key) == 1 && key[0] >= 32 && key[0] <= 126 {
-			a.inputBuf += key
+		if r, ok := a.typedRune(key, ev); ok {
+			a.inputBuf += string(r)
 			a.render()
 		}
 	}
+}
+
+// typedRune resolves a printable character from a key press for text input.
+//
+// keybind.LookupString already returns the correct character for ASCII keys
+// (and space/punctuation), honouring shift and caps-lock — so a single
+// printable rune is used as-is. For non-ASCII keys it instead returns the
+// keysym *name* (e.g. "aacute" for á) or an empty string (for Unicode
+// keysyms), neither of which is the character the user typed. In that case we
+// resolve the rune from the keysym directly.
+func (a *App) typedRune(key string, ev xevent.KeyPressEvent) (rune, bool) {
+	if r, n := utf8.DecodeRuneInString(key); n == len(key) && unicode.IsPrint(r) {
+		return r, true
+	}
+
+	col := byte(0)
+	if ev.State&xproto.ModMaskShift > 0 {
+		col = 1
+	}
+	return keysymToRune(keybind.KeysymGet(a.xu, ev.Detail, col))
+}
+
+// keysymToRune converts an X11 keysym to its Unicode rune using the standard
+// keysym→UCS rules: Latin-1 keysyms (which include ASCII) map directly to the
+// same code point, and "Unicode keysyms" carry the code point in their low 24
+// bits (0x01000000 | cp). The latter is how non-Latin layouts and tools like
+// `xdotool type` deliver characters, so this covers most real input. Legacy
+// national keysyms (Cyrillic_*, Greek_*, …) are not mapped here, and IME
+// composition (XIM) is not received by this X stack at all.
+func keysymToRune(ks xproto.Keysym) (rune, bool) {
+	k := uint32(ks)
+	switch {
+	case k&0xff000000 == 0x01000000:
+		if r := rune(k & 0x00ffffff); unicode.IsPrint(r) {
+			return r, true
+		}
+	case (k >= 0x20 && k <= 0x7e) || (k >= 0xa0 && k <= 0xff):
+		if r := rune(k); unicode.IsPrint(r) {
+			return r, true
+		}
+	}
+	return 0, false
 }
 
 func (a *App) quit() {
@@ -631,7 +671,7 @@ func (a *App) renderResult(canvas *image.RGBA) {
 
 func (a *App) renderSummary(canvas *image.RGBA) {
 	elapsed := time.Since(a.start).Round(time.Second)
-	y := a.height/4
+	y := a.height / 4
 
 	a.drawTextCentered(canvas, "Session Complete", y, a.fontLarge, accentColor)
 	y += 60
