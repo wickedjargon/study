@@ -86,7 +86,7 @@ func TestStoreReset(t *testing.T) {
 	s.RecordCorrect("card1")
 	s.Reset()
 
-	if s.HasProgress() {
+	if len(s.data.Cards) != 0 {
 		t.Error("expected no progress after reset")
 	}
 }

@@ -16,7 +16,7 @@ import (
 type CardProgress struct {
 	TimesCorrect int       `json:"times_correct"`
 	TimesWrong   int       `json:"times_wrong"`
-	Streak       int       `json:"streak"`    // consecutive correct
+	Streak       int       `json:"streak"` // consecutive correct
 	LastSeen     time.Time `json:"last_seen"`
 }
 
@@ -172,11 +172,6 @@ func (s *Store) PrioritizeCards(cards []deck.Card) []deck.Card {
 	// Append mastered cards at the end (they'll rarely be reached).
 	active = append(active, mastered...)
 	return active
-}
-
-// HasProgress returns true if there is any saved progress for this deck.
-func (s *Store) HasProgress() bool {
-	return len(s.data.Cards) > 0
 }
 
 // Summary returns aggregate stats for display.

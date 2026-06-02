@@ -20,7 +20,7 @@ const (
 // Result records the outcome of answering a single card.
 type Result struct {
 	Card     *deck.Card
-	Chosen   int    // index of chosen answer (0-based, -1 for type mode/timeout)
+	Chosen   int // index of chosen answer (0-based, -1 for type mode/timeout)
 	Correct  bool
 	Answer   string // the correct answer text
 	Typed    string // what the user typed (type mode only)
@@ -43,12 +43,12 @@ type Engine struct {
 	allCards []*deck.Card
 
 	// Current state.
-	current        *deck.Card
-	currentOpts    []string // current answer choices (choice mode only)
-	correctIdx     int      // index of correct answer in currentOpts
-	fromRetry      bool     // is current card from retry queue?
-	repeatCurrent  bool     // repeat this card immediately (wrong answer)
-	state          State
+	current       *deck.Card
+	currentOpts   []string // current answer choices (choice mode only)
+	correctIdx    int      // index of correct answer in currentOpts
+	fromRetry     bool     // is current card from retry queue?
+	repeatCurrent bool     // repeat this card immediately (wrong answer)
+	state         State
 
 	// Session stats.
 	TotalSeen    int
@@ -143,11 +143,6 @@ func (e *Engine) Remaining() int {
 		n++
 	}
 	return n
-}
-
-// TotalCards returns the total number of cards in the deck.
-func (e *Engine) TotalCards() int {
-	return len(e.allCards)
 }
 
 // Answer submits an answer (0-based index) and returns the result.

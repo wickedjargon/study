@@ -10,8 +10,8 @@ import (
 
 // Viewer manages external media viewer processes.
 type Viewer struct {
-	imageCmd  string   // image viewer command (sxiv, feh)
-	audioCmd  string   // audio player command (mpv, aplay)
+	imageCmd  string // image viewer command (sxiv, feh)
+	audioCmd  string // audio player command (mpv, aplay)
 	processes []*os.Process
 }
 
@@ -46,16 +46,6 @@ func NewViewer() *Viewer {
 	}
 
 	return v
-}
-
-// HasImageViewer returns true if an image viewer was found.
-func (v *Viewer) HasImageViewer() bool {
-	return v.imageCmd != ""
-}
-
-// HasAudioPlayer returns true if an audio player was found.
-func (v *Viewer) HasAudioPlayer() bool {
-	return v.audioCmd != ""
 }
 
 // ShowMedia displays all media elements for a card side.
@@ -123,40 +113,5 @@ func (v *Viewer) playAudio(path string) error {
 		return fmt.Errorf("launching %s: %w", v.audioCmd, err)
 	}
 	v.processes = append(v.processes, cmd.Process)
-	return nil
-}
-
-// CheckRequiredViewers validates that viewers are available for the
-// media types used in a deck.
-func (v *Viewer) CheckRequiredViewers(d *deck.Deck) error {
-	needsImage := false
-	needsAudio := false
-
-	for _, card := range d.Cards {
-		for _, m := range card.Question {
-			switch m.Type {
-			case deck.Image:
-				needsImage = true
-			case deck.Audio:
-				needsAudio = true
-			}
-		}
-		for _, m := range card.Answer {
-			switch m.Type {
-			case deck.Image:
-				needsImage = true
-			case deck.Audio:
-				needsAudio = true
-			}
-		}
-	}
-
-	if needsImage && !v.HasImageViewer() {
-		return fmt.Errorf("deck uses images but no viewer found (install sxiv or feh)")
-	}
-	if needsAudio && !v.HasAudioPlayer() {
-		return fmt.Errorf("deck uses audio but no player found (install mpv or aplay)")
-	}
-
 	return nil
 }
