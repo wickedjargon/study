@@ -5,22 +5,25 @@ references are approximate and may drift as the code changes.
 
 ## Bugs & dead code
 
-### 1. Endless sessions / no in-app summary — WORKING AS INTENDED
-Originally filed as a bug: `quiz.handleCorrect()` always re-appends every
-non-retry card (`quiz/engine.go:342-367`), so the queue never drains,
-`advance()` never reaches the `Done` branch (`quiz/engine.go:330`), and
-`renderSummary()` (`gui/app.go`) is never shown.
+### 1. Endless sessions — WORKING AS INTENDED
+Originally filed as "the Session Complete screen is unreachable," on the
+premise that the queue never drains. That premise is **wrong**: a card
+answered correctly from the main queue is re-appended (`requeueCard`,
+`quiz/engine.go:342-367`), but a card answered *wrong* moves to the retry
+queue and, once graduated (answered correctly `minRepeats` times), is removed
+entirely. So both queues *can* drain — `advance()` then reaches `Done`
+(`quiz/engine.go:~327`) and `renderSummary()` (`gui/app.go`) *does* show.
+(Verified by driving the engine to `Done` in 8 steps.)
 
-This is the intended design: a session is endless — you study until you decide
-to stop. Pressing `Escape` (or closing the window) exits gracefully via
-`quit()`, which persists *all* progress recorded during the session before
-tearing down, so **no data is lost** (`saveProgress` now also reports a failed
-write to stderr rather than dropping the results silently). Stats are reviewed
-out of band with `study --stats <deck>` (#9), not on an end-of-session screen.
+In normal use sessions nevertheless feel endless, because correctly-recalled
+cards keep coming back — which is the desired behaviour. Either way **no data
+is lost**: the `Done` transition saves via the result→`Next` path, and quitting
+early with `Escape` (or closing the window) saves via `quit()` →
+`saveProgress` (which now also reports a failed write to stderr instead of
+dropping the session silently). Stats can also be reviewed out of band with
+`study --stats <deck>` (#9).
 
-As a result the engine's `Done` state and `renderSummary()` are intentionally
-unreachable; an in-app completion summary is explicitly a non-goal. They remain
-in the tree as harmless dead code (candidates for later removal).
+So `Done` and `renderSummary()` are **live, not dead code** — they are kept.
 
 ### 2. Confidence-based prioritization is discarded in the default mode
 `main.go` calls `store.PrioritizeCards(...)` (weak-cards-first) and *then*
