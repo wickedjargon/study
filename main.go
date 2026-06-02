@@ -25,12 +25,8 @@ const helpText = `study — suckless quiz tool
 usage: study [flags] <deck-file>
 
 flags:
-  --choices N       number of answer choices (overrides deck header)
-  --time N          per-question time limit in seconds, 0 to disable
-                    (overrides deck header)
-  --sequential      present cards in deck order (default: shuffled)
   --stats           print saved progress summary for the deck and exit
-  --reset           clear progress for this deck
+  --forget          clear saved progress for this deck
   --help            show this help
 
 deck format:
@@ -39,19 +35,17 @@ deck format:
   @img <path>       image on question/answer side
   @audio <path>     audio on question/answer side
   ~ <text>          custom wrong answer (distractor)
-  # comment         comment or metadata (# choices: N, # time: N)
+  # comment         comment or metadata
+                    (# choices: N, # time: N, # order: sequential)
 
 examples:
   study japanese.deck
-  study --choices 3 mahjong.deck
-  study --time 10 --sequential vocab.deck`
+  study --stats mahjong.deck
+  study --forget vocab.deck`
 
 func main() {
-	choices := flag.Int("choices", 0, "number of answer choices (overrides deck header)")
-	timeLimit := flag.Int("time", -1, "per-question time limit in seconds, 0 to disable (overrides deck header)")
-	sequential := flag.Bool("sequential", false, "present cards in deck order")
 	stats := flag.Bool("stats", false, "print saved progress summary for the deck and exit")
-	reset := flag.Bool("reset", false, "clear progress for this deck")
+	forget := flag.Bool("forget", false, "clear saved progress for this deck")
 	help := flag.Bool("help", false, "show help")
 
 	flag.Usage = func() {
@@ -91,7 +85,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	if *reset {
+	if *forget {
 		store.Reset()
 		if err := store.Save(); err != nil {
 			fmt.Fprintf(os.Stderr, "✗ saving reset: %v\n", err)
@@ -100,26 +94,21 @@ func main() {
 		fmt.Println("✓ progress reset for", d.Name)
 	}
 
-	// A --time flag overrides the deck's global time limit (per-card
-	// overrides in the deck still apply). -1 means the flag was not set.
-	if *timeLimit >= 0 {
-		d.TimeLimit = *timeLimit
-	}
-
-	// Order cards for the session. Unless --sequential is set, shuffle first
-	// so the deck's authored order isn't a memorization crutch; then
-	// PrioritizeCards (a stable sort) lifts weak cards to the front while
-	// equal-confidence cards keep their now-randomized relative order. The
-	// engine must not re-shuffle afterwards, or it would throw this ordering
-	// away — which is exactly what used to happen in the default mode.
-	if !*sequential {
+	// Order cards for the session. Unless the deck opts into sequential order
+	// (# order: sequential), shuffle first so the deck's authored order isn't
+	// a memorization crutch; then PrioritizeCards (a stable sort) lifts weak
+	// cards to the front while equal-confidence cards keep their now-randomized
+	// relative order. The engine must not re-shuffle afterwards, or it would
+	// throw this ordering away — which is exactly what used to happen in the
+	// default mode.
+	if !d.Sequential {
 		rand.Shuffle(len(d.Cards), func(i, j int) {
 			d.Cards[i], d.Cards[j] = d.Cards[j], d.Cards[i]
 		})
 	}
 	d.Cards = store.PrioritizeCards(d.Cards)
 
-	engine := quiz.NewEngine(d, false, *choices, store)
+	engine := quiz.NewEngine(d, false, 0, store)
 
 	// Run GUI.
 	if err := gui.Run(engine, viewer, store); err != nil {

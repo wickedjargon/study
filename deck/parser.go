@@ -79,6 +79,7 @@ type Deck struct {
 	Mode          QuizMode // choice or type
 	CaseSensitive bool     // case-sensitive matching for type mode
 	TimeLimit     int      // global per-question time limit in seconds (0 = none)
+	Sequential    bool     // present cards in deck order (default: shuffled)
 	Cards         []Card
 }
 
@@ -142,6 +143,14 @@ func Parse(path string) (*Deck, error) {
 		if after, ok := strings.CutPrefix(trimmed, "# time:"); ok {
 			if n, ok := parseTimeLimit(after); ok && n > 0 {
 				deck.TimeLimit = n
+			}
+		}
+		if after, ok := strings.CutPrefix(trimmed, "# order:"); ok {
+			switch strings.TrimSpace(after) {
+			case "sequential":
+				deck.Sequential = true
+			case "shuffled":
+				deck.Sequential = false
 			}
 		}
 	}

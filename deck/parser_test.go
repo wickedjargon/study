@@ -64,6 +64,35 @@ a1
 	}
 }
 
+func TestParseOrderMetadata(t *testing.T) {
+	// Default (no header) is shuffled.
+	d, err := Parse(writeTempDeck(t, "q1\n---\na1\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if d.Sequential {
+		t.Errorf("expected Sequential=false by default")
+	}
+
+	// # order: sequential opts into deck order.
+	d, err = Parse(writeTempDeck(t, "# order: sequential\n\nq1\n---\na1\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !d.Sequential {
+		t.Errorf("expected Sequential=true with '# order: sequential'")
+	}
+
+	// # order: shuffled is the explicit default.
+	d, err = Parse(writeTempDeck(t, "# order: shuffled\n\nq1\n---\na1\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if d.Sequential {
+		t.Errorf("expected Sequential=false with '# order: shuffled'")
+	}
+}
+
 func TestParseCustomDistractors(t *testing.T) {
 	content := `question
 ---

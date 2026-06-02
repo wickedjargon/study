@@ -20,11 +20,11 @@ study [flags] <deck-file>
 
 | Flag             | Description                              |
 |------------------|------------------------------------------|
-| `--choices N`    | Number of answer choices (overrides deck) |
-| `--time N`       | Per-question time limit in seconds, `0` to disable (overrides deck) |
-| `--sequential`   | Present cards in deck order (default: shuffled) |
-| `--reset`        | Clear progress for this deck             |
+| `--stats`        | Print saved progress summary for the deck and exit |
+| `--forget`       | Clear saved progress for this deck       |
 | `--help`         | Show help                                |
+
+All per-deck settings (choices, time, order, …) live in the deck file header — see below.
 
 ## Deck Format
 
@@ -48,6 +48,7 @@ Comments at the top of the file configure deck-wide settings:
 # choices: 4
 # case: insensitive
 # time: 20
+# order: sequential
 ```
 
 | Header           | Values                  | Default       |
@@ -56,6 +57,7 @@ Comments at the top of the file configure deck-wide settings:
 | `# choices:`     | any integer ≥ 2         | `4`           |
 | `# case:`        | `sensitive`, `insensitive` | `sensitive` |
 | `# time:`        | seconds (e.g. `20`, `20s`), or `none` | none (no limit) |
+| `# order:`       | `sequential`, `shuffled` | `shuffled`   |
 
 ## Features
 
@@ -175,8 +177,25 @@ ok
 ```
 
 The first card uses the deck default (10s), the second allows 30s, and the third
-has no limit. The `--time N` flag overrides the deck-wide default from the command
-line (`--time 0` disables it); per-card overrides still apply.
+has no limit.
+
+### Card order
+
+By default cards are shuffled each session so the deck's authored order can't
+become a memorization crutch (weak cards are still lifted toward the front).
+Set `# order: sequential` in the header to present cards in deck order instead:
+
+```
+# order: sequential
+
+First card
+---
+1
+
+Second card
+---
+2
+```
 
 ### Images
 
