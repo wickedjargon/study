@@ -561,7 +561,13 @@ func (a *App) quit() {
 }
 
 func (a *App) saveProgress() {
-	_ = a.store.Save()
+	// Sessions are endless by design; a graceful Escape (or window close) is
+	// the normal way to stop, so this is the point where progress must be
+	// persisted. Report a failed write instead of silently dropping the
+	// session's results.
+	if err := a.store.Save(); err != nil {
+		fmt.Fprintf(os.Stderr, "study: failed to save progress: %v\n", err)
+	}
 }
 
 // ── Media Loading ───────────────────────────────────────────────────
