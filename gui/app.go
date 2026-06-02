@@ -21,6 +21,7 @@ import (
 	"github.com/BurntSushi/xgbutil/keybind"
 	"github.com/BurntSushi/xgbutil/xevent"
 	"github.com/BurntSushi/xgbutil/xgraphics"
+	"github.com/BurntSushi/xgbutil/xprop"
 	"github.com/BurntSushi/xgbutil/xwindow"
 
 	"golang.org/x/image/font"
@@ -150,6 +151,11 @@ type App struct {
 
 	// Text input buffer (type mode).
 	inputBuf string
+
+	// Interned atoms for clipboard/primary paste. Zero until setupAtoms runs.
+	clipboardAtom xproto.Atom // CLIPBOARD selection (Ctrl+V source)
+	utf8Atom      xproto.Atom // UTF8_STRING conversion target
+	selPropAtom   xproto.Atom // scratch property the selection is delivered to
 }
 
 const (
@@ -202,6 +208,7 @@ func Run(engine *quiz.Engine, viewer *media.Viewer, store *progress.Store) error
 		bgPixel,
 		xproto.EventMaskExposure|
 			xproto.EventMaskKeyPress|
+			xproto.EventMaskButtonPress|
 			xproto.EventMaskStructureNotify)
 
 	// Set window title.
@@ -230,9 +237,18 @@ func Run(engine *quiz.Engine, viewer *media.Viewer, store *progress.Store) error
 
 	// Set up event handlers.
 	keybind.Initialize(xu)
+	app.setupAtoms()
 
 	xevent.KeyPressFun(func(xu *xgbutil.XUtil, ev xevent.KeyPressEvent) {
 		app.handleKey(ev)
+	}).Connect(xu, win.Id)
+
+	xevent.ButtonPressFun(func(xu *xgbutil.XUtil, ev xevent.ButtonPressEvent) {
+		app.handleButton(ev)
+	}).Connect(xu, win.Id)
+
+	xevent.SelectionNotifyFun(func(xu *xgbutil.XUtil, ev xevent.SelectionNotifyEvent) {
+		app.handleSelectionNotify(ev)
 	}).Connect(xu, win.Id)
 
 	xevent.ExposeFun(func(xu *xgbutil.XUtil, ev xevent.ExposeEvent) {
@@ -399,6 +415,16 @@ func (a *App) handleTypeKey(key string, ev xevent.KeyPressEvent) {
 	case "Escape":
 		a.quit()
 	default:
+		// Ctrl combos are commands, not text. Ctrl+V pastes the CLIPBOARD
+		// selection; every other Ctrl combo is swallowed so it can't leak a
+		// stray character into the buffer (LookupString ignores Ctrl, so e.g.
+		// Ctrl+V would otherwise insert a literal "v").
+		if ev.State&xproto.ModMaskControl > 0 {
+			if key == "v" || key == "V" {
+				a.requestPaste(a.clipboardAtom, ev.Time)
+			}
+			return
+		}
 		if r, ok := a.typedRune(key, ev); ok {
 			a.inputBuf += string(r)
 			a.render()
@@ -446,6 +472,86 @@ func keysymToRune(ks xproto.Keysym) (rune, bool) {
 		}
 	}
 	return 0, false
+}
+
+// ── Clipboard paste ─────────────────────────────────────────────────
+//
+// Type mode supports pasting so that text which can't be entered directly —
+// notably CJK composed via an IME, which this X stack never receives — can
+// still be brought in: compose it elsewhere, then paste. Ctrl+V pastes the
+// CLIPBOARD selection and middle-click pastes the PRIMARY selection, per X11
+// convention.
+
+const selPropName = "STUDY_SELECTION"
+
+// setupAtoms interns the atoms used for selection paste. Failures are left as
+// zero atoms; requestPaste then no-ops, so paste is simply unavailable rather
+// than fatal.
+func (a *App) setupAtoms() {
+	if at, err := xprop.Atm(a.xu, "CLIPBOARD"); err == nil {
+		a.clipboardAtom = at
+	}
+	if at, err := xprop.Atm(a.xu, "UTF8_STRING"); err == nil {
+		a.utf8Atom = at
+	}
+	if at, err := xprop.Atm(a.xu, selPropName); err == nil {
+		a.selPropAtom = at
+	}
+}
+
+// handleButton pastes the PRIMARY selection on a middle-click while a typed
+// answer is being entered.
+func (a *App) handleButton(ev xevent.ButtonPressEvent) {
+	const middleButton = 2
+	if ev.Detail != middleButton {
+		return
+	}
+	if a.engine.State() != quiz.ShowQuestion || a.engine.Mode() != deck.ModeType {
+		return
+	}
+	a.requestPaste(xproto.AtomPrimary, ev.Time)
+}
+
+// requestPaste asks the owner of the given selection to convert it to UTF-8
+// text into our scratch property. The reply arrives later as a SelectionNotify
+// event (handleSelectionNotify).
+func (a *App) requestPaste(selection xproto.Atom, t xproto.Timestamp) {
+	if selection == 0 || a.utf8Atom == 0 || a.selPropAtom == 0 {
+		return
+	}
+	xproto.ConvertSelection(a.xu.Conn(), a.win.Id, selection, a.utf8Atom, a.selPropAtom, t)
+}
+
+// handleSelectionNotify reads the pasted text delivered by a ConvertSelection
+// request and appends its printable characters to the input buffer.
+func (a *App) handleSelectionNotify(ev xevent.SelectionNotifyEvent) {
+	// Property is None (0) when no owner held the selection or the conversion
+	// was refused.
+	if ev.Property == 0 {
+		return
+	}
+	if a.engine.State() != quiz.ShowQuestion || a.engine.Mode() != deck.ModeType {
+		return
+	}
+
+	text, err := xprop.PropValStr(xprop.GetProperty(a.xu, a.win.Id, selPropName))
+	// Clear the scratch property regardless, per ICCCM.
+	xproto.DeleteProperty(a.xu.Conn(), a.win.Id, a.selPropAtom)
+	if err != nil || text == "" {
+		return
+	}
+
+	var b strings.Builder
+	b.WriteString(a.inputBuf)
+	for _, r := range text {
+		// Keep printable runes only; this drops newlines, tabs, and other
+		// control characters so a multi-line paste collapses into the field.
+		if unicode.IsPrint(r) {
+			b.WriteRune(r)
+		}
+	}
+	a.inputBuf = b.String()
+	a.render()
 }
 
 func (a *App) quit() {

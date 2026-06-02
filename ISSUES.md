@@ -59,6 +59,7 @@ from a hardware layout that doesn't emit Unicode keysyms) are not mapped, and
 interactive IME composition (fcitx/ibus over XIM) is never received by this
 xgbutil-based X stack at all — so live romaji→kanji conversion still won't
 work. Closing those needs a keysym→UCS table and/or XIM/IBus client support.
+As a practical workaround, composed text can now be pasted in (see #11).
 
 ### 6. No text wrapping
 `drawTextCentered` clamps the left edge to `padding` but does nothing about the
@@ -81,6 +82,17 @@ Implemented as `study --stats <deck>`, which prints a progress summary
 
 ### 10. No pause
 The countdown can't be paused; stepping away counts the card as wrong.
+
+### 11. No clipboard paste in type mode — DONE
+~~Type mode only read individual key presses, so there was no way to paste an
+answer, and `Ctrl+V` actually inserted a literal `v` (LookupString ignores the
+Control modifier).~~ Type mode now supports paste: `Ctrl+V` pastes the
+`CLIPBOARD` selection and middle-click pastes the `PRIMARY` selection (only
+printable runes are kept, so multi-line pastes collapse into the field), and
+non-paste `Ctrl` combos are swallowed instead of leaking characters. This is
+also the practical workaround for the IME gap in #5: compose CJK elsewhere,
+then paste it in. *Note:* the X INCR protocol (very large selections) is not
+handled — fine for short answers.
 
 ## Smaller notes
 
