@@ -8,6 +8,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"math/rand"
 	"os"
 	"sort"
 	"strings"
@@ -105,13 +106,20 @@ func main() {
 		d.TimeLimit = *timeLimit
 	}
 
-	// Prioritize cards based on past performance.
-	cards := store.PrioritizeCards(d.Cards)
-	d.Cards = cards
+	// Order cards for the session. Unless --sequential is set, shuffle first
+	// so the deck's authored order isn't a memorization crutch; then
+	// PrioritizeCards (a stable sort) lifts weak cards to the front while
+	// equal-confidence cards keep their now-randomized relative order. The
+	// engine must not re-shuffle afterwards, or it would throw this ordering
+	// away — which is exactly what used to happen in the default mode.
+	if !*sequential {
+		rand.Shuffle(len(d.Cards), func(i, j int) {
+			d.Cards[i], d.Cards[j] = d.Cards[j], d.Cards[i]
+		})
+	}
+	d.Cards = store.PrioritizeCards(d.Cards)
 
-	// Create engine.
-	shuffle := !*sequential
-	engine := quiz.NewEngine(d, shuffle, *choices, store)
+	engine := quiz.NewEngine(d, false, *choices, store)
 
 	// Run GUI.
 	if err := gui.Run(engine, viewer, store); err != nil {
