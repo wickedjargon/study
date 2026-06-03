@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -85,6 +86,9 @@ func main() {
 		os.Exit(0)
 	}
 
+	// --forget clears saved progress and exits without launching the quiz,
+	// mirroring --stats. It's a maintenance action, not the start of a study
+	// session.
 	if *forget {
 		store.Reset()
 		if err := store.Save(); err != nil {
@@ -92,6 +96,7 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Println("✓ progress reset for", d.Name)
+		os.Exit(0)
 	}
 
 	// Order cards for the session. Unless the deck opts into sequential order
@@ -123,7 +128,7 @@ func main() {
 // removed cards is ignored).
 func printStats(d *deck.Deck, store *progress.Store) {
 	type row struct {
-		question string
+		label    string
 		accuracy float64
 		conf     float64
 	}
@@ -142,7 +147,7 @@ func printStats(d *deck.Deck, store *progress.Store) {
 			mastered++
 		}
 		studied = append(studied, row{
-			question: questionPreview(c),
+			label:    cardLabel(c),
 			accuracy: cp.Accuracy(),
 			conf:     cp.Confidence(),
 		})
@@ -180,26 +185,59 @@ func printStats(d *deck.Deck, store *progress.Store) {
 	}
 	fmt.Printf("\n  Weakest cards\n")
 	for _, r := range studied[:n] {
-		fmt.Printf("    %3.0f%% acc  conf %3.0f   %s\n", r.accuracy, r.conf, r.question)
+		fmt.Printf("    %3.0f%% acc  conf %3.0f   %s\n", r.accuracy, r.conf, r.label)
 	}
 }
 
-// questionPreview returns a single-line, length-capped preview of a card's
-// question text for use in the stats listing.
-func questionPreview(c *deck.Card) string {
+// cardLabel returns a short, single-line identifier for a card, used in the
+// stats listing so the user can tell cards apart. It tries, in order: the
+// question text (what the user authored and sees while studying); the answer
+// text, marked with "→" so it's clear the label is the answer side (this is
+// what makes media-only question cards — e.g. an image flashcard whose answer
+// is a word — distinguishable); the file name of the card's first media
+// element; and finally "(media card)" only when a card carries no text or
+// media name at all.
+func cardLabel(c *deck.Card) string {
+	if s := joinText(c.Question); s != "" {
+		return clipLabel(s)
+	}
+	if s := joinText(c.Answer); s != "" {
+		return clipLabel("→ " + s)
+	}
+	if s := firstMediaName(c.Question); s != "" {
+		return clipLabel("[" + s + "]")
+	}
+	return "(media card)"
+}
+
+// joinText collapses the text segments of a card side into a single
+// whitespace-normalized line, ignoring image and audio elements.
+func joinText(media []deck.Media) string {
 	var parts []string
-	for _, m := range c.Question {
+	for _, m := range media {
 		if m.Type == deck.Text && m.Content != "" {
 			parts = append(parts, m.Content)
 		}
 	}
-	s := strings.Join(parts, " ")
-	if s == "" {
-		s = "(media card)"
+	return strings.Join(strings.Fields(strings.Join(parts, " ")), " ")
+}
+
+// firstMediaName returns the base file name of the first image or audio
+// element on a card side, or "" if there is none.
+func firstMediaName(media []deck.Media) string {
+	for _, m := range media {
+		if m.Type == deck.Image || m.Type == deck.Audio {
+			return filepath.Base(m.Content)
+		}
 	}
+	return ""
+}
+
+// clipLabel truncates a label to a fixed width for the listing.
+func clipLabel(s string) string {
 	const max = 48
 	if r := []rune(s); len(r) > max {
-		s = string(r[:max-1]) + "…"
+		return string(r[:max-1]) + "…"
 	}
 	return s
 }
