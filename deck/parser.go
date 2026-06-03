@@ -6,7 +6,7 @@
 //	@img path/to/image.png
 //	@audio path/to/audio.mp3
 //	Question text
-//	---
+//	---                        (or === — both separate question from answer)
 //	Answer text
 //	~ Optional custom distractor
 //
@@ -67,8 +67,8 @@ func (c *Card) EffectiveTimeLimit(deckLimit int) int {
 type QuizMode int
 
 const (
-	ModeChoice QuizMode = iota // multiple choice (default)
-	ModeType                   // user types the answer
+	ModeChoice QuizMode = iota // multiple choice
+	ModeType                   // user types the answer (default)
 )
 
 // Deck represents a parsed deck file.
@@ -101,6 +101,7 @@ func Parse(path string) (*Deck, error) {
 		Name:    deckName(absPath),
 		Path:    absPath,
 		Choices: 4,
+		Mode:    ModeType, // default to active recall; # mode: choice opts in
 	}
 
 	var lines []string
@@ -244,27 +245,27 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode) (*Card, err
 		return nil, nil
 	}
 
-	// Split on --- separator.
+	// Split on the question/answer separator (--- or ===).
 	sepIdx := -1
 	for i, line := range filtered {
-		if strings.TrimSpace(line) == "---" {
+		if isSeparator(line) {
 			sepIdx = i
 			break
 		}
 	}
 
 	if sepIdx == -1 {
-		return nil, fmt.Errorf("card missing --- separator: %q", strings.Join(filtered, " / "))
+		return nil, fmt.Errorf("card missing --- or === separator: %q", strings.Join(filtered, " / "))
 	}
 	if sepIdx == 0 {
-		return nil, fmt.Errorf("card has no question (--- at start): %q", strings.Join(filtered, " / "))
+		return nil, fmt.Errorf("card has no question (separator at start): %q", strings.Join(filtered, " / "))
 	}
 
 	questionLines := filtered[:sepIdx]
 	afterSep := filtered[sepIdx+1:]
 
 	if len(afterSep) == 0 {
-		return nil, fmt.Errorf("card has no answer (nothing after ---): %q", strings.Join(filtered, " / "))
+		return nil, fmt.Errorf("card has no answer (nothing after separator): %q", strings.Join(filtered, " / "))
 	}
 
 	// Separate answer lines from distractor lines (~ prefix).
@@ -358,6 +359,22 @@ func parseMediaLines(lines []string, baseDir string) ([]Media, error) {
 		}
 	}
 	return media, nil
+}
+
+// isSeparator reports whether a line is a question/answer separator: a run of
+// three or more dashes or equals (---, ----, ===, ========, …). Both
+// characters are accepted, and any length ≥ 3, so deck authors can use
+// whichever divider — and however long a rule — they find readable.
+func isSeparator(line string) bool {
+	s := strings.TrimSpace(line)
+	if len(s) < 3 {
+		return false
+	}
+	switch s[0] {
+	case '-', '=':
+		return strings.Trim(s, string(s[0])) == ""
+	}
+	return false
 }
 
 // extractText joins all text-type Media elements into a single string.

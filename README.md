@@ -28,7 +28,7 @@ All per-deck settings (choices, time, order, …) live in the deck file header �
 
 ## Deck Format
 
-A `.deck` file is plain text. Cards are separated by blank lines. Each card has a question and answer divided by `---`.
+A `.deck` file is plain text. Cards are separated by blank lines. Each card has a question and answer divided by `---` (or `===` — both work).
 
 ### Minimal card
 
@@ -53,7 +53,7 @@ Comments at the top of the file configure deck-wide settings:
 
 | Header           | Values                  | Default       |
 |------------------|-------------------------|---------------|
-| `# mode:`        | `choice`, `type`        | `choice`      |
+| `# mode:`        | `choice`, `type`        | `type`        |
 | `# choices:`     | any integer ≥ 2         | `4`           |
 | `# case:`        | `sensitive`, `insensitive` | `sensitive` |
 | `# time:`        | seconds (e.g. `20`, `20s`), or `none` | none (no limit) |
@@ -61,9 +61,22 @@ Comments at the top of the file configure deck-wide settings:
 
 ## Features
 
+### Type-in mode
+
+The default. The user types the answer.
+
+```
+What is 10 - 3?
+---
+7
+```
+
+Type-in is active recall — you produce the answer rather than recognizing it —
+so it's the default. Use `# case: insensitive` to ignore capitalization.
+
 ### Multiple choice mode
 
-The default. The user picks from numbered options.
+The user picks from numbered options. Opt in with `# mode: choice`.
 
 ```
 # mode: choice
@@ -75,19 +88,6 @@ What is 3 + 5?
 ```
 
 The quiz generates 4 options using answers from other cards in the deck as distractors.
-
-### Type-in mode
-
-The user types the answer.
-
-```
-# mode: type
-# case: insensitive
-
-What is 10 - 3?
----
-7
-```
 
 ### Custom distractors
 

@@ -32,7 +32,8 @@ flags:
 
 deck format:
   plain text, blank lines separate cards.
-  --- separates question from answer.
+  --- or === separates question from answer.
+  cards default to type-in; use # mode: choice for multiple choice.
   @img <path>       image on question/answer side
   @audio <path>     audio on question/answer side
   ~ <text>          custom wrong answer (distractor)

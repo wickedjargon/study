@@ -47,6 +47,62 @@ bar
 	}
 }
 
+func TestParseDefaultModeIsType(t *testing.T) {
+	// A deck with no # mode: header defaults to type-in (active recall).
+	d, err := Parse(writeTempDeck(t, "2 + 2\n---\n4\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if d.Mode != ModeType {
+		t.Errorf("expected deck default mode ModeType, got %v", d.Mode)
+	}
+	if d.Cards[0].Mode != ModeType {
+		t.Errorf("expected card default mode ModeType, got %v", d.Cards[0].Mode)
+	}
+
+	// # mode: choice still opts a deck into multiple choice.
+	d, err = Parse(writeTempDeck(t, "# mode: choice\n\n2 + 2\n---\n4\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if d.Mode != ModeChoice {
+		t.Errorf("expected ModeChoice with '# mode: choice', got %v", d.Mode)
+	}
+}
+
+func TestParseSeparatorVariants(t *testing.T) {
+	// --- and ===, any length ≥ 3, are all accepted and mixable in one deck.
+	content := "a\n===\n1\n\nb\n----\n2\n\nc\n========\n3\n\nd\n---\n4\n"
+	d, err := Parse(writeTempDeck(t, content))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"1", "2", "3", "4"}
+	if len(d.Cards) != len(want) {
+		t.Fatalf("expected %d cards, got %d", len(want), len(d.Cards))
+	}
+	for i, w := range want {
+		if d.Cards[i].AnswerText != w {
+			t.Errorf("card %d: expected answer %q, got %q", i, w, d.Cards[i].AnswerText)
+		}
+	}
+}
+
+func TestIsSeparator(t *testing.T) {
+	yes := []string{"---", "----", "===", "========", "  ---  ", "-----------"}
+	no := []string{"--", "==", "-", "", "-=-", "- - -", "===x", "a---"}
+	for _, s := range yes {
+		if !isSeparator(s) {
+			t.Errorf("isSeparator(%q) = false, want true", s)
+		}
+	}
+	for _, s := range no {
+		if isSeparator(s) {
+			t.Errorf("isSeparator(%q) = true, want false", s)
+		}
+	}
+}
+
 func TestParseChoicesMetadata(t *testing.T) {
 	content := `# choices: 6
 
