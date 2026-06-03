@@ -8,11 +8,14 @@ import (
 	"study/deck"
 )
 
-// Viewer manages external media viewer processes.
+// Viewer manages external media viewer processes. Image and audio processes
+// are tracked separately so audio can be replayed (stopping any in-flight clip)
+// without disturbing a displayed image.
 type Viewer struct {
-	imageCmd  string // image viewer command (sxiv, feh)
-	audioCmd  string // audio player command (mpv, aplay)
-	processes []*os.Process
+	imageCmd   string // image viewer command (sxiv, feh)
+	audioCmd   string // audio player command (mpv, aplay)
+	imageProcs []*os.Process
+	audioProcs []*os.Process
 }
 
 // imageViewers lists image viewers in preference order.
@@ -72,15 +75,28 @@ func (v *Viewer) ShowMedia(media []deck.Media) error {
 	return nil
 }
 
-// CloseAll terminates all running media processes.
+// CloseAll terminates all running media processes (image and audio).
 func (v *Viewer) CloseAll() {
-	for _, p := range v.processes {
+	killProcs(v.imageProcs)
+	v.imageProcs = nil
+	killProcs(v.audioProcs)
+	v.audioProcs = nil
+}
+
+// StopAudio terminates any in-flight audio clip, leaving images untouched.
+func (v *Viewer) StopAudio() {
+	killProcs(v.audioProcs)
+	v.audioProcs = nil
+}
+
+// killProcs terminates and reaps a set of subprocesses.
+func killProcs(procs []*os.Process) {
+	for _, p := range procs {
 		if p != nil {
 			p.Kill()
 			p.Wait()
 		}
 	}
-	v.processes = nil
 }
 
 // showImage launches the image viewer as a subprocess.
@@ -91,12 +107,15 @@ func (v *Viewer) showImage(path string) error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("launching %s: %w", v.imageCmd, err)
 	}
-	v.processes = append(v.processes, cmd.Process)
+	v.imageProcs = append(v.imageProcs, cmd.Process)
 	return nil
 }
 
-// playAudio launches the audio player as a subprocess.
+// playAudio launches the audio player as a subprocess. Any clip already
+// playing is stopped first, so a replay restarts cleanly rather than overlapping.
 func (v *Viewer) playAudio(path string) error {
+	v.StopAudio()
+
 	var args []string
 	for _, p := range audioPlayers {
 		if p.cmd == v.audioCmd {
@@ -112,6 +131,6 @@ func (v *Viewer) playAudio(path string) error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("launching %s: %w", v.audioCmd, err)
 	}
-	v.processes = append(v.processes, cmd.Process)
+	v.audioProcs = append(v.audioProcs, cmd.Process)
 	return nil
 }

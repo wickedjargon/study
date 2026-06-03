@@ -301,6 +301,11 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode) (*Card, err
 	if answerText == "" {
 		return nil, fmt.Errorf("card answer has no text (needed for choices): %q", strings.Join(filtered, " / "))
 	}
+	// Answers are a single line: the user types or matches one value. Multiple
+	// text lines (joined with a newline by extractText) are rejected.
+	if strings.Contains(answerText, "\n") {
+		return nil, fmt.Errorf("card answer must be a single line: %q", strings.Join(filtered, " / "))
+	}
 
 	card := &Card{
 		ID:          cardID(questionLines),

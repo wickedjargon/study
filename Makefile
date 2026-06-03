@@ -16,4 +16,8 @@ uninstall:
 clean:
 	rm -f study
 
-.PHONY: all install uninstall clean
+# study is .PHONY so `make` always delegates to `go build`, which does its own
+# up-to-date checking. Without this, make sees the existing ./study file (the
+# target has no prerequisites) and skips rebuilding after source changes,
+# silently shipping a stale binary.
+.PHONY: all study install uninstall clean

@@ -308,12 +308,9 @@ func (a *App) tick() {
 	// Time's up — count the card as wrong, just like an incorrect answer.
 	a.deadline = time.Time{}
 	a.result = a.engine.AnswerTimeout()
-	// Retry-queue reps are drill repetitions, not cold recall, so they stay
-	// invisible to persisted stats. The first miss was already recorded when
-	// the card came from the main queue.
-	if a.result != nil && !a.engine.IsRetry() {
-		a.store.RecordWrong(a.result.Card.ID)
-	}
+	// The engine records the outcome to the store; persist it now so an
+	// ungraceful exit can't lose this answer.
+	a.saveProgress()
 	a.render()
 }
 
@@ -338,6 +335,12 @@ func (a *App) handleKey(ev xevent.KeyPressEvent) {
 
 	switch a.engine.State() {
 	case quiz.ShowQuestion:
+		// Ctrl+R replays the current question's audio, in either mode. Handled
+		// before mode dispatch so it never lands in the type-mode answer buffer.
+		if ev.State&xproto.ModMaskControl > 0 && (key == "r" || key == "R") {
+			a.playQuestionAudio()
+			return
+		}
 		if a.engine.Mode() == deck.ModeType {
 			a.handleTypeKey(key, ev)
 		} else {
@@ -383,14 +386,9 @@ func (a *App) handleChoiceKey(key string) {
 			return
 		}
 		a.result = a.engine.Answer(idx)
-		// Skip stat recording for retry-queue reps (see tick()).
-		if a.result != nil && !a.engine.IsRetry() {
-			if a.result.Correct {
-				a.store.RecordCorrect(a.result.Card.ID)
-			} else {
-				a.store.RecordWrong(a.result.Card.ID)
-			}
-		}
+		// The engine records the outcome; persist immediately so an ungraceful
+		// exit can't lose this answer.
+		a.saveProgress()
 		a.render()
 	case "Escape":
 		a.quit()
@@ -401,14 +399,9 @@ func (a *App) handleTypeKey(key string, ev xevent.KeyPressEvent) {
 	switch key {
 	case "Return":
 		a.result = a.engine.AnswerTyped(a.inputBuf)
-		// Skip stat recording for retry-queue reps (see tick()).
-		if a.result != nil && !a.engine.IsRetry() {
-			if a.result.Correct {
-				a.store.RecordCorrect(a.result.Card.ID)
-			} else {
-				a.store.RecordWrong(a.result.Card.ID)
-			}
-		}
+		// The engine records the outcome; persist immediately so an ungraceful
+		// exit can't lose this answer.
+		a.saveProgress()
 		a.render()
 	case "BackSpace":
 		if len(a.inputBuf) > 0 {
@@ -566,10 +559,10 @@ func (a *App) quit() {
 }
 
 func (a *App) saveProgress() {
-	// Sessions are endless by design; a graceful Escape (or window close) is
-	// the normal way to stop, so this is the point where progress must be
-	// persisted. Report a failed write instead of silently dropping the
-	// session's results.
+	// Sessions are endless by design and the only way to stop is to quit, so
+	// progress is flushed after every answer (not just at exit) — an ungraceful
+	// kill then loses at most nothing. Report a failed write instead of
+	// silently dropping the session's results.
 	if err := a.store.Save(); err != nil {
 		fmt.Fprintf(os.Stderr, "study: failed to save progress: %v\n", err)
 	}

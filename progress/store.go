@@ -94,7 +94,12 @@ func (s *Store) RecordWrong(cardID string) {
 	cp.LastSeen = time.Now()
 }
 
-// Save writes progress to disk.
+// Save writes progress to disk atomically. Because callers persist after every
+// answer, a plain truncate-then-write (os.WriteFile) would leave the file
+// half-written if the process is killed mid-write, corrupting the entire
+// progress history. Instead we write to a temp file in the same directory,
+// fsync it, then rename it over the real path — rename is atomic on POSIX, so a
+// reader always sees either the old complete file or the new complete file.
 func (s *Store) Save() error {
 	if err := os.MkdirAll(s.dir, 0755); err != nil {
 		return fmt.Errorf("creating progress dir: %w", err)
@@ -105,8 +110,30 @@ func (s *Store) Save() error {
 		return fmt.Errorf("marshaling progress: %w", err)
 	}
 
-	if err := os.WriteFile(s.path, data, 0644); err != nil {
+	// Temp file must share a filesystem with the target for rename to be atomic,
+	// so create it alongside the destination.
+	tmp, err := os.CreateTemp(s.dir, filepath.Base(s.path)+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("creating temp progress file: %w", err)
+	}
+	tmpName := tmp.Name()
+	// Best-effort cleanup if we bail before the rename succeeds.
+	defer os.Remove(tmpName)
+
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
 		return fmt.Errorf("writing progress: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return fmt.Errorf("syncing progress: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("closing progress: %w", err)
+	}
+
+	if err := os.Rename(tmpName, s.path); err != nil {
+		return fmt.Errorf("replacing progress file: %w", err)
 	}
 
 	return nil

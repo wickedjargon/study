@@ -35,9 +35,18 @@ type Engine struct {
 	caseSensitive bool
 	store         *progress.Store
 
-	// Card queues.
-	main  []*deck.Card // primary queue (shuffled or sequential)
-	retry []*retryCard // cards answered wrong, need consecutive correct
+	// Card queues. main is kept sorted by ascending due tick; the earliest-due
+	// card is always served next. retry holds cards answered wrong that owe
+	// consecutive correct repetitions.
+	main  []queuedCard
+	retry []*retryCard
+
+	// step is a monotonic logical clock incremented each time a card is shown
+	// from the main queue. A re-queued card's due tick is step+delay, so weak
+	// cards (small delay) recur sooner than strong ones — yet because due ticks
+	// are absolute and step only grows, every card is eventually served and
+	// none can be starved.
+	step int
 
 	// All cards for generating distractors.
 	allCards []*deck.Card
@@ -54,6 +63,13 @@ type Engine struct {
 	TotalSeen    int
 	TotalCorrect int
 	TotalWrong   int
+}
+
+// queuedCard is a card in the main queue tagged with the logical tick at which
+// it becomes due to be shown.
+type queuedCard struct {
+	card *deck.Card
+	due  int
 }
 
 // retryCard tracks a card in the retry queue.
@@ -88,6 +104,13 @@ func NewEngine(d *deck.Deck, shuffle bool, choicesOverride int, store *progress.
 		})
 	}
 
+	// Seed the main queue with due ticks matching the incoming order, so the
+	// first pass presents cards in their (already shuffled/prioritized) order.
+	main := make([]queuedCard, len(cards))
+	for i, c := range cards {
+		main[i] = queuedCard{card: c, due: i}
+	}
+
 	allCards := make([]*deck.Card, len(d.Cards))
 	for i := range d.Cards {
 		allCards[i] = &d.Cards[i]
@@ -99,7 +122,7 @@ func NewEngine(d *deck.Deck, shuffle bool, choicesOverride int, store *progress.
 		mode:          d.Mode,
 		caseSensitive: d.CaseSensitive,
 		store:         store,
-		main:          cards,
+		main:          main,
 		allCards:      allCards,
 		state:         ShowQuestion,
 	}
@@ -161,6 +184,7 @@ func (e *Engine) Answer(choice int) *Result {
 	}
 
 	e.TotalSeen++
+	e.recordAnswer(correct)
 	if correct {
 		e.TotalCorrect++
 		e.handleCorrect()
@@ -198,6 +222,7 @@ func (e *Engine) AnswerTyped(input string) *Result {
 	}
 
 	e.TotalSeen++
+	e.recordAnswer(correct)
 	if correct {
 		e.TotalCorrect++
 		e.handleCorrect()
@@ -236,6 +261,7 @@ func (e *Engine) AnswerTimeout() *Result {
 	}
 
 	e.TotalSeen++
+	e.recordAnswer(false)
 	e.TotalWrong++
 	e.handleWrong()
 
@@ -252,6 +278,24 @@ func (e *Engine) Next() {
 	e.advance()
 }
 
+// recordAnswer persists the outcome of the current card to the store. It must
+// run BEFORE handleCorrect/handleWrong, because requeueCard reads the freshly
+// updated streak to schedule the card's next appearance — recording afterwards
+// would schedule off a stale, one-answer-old streak.
+//
+// Retry-queue reps are drill repetitions, not cold recall, so they stay out of
+// persisted stats; only the original main-queue showing counts.
+func (e *Engine) recordAnswer(correct bool) {
+	if e.store == nil || e.fromRetry {
+		return
+	}
+	if correct {
+		e.store.RecordCorrect(e.current.ID)
+	} else {
+		e.store.RecordWrong(e.current.ID)
+	}
+}
+
 // handleCorrect processes a correct answer.
 // Re-queues the card at a delay proportional to confidence.
 func (e *Engine) handleCorrect() {
@@ -262,6 +306,12 @@ func (e *Engine) handleCorrect() {
 				rc.remaining--
 				if rc.remaining <= 0 {
 					e.retry = append(e.retry[:i], e.retry[i+1:]...)
+					// A card the user originally missed must not vanish for
+					// the rest of the session while cards they answered right
+					// keep recurring. Re-queue it: its low stored confidence
+					// yields a short delay, so it returns sooner than
+					// well-known cards — i.e. wrong cards are seen more often.
+					e.requeueCard(e.current)
 				} else {
 					e.repeatCurrent = true
 				}
@@ -312,8 +362,10 @@ func (e *Engine) advance() {
 			e.current = e.retry[0].card
 			e.fromRetry = true
 		} else {
-			e.current = e.main[0]
+			// Serve the earliest-due card and advance the logical clock.
+			e.current = e.main[0].card
 			e.main = e.main[1:]
+			e.step++
 			e.fromRetry = false
 		}
 	} else if len(e.retry) > 0 {
@@ -332,33 +384,53 @@ func (e *Engine) advance() {
 	e.state = ShowQuestion
 }
 
-// requeueCard re-inserts a card into the main queue at a position
-// based on confidence. High confidence = further back = seen less often.
+// maxStreak caps how far a correct streak can push a card's next appearance
+// out. Beyond this the card is effectively "known well enough"; spacing it any
+// further would just hide it.
+const maxStreak = 10
+
+// requeueCard re-inserts a card into the main queue, scheduling it to come due
+// after a delay driven by the card's current correct streak — NOT its lifetime
+// confidence. Streak is a recency signal: a wrong answer resets it to 0, so a
+// just-missed card returns soonest (appears most often) regardless of how good
+// its history is, and only spaces back out as the user rebuilds consecutive
+// correct answers. The due tick is absolute (step + delay), so the queue stays
+// ordered by due time and no card can be starved — every card's due tick is
+// eventually reached as the clock advances.
 func (e *Engine) requeueCard(card *deck.Card) {
-	conf := 0.0
+	streak := 0
 	if e.store != nil {
-		conf = e.store.Get(card.ID).Confidence()
+		streak = e.store.Get(card.ID).Streak
+	}
+	if streak > maxStreak {
+		streak = maxStreak
 	}
 
-	// Delay: minimum 1, scales with confidence and deck size.
 	deckSize := len(e.allCards)
 	if deckSize < 2 {
 		deckSize = 2
 	}
 
-	// Low confidence (0): re-insert after ~2 cards.
-	// High confidence (100): re-insert after deckSize*3 cards.
-	delay := 2 + int(conf/100.0*float64(deckSize*3))
+	// Streak 0 (just missed, or never answered correctly): due again after ~2
+	// steps. Full streak: due after ~deckSize*3 steps. Each correct answer in
+	// between nudges the next appearance a little further out — a gradual
+	// recovery, exactly inverse to a miss snapping it back to the front.
+	delay := 2 + int(float64(streak)/float64(maxStreak)*float64(deckSize*3))
+	due := e.step + delay
 
-	// Clamp to queue length.
-	if delay > len(e.main) {
-		e.main = append(e.main, card)
-	} else {
-		// Insert at position.
-		e.main = append(e.main, nil)
-		copy(e.main[delay+1:], e.main[delay:])
-		e.main[delay] = card
+	// Insert keeping main sorted by ascending due tick (stable: ties keep the
+	// existing card ahead of the newcomer).
+	qc := queuedCard{card: card, due: due}
+	pos := len(e.main)
+	for i := range e.main {
+		if e.main[i].due > due {
+			pos = i
+			break
+		}
 	}
+	e.main = append(e.main, queuedCard{})
+	copy(e.main[pos+1:], e.main[pos:])
+	e.main[pos] = qc
 }
 
 // generateChoices builds the multiple choice options for a card.

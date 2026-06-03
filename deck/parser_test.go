@@ -242,19 +242,15 @@ answer
 	}
 }
 
-func TestParseMultilineAnswer(t *testing.T) {
+func TestParseMultilineAnswerRejected(t *testing.T) {
 	content := `question
 ---
 line one
 line two
 `
 	path := writeTempDeck(t, content)
-	d, err := Parse(path)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if d.Cards[0].AnswerText != "line one\nline two" {
-		t.Errorf("expected multiline answer, got %q", d.Cards[0].AnswerText)
+	if _, err := Parse(path); err == nil {
+		t.Fatal("expected error for multi-line answer, got nil")
 	}
 }
 

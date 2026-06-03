@@ -29,15 +29,15 @@ func TestCardLabel(t *testing.T) {
 			want: "→ 3 Bamboos",
 		},
 		{
-			name: "multiline answer collapsed to one line",
+			name: "multiline question collapsed to one line",
 			card: deck.Card{
-				Question: []deck.Media{{Type: deck.Audio, Content: "/decks/a.mp3"}},
-				Answer: []deck.Media{
+				Question: []deck.Media{
 					{Type: deck.Text, Content: "line one"},
 					{Type: deck.Text, Content: "line two"},
 				},
+				Answer: []deck.Media{{Type: deck.Text, Content: "answer"}},
 			},
-			want: "→ line one line two",
+			want: "line one line two",
 		},
 		{
 			name: "media on both sides falls back to file name",
