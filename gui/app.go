@@ -11,6 +11,7 @@ import (
 	_ "image/png"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -140,11 +141,18 @@ type App struct {
 	// Zero means the current card has no time limit.
 	deadline time.Time
 
-	// Fonts.
-	fontRegular font.Face
-	fontBold    font.Face
-	fontSmall   font.Face
-	fontLarge   font.Face
+	// Fonts. The faces are rebuilt from the raw font data whenever the
+	// window is resized so text scales with the window; dpi is the detected
+	// display resolution used to render points at a physically sane size.
+	fontRegular     font.Face
+	fontBold        font.Face
+	fontSmall       font.Face
+	fontLarge       font.Face
+	fontRegularData []byte
+	fontBoldData    []byte
+	dpi             float64
+	baseFontPt      float64 // current base point size; adjustable with Ctrl+=/-
+	initialFontPt   float64 // the starting base size; Ctrl+0 resets to this
 
 	// Cached question image (loaded from disk).
 	questionImg image.Image
@@ -162,6 +170,22 @@ const (
 	defaultWidth  = 800
 	defaultHeight = 600
 	padding       = 40
+)
+
+// Type scale. All face sizes derive from a per-window base point size (the
+// App.baseFontPt field) times a per-role multiplier, then scaled by window
+// size and rendered at the detected DPI. The base size starts at defaultFontPt
+// (or the deck's "# font-size:" directive) and the user nudges it at runtime
+// with Ctrl+= / Ctrl+-, in fontStepPt increments, clamped to [min,max]FontPt.
+const (
+	defaultFontPt = 14.0 // base size when the deck doesn't set one
+	minFontPt     = 8.0
+	maxFontPt     = 40.0
+	fontStepPt    = 2.0
+
+	fontMulSmall   = 0.75 // hints, progress, timer
+	fontMulRegular = 1.0  // prompts, answers, body
+	fontMulLarge   = 1.5  // card content, headers
 )
 
 // Run launches the X11 quiz window.
@@ -188,6 +212,13 @@ func Run(engine *quiz.Engine, viewer *media.Viewer, store *progress.Store) error
 		width:  defaultWidth,
 		height: defaultHeight,
 	}
+
+	// Base font size: the deck's "# font-size:" directive if set, else default.
+	app.baseFontPt = defaultFontPt
+	if pt := engine.FontSize(); pt > 0 {
+		app.baseFontPt = clampFontPt(float64(pt))
+	}
+	app.initialFontPt = app.baseFontPt // Ctrl+0 returns here
 
 	if err := app.loadFonts(); err != nil {
 		return fmt.Errorf("loading fonts: %w", err)
@@ -256,8 +287,15 @@ func Run(engine *quiz.Engine, viewer *media.Viewer, store *progress.Store) error
 	}).Connect(xu, win.Id)
 
 	xevent.ConfigureNotifyFun(func(xu *xgbutil.XUtil, ev xevent.ConfigureNotifyEvent) {
+		if int(ev.Width) == app.width && int(ev.Height) == app.height {
+			return // position-only change; nothing to redraw
+		}
 		app.width = int(ev.Width)
 		app.height = int(ev.Height)
+		// Rescale fonts to the new window size. Keep the old faces on error.
+		if err := app.buildFonts(); err != nil {
+			fmt.Fprintf(os.Stderr, "rescaling fonts: %v\n", err)
+		}
 		app.render()
 	}).Connect(xu, win.Id)
 
@@ -332,6 +370,24 @@ func (a *App) secondsLeft() int {
 
 func (a *App) handleKey(ev xevent.KeyPressEvent) {
 	key := keybind.LookupString(a.xu, ev.State, ev.Detail)
+
+	// Ctrl+= / Ctrl+- adjust the font size in any state and either mode.
+	// Handled before dispatch so the keys never land in the type-mode buffer.
+	// LookupString collapses these keysyms to their characters ("=", "+", "-"),
+	// including the keypad variants, so we match on those rather than names.
+	if ev.State&xproto.ModMaskControl > 0 {
+		switch key {
+		case "=", "+":
+			a.changeFontSize(fontStepPt)
+			return
+		case "-":
+			a.changeFontSize(-fontStepPt)
+			return
+		case "0":
+			a.setFontSize(a.initialFontPt)
+			return
+		}
+	}
 
 	switch a.engine.State() {
 	case quiz.ShowQuestion:
@@ -663,44 +719,44 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 		}
 		a.drawTextRight(canvas, fmt.Sprintf("%ds", secs), a.width-padding, y, a.fontSmall, timerColor)
 	}
-	y += 30
+	y += lineHeight(a.fontSmall)
 
 	// Question image.
 	if a.questionImg != nil {
 		imgH := a.renderImage(canvas, a.questionImg, y)
-		y += imgH + 20
+		y += imgH + a.scaled(20)
 	}
 
 	// Question text.
 	for _, m := range card.Question {
 		if m.Type == deck.Text {
 			a.drawTextCentered(canvas, m.Content, y, a.fontLarge, textColor)
-			y += 40
+			y += lineHeight(a.fontLarge)
 		}
 	}
 
-	y += 10
+	y += a.scaled(10)
 
 	if a.engine.Mode() == deck.ModeType {
 		// Text input field.
 		prompt := "> " + a.inputBuf + "_"
 		a.drawText(canvas, prompt, padding+20, y, a.fontRegular, accentColor)
-		y += 32
+		y += lineHeight(a.fontRegular)
 
 		// Help.
-		a.drawTextCentered(canvas, "type answer + enter  |  esc: quit", a.height-padding, a.fontSmall, dimColor)
+		a.drawTextCentered(canvas, "type answer + enter  |  esc: quit", a.footerY(y), a.fontSmall, dimColor)
 	} else {
 		// Choices.
 		opts := a.engine.Options()
 		for i, opt := range opts {
 			line := fmt.Sprintf("%d)  %s", i+1, opt)
 			a.drawText(canvas, line, padding+20, y, a.fontRegular, textColor)
-			y += 32
+			y += lineHeight(a.fontRegular)
 		}
 
 		// Help.
 		help := fmt.Sprintf("1-%d: answer  |  esc: quit", len(opts))
-		a.drawTextCentered(canvas, help, a.height-padding, a.fontSmall, dimColor)
+		a.drawTextCentered(canvas, help, a.footerY(y), a.fontSmall, dimColor)
 	}
 }
 
@@ -716,23 +772,23 @@ func (a *App) renderResult(canvas *image.RGBA) {
 	remaining := a.engine.Remaining()
 	prog := fmt.Sprintf("[%d/%d]", seen, seen+remaining)
 	a.drawText(canvas, prog, padding, y, a.fontSmall, dimColor)
-	y += 30
+	y += lineHeight(a.fontSmall)
 
 	// Question image.
 	if a.questionImg != nil {
 		imgH := a.renderImage(canvas, a.questionImg, y)
-		y += imgH + 20
+		y += imgH + a.scaled(20)
 	}
 
 	// Question text.
 	for _, m := range card.Question {
 		if m.Type == deck.Text {
 			a.drawTextCentered(canvas, m.Content, y, a.fontLarge, textColor)
-			y += 40
+			y += lineHeight(a.fontLarge)
 		}
 	}
 
-	y += 10
+	y += a.scaled(10)
 
 	if a.engine.Mode() == deck.ModeType {
 		// Show what was typed.
@@ -740,10 +796,10 @@ func (a *App) renderResult(canvas *image.RGBA) {
 			a.drawText(canvas, "> "+a.result.Typed+"  ✓", padding+20, y, a.fontRegular, greenColor)
 		} else {
 			a.drawText(canvas, "> "+a.result.Typed+"  X", padding+20, y, a.fontRegular, redColor)
-			y += 32
+			y += lineHeight(a.fontRegular)
 			a.drawText(canvas, "= "+a.result.Answer, padding+20, y, a.fontRegular, greenColor)
 		}
-		y += 32
+		y += lineHeight(a.fontRegular)
 	} else {
 		// Choices with highlighting.
 		opts := a.engine.Options()
@@ -758,11 +814,11 @@ func (a *App) renderResult(canvas *image.RGBA) {
 				c = redColor
 			}
 			a.drawText(canvas, line, padding+20, y, a.fontRegular, c)
-			y += 32
+			y += lineHeight(a.fontRegular)
 		}
 	}
 
-	y += 16
+	y += a.scaled(16)
 
 	// Result message.
 	if a.result.Correct {
@@ -774,9 +830,10 @@ func (a *App) renderResult(canvas *image.RGBA) {
 		msg := "X  Wrong — answer: " + a.result.Answer
 		a.drawTextCentered(canvas, msg, y, a.fontBold, redColor)
 	}
+	y += lineHeight(a.fontBold)
 
 	// Help.
-	a.drawTextCentered(canvas, "enter: continue  •  esc: quit", a.height-padding, a.fontSmall, dimColor)
+	a.drawTextCentered(canvas, "enter: continue  •  esc: quit", a.footerY(y), a.fontSmall, dimColor)
 }
 
 func (a *App) renderSummary(canvas *image.RGBA) {
@@ -784,7 +841,7 @@ func (a *App) renderSummary(canvas *image.RGBA) {
 	y := a.height / 4
 
 	a.drawTextCentered(canvas, "Session Complete", y, a.fontLarge, accentColor)
-	y += 60
+	y += lineHeight(a.fontLarge) + a.scaled(20)
 
 	stats := []struct {
 		label string
@@ -820,24 +877,24 @@ func (a *App) renderSummary(canvas *image.RGBA) {
 	for _, s := range stats {
 		line := fmt.Sprintf("%-16s %s", s.label, s.value)
 		a.drawTextCentered(canvas, line, y, a.fontRegular, s.color)
-		y += 32
+		y += lineHeight(a.fontRegular)
 	}
 
 	// All-time stats.
 	totalCorrect, totalWrong, cardsStudied := a.store.Summary()
 	if cardsStudied > 0 {
-		y += 20
+		y += a.scaled(20)
 		a.drawTextCentered(canvas, "── All-time ──", y, a.fontSmall, dimColor)
-		y += 32
+		y += lineHeight(a.fontSmall)
 		totalAcc := float64(0)
 		if totalCorrect+totalWrong > 0 {
 			totalAcc = float64(totalCorrect) / float64(totalCorrect+totalWrong) * 100
 		}
 		a.drawTextCentered(canvas, fmt.Sprintf("Cards seen: %d  •  Accuracy: %.0f%%", cardsStudied, totalAcc), y, a.fontRegular, dimColor)
-		y += 32
+		y += lineHeight(a.fontRegular)
 	}
 
-	a.drawTextCentered(canvas, "esc: exit", a.height-padding, a.fontSmall, dimColor)
+	a.drawTextCentered(canvas, "esc: exit", a.footerY(y), a.fontSmall, dimColor)
 }
 
 // ── Drawing Helpers ─────────────────────────────────────────────────
@@ -966,31 +1023,150 @@ func (a *App) loadFonts() error {
 		boldData = sysFontData // CJK fonts typically have one weight
 	}
 
-	regular, err := parseFontFace(regularData, 18)
+	a.fontRegularData = regularData
+	a.fontBoldData = boldData
+	a.dpi = detectDPI(a.xu)
+
+	return a.buildFonts()
+}
+
+// buildFonts rebuilds the four faces from the loaded font data at the current
+// window size and DPI. Faces are assigned together at the end so a parse
+// failure leaves the previous faces intact.
+func (a *App) buildFonts() error {
+	scale := a.windowScale()
+
+	regular, err := parseFontFace(a.fontRegularData, a.baseFontPt*fontMulRegular*scale, a.dpi)
 	if err != nil {
 		return err
 	}
-	a.fontRegular = regular
-
-	bold, err := parseFontFace(boldData, 18)
+	bold, err := parseFontFace(a.fontBoldData, a.baseFontPt*fontMulRegular*scale, a.dpi)
 	if err != nil {
 		return err
 	}
-	a.fontBold = bold
-
-	small, err := parseFontFace(regularData, 14)
+	small, err := parseFontFace(a.fontRegularData, a.baseFontPt*fontMulSmall*scale, a.dpi)
 	if err != nil {
 		return err
 	}
-	a.fontSmall = small
-
-	large, err := parseFontFace(boldData, 28)
+	large, err := parseFontFace(a.fontBoldData, a.baseFontPt*fontMulLarge*scale, a.dpi)
 	if err != nil {
 		return err
 	}
-	a.fontLarge = large
 
+	a.fontRegular, a.fontBold, a.fontSmall, a.fontLarge = regular, bold, small, large
 	return nil
+}
+
+// lineHeight returns the baseline-to-baseline advance for face, derived from
+// the font's own metrics so line spacing tracks the (DPI- and window-scaled)
+// font size. Metrics().Height is the font's recommended advance; the extra
+// quarter adds comfortable leading. Using metrics instead of fixed pixels is
+// what keeps successive lines from overlapping as the fonts grow.
+func lineHeight(face font.Face) int {
+	h := face.Metrics().Height
+	return (h + h/4).Ceil()
+}
+
+// textScale reports how much larger the current regular font renders than the
+// app's original 18px design. Fixed spacer gaps are multiplied by it (via
+// scaled) so the vertical layout keeps its proportions as fonts scale.
+func (a *App) textScale() float64 {
+	return a.baseFontPt * fontMulRegular * a.windowScale() * a.dpi / 72.0 / 18.0
+}
+
+// clampFontPt keeps a base point size within the legible range.
+func clampFontPt(pt float64) float64 {
+	if pt < minFontPt {
+		return minFontPt
+	}
+	if pt > maxFontPt {
+		return maxFontPt
+	}
+	return pt
+}
+
+// setFontSize sets the base font size (clamped), rebuilds the faces, and
+// redraws. A no-op if the size is unchanged or the rebuild fails.
+func (a *App) setFontSize(pt float64) {
+	pt = clampFontPt(pt)
+	if pt == a.baseFontPt {
+		return
+	}
+	a.baseFontPt = pt
+	if err := a.buildFonts(); err != nil {
+		return
+	}
+	a.render()
+}
+
+// changeFontSize nudges the base font size by delta points (one increment is
+// fontStepPt). Ctrl+= / Ctrl+- call this; Ctrl+0 calls setFontSize directly.
+func (a *App) changeFontSize(delta float64) {
+	a.setFontSize(a.baseFontPt + delta)
+}
+
+// footerY returns the baseline for a bottom-anchored footer line. It pins the
+// footer near the window bottom, but pushes it down to clear contentY when the
+// content has grown tall enough to reach it — so the footer never overlaps the
+// body, at any font size. (At extreme zoom the footer simply scrolls off the
+// bottom edge, which is the expected consequence of zooming in.)
+func (a *App) footerY(contentY int) int {
+	pinned := a.height - padding
+	if contentY > pinned {
+		return contentY
+	}
+	return pinned
+}
+
+// scaled converts a spacer gap from the original design (in pixels) to the
+// current text scale.
+func (a *App) scaled(px int) int {
+	return int(float64(px) * a.textScale())
+}
+
+// windowScale returns the font scale factor for the current window size,
+// relative to the default. Text grows with the window, clamped so it stays
+// legible when small and doesn't overflow when large.
+func (a *App) windowScale() float64 {
+	s := float64(a.height) / float64(defaultHeight)
+	if s < 0.8 {
+		s = 0.8
+	}
+	if s > 2.0 {
+		s = 2.0
+	}
+	return s
+}
+
+// detectDPI returns the display DPI to render fonts at.
+// Priority: Xft.dpi (the desktop's configured value) → the X screen's
+// 96 (the conventional default).
+//
+// Deliberately NOT derived from the panel's physical size: that yields the
+// monitor's true DPI (e.g. ~158 on a 1080p laptop panel), but the rest of the
+// desktop only renders at that scale when the user has configured it — in which
+// case Xft.dpi is set and we use it above. With Xft.dpi unset the desktop is
+// effectively 96 DPI, so rendering fonts at the physical DPI makes this app's
+// text ~1.6× larger than every other window. Matching 96 keeps us consistent.
+func detectDPI(xu *xgbutil.XUtil) float64 {
+	const minDPI, maxDPI = 50.0, 400.0
+
+	// Xft.dpi from the X resource database — the source of truth when set
+	// (it reflects the user's actual scaling choice, HiDPI included).
+	if out, err := exec.Command("xrdb", "-query").Output(); err == nil {
+		for _, line := range strings.Split(string(out), "\n") {
+			if !strings.HasPrefix(line, "Xft.dpi:") {
+				continue
+			}
+			v := strings.TrimSpace(strings.TrimPrefix(line, "Xft.dpi:"))
+			if dpi, err := strconv.ParseFloat(v, 64); err == nil && dpi >= minDPI && dpi <= maxDPI {
+				return dpi
+			}
+		}
+	}
+
+	// Conventional default — matches an unscaled desktop.
+	return 96
 }
 
 // fcMatchFile asks fontconfig for the file path of the best match for the
@@ -1010,7 +1186,7 @@ func fcMatchFile(pattern string) string {
 	return path
 }
 
-func parseFontFace(ttfData []byte, size float64) (font.Face, error) {
+func parseFontFace(ttfData []byte, size, dpi float64) (font.Face, error) {
 	// Try parsing as TTC (font collection) first, then as single font.
 	collection, err := opentype.ParseCollection(ttfData)
 	if err == nil {
@@ -1020,7 +1196,7 @@ func parseFontFace(ttfData []byte, size float64) (font.Face, error) {
 		}
 		return opentype.NewFace(f, &opentype.FaceOptions{
 			Size:    size,
-			DPI:     72,
+			DPI:     dpi,
 			Hinting: font.HintingFull,
 		})
 	}
@@ -1031,7 +1207,7 @@ func parseFontFace(ttfData []byte, size float64) (font.Face, error) {
 	}
 	face, err := opentype.NewFace(f, &opentype.FaceOptions{
 		Size:    size,
-		DPI:     72,
+		DPI:     dpi,
 		Hinting: font.HintingFull,
 	})
 	if err != nil {
@@ -1039,5 +1215,3 @@ func parseFontFace(ttfData []byte, size float64) (font.Face, error) {
 	}
 	return face, nil
 }
-
-// suppress unused import for strings
