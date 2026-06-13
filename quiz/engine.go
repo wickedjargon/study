@@ -144,6 +144,12 @@ func (e *Engine) Mode() deck.QuizMode {
 	return e.mode
 }
 
+// FontSize returns the deck's configured base font size in points,
+// or 0 if the deck doesn't set one.
+func (e *Engine) FontSize() int {
+	return e.deck.FontSize
+}
+
 // Current returns the current card being quizzed.
 func (e *Engine) Current() *deck.Card {
 	return e.current

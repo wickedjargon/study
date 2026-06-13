@@ -335,6 +335,35 @@ a4
 	}
 }
 
+func TestParseFontSizeMetadata(t *testing.T) {
+	cases := []struct {
+		name string
+		line string
+		want int
+	}{
+		{"numeric", "# font-size: 24", 24},
+		{"named small", "# font-size: small", 14},
+		{"named medium", "# font-size: medium", 18},
+		{"named large", "# font-size: large", 22},
+		{"named x-large", "# font-size: x-large", 26},
+		{"out of range", "# font-size: 200", 0}, // rejected → unset
+		{"unparseable", "# font-size: huge", 0}, // rejected → unset
+		{"absent", "# choices: 4", 0},           // no directive → unset
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			content := tc.line + "\n\nq1\n---\na1\n"
+			d, err := Parse(writeTempDeck(t, content))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if d.FontSize != tc.want {
+				t.Errorf("FontSize = %d, want %d", d.FontSize, tc.want)
+			}
+		})
+	}
+}
+
 func TestEffectiveTimeLimitNoDeckDefault(t *testing.T) {
 	// With no deck-global limit, an un-annotated card has no limit.
 	c := Card{TimeLimit: 0}

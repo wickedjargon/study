@@ -27,7 +27,7 @@ import (
 type MediaType int
 
 const (
-	Text  MediaType = iota
+	Text MediaType = iota
 	Image
 	Audio
 )
@@ -80,6 +80,7 @@ type Deck struct {
 	CaseSensitive bool     // case-sensitive matching for type mode
 	TimeLimit     int      // global per-question time limit in seconds (0 = none)
 	Sequential    bool     // present cards in deck order (default: shuffled)
+	FontSize      int      // base font size in points (0 = use the app default)
 	Cards         []Card
 }
 
@@ -152,6 +153,11 @@ func Parse(path string) (*Deck, error) {
 				deck.Sequential = true
 			case "shuffled":
 				deck.Sequential = false
+			}
+		}
+		if after, ok := strings.CutPrefix(trimmed, "# font-size:"); ok {
+			if n, ok := parseFontSize(after); ok {
+				deck.FontSize = n
 			}
 		}
 	}
@@ -334,6 +340,29 @@ func parseTimeLimit(s string) (int, bool) {
 	s = strings.TrimSuffix(s, "s")
 	n, err := strconv.Atoi(strings.TrimSpace(s))
 	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
+
+// parseFontSize parses a font-size metadata value. It accepts a plain integer
+// point size (e.g. "20") or one of the named sizes small/medium/large/x-large,
+// which map onto the app's increment grid. The bool reports whether the value
+// was understood; sizes outside a sane range are rejected.
+func parseFontSize(s string) (int, bool) {
+	s = strings.TrimSpace(s)
+	switch strings.ToLower(s) {
+	case "small":
+		return 14, true
+	case "medium":
+		return 18, true
+	case "large":
+		return 22, true
+	case "x-large", "xlarge":
+		return 26, true
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 8 || n > 48 {
 		return 0, false
 	}
 	return n, true
