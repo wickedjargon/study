@@ -141,15 +141,17 @@ type App struct {
 	// Zero means the current card has no time limit.
 	deadline time.Time
 
-	// Fonts. The faces are rebuilt from the raw font data whenever the
-	// window is resized so text scales with the window; dpi is the detected
-	// display resolution used to render points at a physically sane size.
+	// Fonts. The faces are rebuilt whenever the window is resized so text scales
+	// with the window; dpi is the detected display resolution used to render
+	// points at a physically sane size. The parsed *opentype.Font values are
+	// cached so a resize only re-runs the cheap NewFace step, not a full re-parse
+	// of the (potentially tens-of-MB) font file.
 	fontRegular     font.Face
 	fontBold        font.Face
 	fontSmall       font.Face
 	fontLarge       font.Face
-	fontRegularData []byte
-	fontBoldData    []byte
+	fontRegularFont *opentype.Font
+	fontBoldFont    *opentype.Font
 	dpi             float64
 	baseFontPt      float64 // current base point size; adjustable with Ctrl+=/-
 	initialFontPt   float64 // the starting base size; Ctrl+0 resets to this
@@ -159,6 +161,10 @@ type App struct {
 
 	// Text input buffer (type mode).
 	inputBuf string
+
+	// audioWarned suppresses repeat stderr warnings when audio playback fails
+	// (e.g. no player installed) — we report it once rather than on every card.
+	audioWarned bool
 
 	// Interned atoms for clipboard/primary paste. Zero until setupAtoms runs.
 	clipboardAtom xproto.Atom // CLIPBOARD selection (Ctrl+V source)
@@ -654,7 +660,10 @@ func (a *App) playQuestionAudio() {
 		}
 	}
 	if len(audioMedia) > 0 {
-		_ = a.viewer.ShowMedia(audioMedia)
+		if err := a.viewer.ShowMedia(audioMedia); err != nil && !a.audioWarned {
+			fmt.Fprintf(os.Stderr, "study: %v\n", err)
+			a.audioWarned = true
+		}
 	}
 }
 
@@ -1023,38 +1032,66 @@ func (a *App) loadFonts() error {
 		boldData = sysFontData // CJK fonts typically have one weight
 	}
 
-	a.fontRegularData = regularData
-	a.fontBoldData = boldData
+	// Parse the font data once here; buildFonts (called on every resize) then
+	// only builds faces from these cached fonts.
+	regularFont, err := parseFont(regularData)
+	if err != nil {
+		return err
+	}
+	boldFont, err := parseFont(boldData)
+	if err != nil {
+		return err
+	}
+	a.fontRegularFont = regularFont
+	a.fontBoldFont = boldFont
 	a.dpi = detectDPI(a.xu)
 
 	return a.buildFonts()
 }
 
-// buildFonts rebuilds the four faces from the loaded font data at the current
-// window size and DPI. Faces are assigned together at the end so a parse
-// failure leaves the previous faces intact.
+// buildFonts rebuilds the four faces from the cached fonts at the current
+// window size and DPI. Faces are assigned together at the end so a build
+// failure leaves the previous faces intact. The previous faces are closed
+// before the swap so resizing/zooming doesn't leak a face set per event.
 func (a *App) buildFonts() error {
 	scale := a.windowScale()
 
-	regular, err := parseFontFace(a.fontRegularData, a.baseFontPt*fontMulRegular*scale, a.dpi)
+	regular, err := newFace(a.fontRegularFont, a.baseFontPt*fontMulRegular*scale, a.dpi)
 	if err != nil {
 		return err
 	}
-	bold, err := parseFontFace(a.fontBoldData, a.baseFontPt*fontMulRegular*scale, a.dpi)
+	bold, err := newFace(a.fontBoldFont, a.baseFontPt*fontMulRegular*scale, a.dpi)
 	if err != nil {
+		regular.Close()
 		return err
 	}
-	small, err := parseFontFace(a.fontRegularData, a.baseFontPt*fontMulSmall*scale, a.dpi)
+	small, err := newFace(a.fontRegularFont, a.baseFontPt*fontMulSmall*scale, a.dpi)
 	if err != nil {
+		regular.Close()
+		bold.Close()
 		return err
 	}
-	large, err := parseFontFace(a.fontBoldData, a.baseFontPt*fontMulLarge*scale, a.dpi)
+	large, err := newFace(a.fontBoldFont, a.baseFontPt*fontMulLarge*scale, a.dpi)
 	if err != nil {
+		regular.Close()
+		bold.Close()
+		small.Close()
 		return err
 	}
 
+	a.closeFonts()
 	a.fontRegular, a.fontBold, a.fontSmall, a.fontLarge = regular, bold, small, large
 	return nil
+}
+
+// closeFonts releases the current face set. Safe to call before the first build
+// (the faces are nil) and after each rebuild.
+func (a *App) closeFonts() {
+	for _, f := range []font.Face{a.fontRegular, a.fontBold, a.fontSmall, a.fontLarge} {
+		if f != nil {
+			f.Close()
+		}
+	}
 }
 
 // lineHeight returns the baseline-to-baseline advance for face, derived from
@@ -1186,32 +1223,23 @@ func fcMatchFile(pattern string) string {
 	return path
 }
 
-func parseFontFace(ttfData []byte, size, dpi float64) (font.Face, error) {
-	// Try parsing as TTC (font collection) first, then as single font.
-	collection, err := opentype.ParseCollection(ttfData)
-	if err == nil {
-		f, err := collection.Font(0)
-		if err != nil {
-			return nil, err
-		}
-		return opentype.NewFace(f, &opentype.FaceOptions{
-			Size:    size,
-			DPI:     dpi,
-			Hinting: font.HintingFull,
-		})
+// parseFont parses raw font data into a reusable *opentype.Font, trying a TTC
+// (font collection) first, then a single font. Parsing is the expensive step
+// and is size-independent, so callers do it once and build many faces from the
+// result with newFace.
+func parseFont(ttfData []byte) (*opentype.Font, error) {
+	if collection, err := opentype.ParseCollection(ttfData); err == nil {
+		return collection.Font(0)
 	}
+	return opentype.Parse(ttfData)
+}
 
-	f, err := opentype.Parse(ttfData)
-	if err != nil {
-		return nil, err
-	}
-	face, err := opentype.NewFace(f, &opentype.FaceOptions{
+// newFace builds a face at the given size and DPI from an already-parsed font.
+// This is the cheap, per-size step run on every resize.
+func newFace(f *opentype.Font, size, dpi float64) (font.Face, error) {
+	return opentype.NewFace(f, &opentype.FaceOptions{
 		Size:    size,
 		DPI:     dpi,
 		Hinting: font.HintingFull,
 	})
-	if err != nil {
-		return nil, err
-	}
-	return face, nil
 }

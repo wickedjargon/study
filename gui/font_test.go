@@ -22,8 +22,12 @@ func loadTestFont(t *testing.T) []byte {
 // cannot collide, at every size (including very large zoom levels).
 func TestLineHeightClearsGlyphExtent(t *testing.T) {
 	data := loadTestFont(t)
+	f, err := parseFont(data)
+	if err != nil {
+		t.Fatalf("parseFont: %v", err)
+	}
 	for _, pt := range []float64{minFontPt, 14, 27, maxFontPt, maxFontPt * fontMulLarge * 2} {
-		face, err := parseFontFace(data, pt, 158) // 158 DPI = a HiDPI panel
+		face, err := newFace(f, pt, 158) // 158 DPI = a HiDPI panel
 		if err != nil {
 			t.Fatalf("size %.0f: %v", pt, err)
 		}

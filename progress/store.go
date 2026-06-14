@@ -94,12 +94,15 @@ func (s *Store) RecordWrong(cardID string) {
 	cp.LastSeen = time.Now()
 }
 
-// Save writes progress to disk atomically. Because callers persist after every
-// answer, a plain truncate-then-write (os.WriteFile) would leave the file
-// half-written if the process is killed mid-write, corrupting the entire
-// progress history. Instead we write to a temp file in the same directory,
-// fsync it, then rename it over the real path — rename is atomic on POSIX, so a
-// reader always sees either the old complete file or the new complete file.
+// Save writes progress to disk atomically and durably. Because callers persist
+// after every answer, a plain truncate-then-write (os.WriteFile) would leave the
+// file half-written if the process is killed mid-write, corrupting the entire
+// progress history. Instead we write to a temp file in the same directory, fsync
+// it, then rename it over the real path — rename is atomic on POSIX, so a reader
+// always sees either the old complete file or the new complete file. Finally we
+// fsync the containing directory: rename is atomic, but the directory entry that
+// points at the new file isn't durable until the directory itself is synced, so
+// without this a crash right after the rename could revert to the old file.
 func (s *Store) Save() error {
 	if err := os.MkdirAll(s.dir, 0755); err != nil {
 		return fmt.Errorf("creating progress dir: %w", err)
@@ -134,6 +137,15 @@ func (s *Store) Save() error {
 
 	if err := os.Rename(tmpName, s.path); err != nil {
 		return fmt.Errorf("replacing progress file: %w", err)
+	}
+
+	// Make the rename durable by syncing the directory. Best-effort: not all
+	// platforms/filesystems permit fsync on a directory, and a failure here
+	// doesn't mean the data is lost (the rename already succeeded), so we don't
+	// surface it as an error.
+	if dir, err := os.Open(s.dir); err == nil {
+		dir.Sync()
+		dir.Close()
 	}
 
 	return nil

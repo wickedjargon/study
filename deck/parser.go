@@ -114,12 +114,55 @@ func Parse(path string) (*Deck, error) {
 		return nil, fmt.Errorf("reading deck: %w", err)
 	}
 
-	// Extract metadata from comment lines at the top.
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if !strings.HasPrefix(trimmed, "#") {
+	// Split lines into card blocks separated by blank lines.
+	blocks := splitBlocks(lines)
+
+	// Deck-level metadata lives in the leading comment-only blocks (those before
+	// the first card). Scanning by block rather than by contiguous line means a
+	// blank line between header directives no longer silently drops the rest, and
+	// it cleanly separates deck-level directives from a card's own per-card
+	// directives, which share the card's block (and are read in parseCard).
+	for _, block := range blocks {
+		if !isCommentOnly(block) {
 			break
 		}
+		applyDeckMetadata(deck, block)
+	}
+
+	for _, block := range blocks {
+		card, err := parseCard(block, dir, deck.Mode)
+		if err != nil {
+			return nil, err
+		}
+		if card != nil {
+			deck.Cards = append(deck.Cards, *card)
+		}
+	}
+
+	if len(deck.Cards) == 0 {
+		return nil, fmt.Errorf("deck has no cards")
+	}
+
+	return deck, nil
+}
+
+// isCommentOnly reports whether every line in a block is a comment (blocks from
+// splitBlocks never contain blank lines, so this identifies a metadata-only
+// block that precedes any card content).
+func isCommentOnly(block []string) bool {
+	for _, line := range block {
+		if !strings.HasPrefix(strings.TrimSpace(line), "#") {
+			return false
+		}
+	}
+	return true
+}
+
+// applyDeckMetadata reads deck-level directives from a comment-only block and
+// applies them to the deck.
+func applyDeckMetadata(deck *Deck, block []string) {
+	for _, line := range block {
+		trimmed := strings.TrimSpace(line)
 		if after, ok := strings.CutPrefix(trimmed, "# choices:"); ok {
 			n, err := strconv.Atoi(strings.TrimSpace(after))
 			if err == nil && n >= 2 {
@@ -161,25 +204,6 @@ func Parse(path string) (*Deck, error) {
 			}
 		}
 	}
-
-	// Split lines into card blocks separated by blank lines.
-	blocks := splitBlocks(lines)
-
-	for _, block := range blocks {
-		card, err := parseCard(block, dir, deck.Mode)
-		if err != nil {
-			return nil, err
-		}
-		if card != nil {
-			deck.Cards = append(deck.Cards, *card)
-		}
-	}
-
-	if len(deck.Cards) == 0 {
-		return nil, fmt.Errorf("deck has no cards")
-	}
-
-	return deck, nil
 }
 
 // splitBlocks splits lines into groups separated by blank lines,

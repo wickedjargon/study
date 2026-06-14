@@ -377,6 +377,33 @@ func TestEffectiveTimeLimitNoDeckDefault(t *testing.T) {
 	}
 }
 
+func TestParseHeaderDirectivesAcrossBlankLines(t *testing.T) {
+	// Deck-level directives are read from every leading comment-only block, so a
+	// blank line separating header directives must not drop the ones after it.
+	content := `# choices: 6
+
+# mode: choice
+# order: sequential
+
+q1
+---
+a1
+`
+	d, err := Parse(writeTempDeck(t, content))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if d.Choices != 6 {
+		t.Errorf("expected 6 choices, got %d", d.Choices)
+	}
+	if d.Mode != ModeChoice {
+		t.Errorf("expected ModeChoice from directive after a blank line, got %v", d.Mode)
+	}
+	if !d.Sequential {
+		t.Errorf("expected Sequential=true from directive after a blank line")
+	}
+}
+
 func TestParsePerCardChoices(t *testing.T) {
 	content := `# choices: 4
 
