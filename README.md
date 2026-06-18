@@ -210,6 +210,24 @@ France
 
 Paths are relative to the directory containing the `.deck` file.
 
+### Right-to-left scripts (Arabic, Persian, …)
+
+Arabic-script text is rendered with full contextual shaping (letters join into
+their isolated/initial/medial/final forms) and right-to-left layout, including
+ZWNJ (zero-width non-joiner) handling — so Persian, Arabic, Urdu, etc. display
+correctly:
+
+```
+سلام
+salâm
+---
+hello
+```
+
+This needs an Arabic-capable font installed (e.g. Noto Naskh Arabic, Noto Sans
+Arabic, or Vazirmatn); one is detected automatically. If none is found, the text
+falls back to the plain renderer (unshaped). Latin and CJK text are unaffected.
+
 ### Audio
 
 Play a pronunciation clip with `@audio`:

@@ -25,6 +25,9 @@ import (
 	"github.com/BurntSushi/xgbutil/xprop"
 	"github.com/BurntSushi/xgbutil/xwindow"
 
+	"github.com/go-text/render"
+	gtfont "github.com/go-text/typesetting/font"
+
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/gofont/gobold"
 	"golang.org/x/image/font/gofont/goregular"
@@ -156,6 +159,16 @@ type App struct {
 	baseFontPt      float64 // current base point size; adjustable with Ctrl+=/-
 	initialFontPt   float64 // the starting base size; Ctrl+0 resets to this
 
+	// Arabic-script rendering. Go's font.Drawer does no contextual shaping or
+	// RTL layout, so Arabic/Persian text (which joins cursively and reads
+	// right-to-left) is instead shaped and drawn through go-text. arabicFace is
+	// nil when no Arabic-capable font is found, in which case such text falls
+	// back to the plain drawer. measureImg is a scratch target used only to
+	// measure a shaped line's width (for centering) before drawing it for real.
+	arabicFace     *gtfont.Face
+	arabicRenderer *render.Renderer
+	measureImg     *image.RGBA
+
 	// Cached question image (loaded from disk).
 	questionImg image.Image
 
@@ -250,6 +263,10 @@ func Run(engine *quiz.Engine, viewer *media.Viewer, store *progress.Store) error
 	if err := app.loadFonts(); err != nil {
 		return fmt.Errorf("loading fonts: %w", err)
 	}
+
+	// Load an Arabic-capable font for shaping RTL scripts (best-effort; decks
+	// without Arabic text are unaffected if none is found).
+	app.loadArabicFont()
 
 	// Create window.
 	win, err := xwindow.Generate(xu)
@@ -792,7 +809,7 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 	// Question text.
 	for _, m := range card.Question {
 		if m.Type == deck.Text {
-			a.drawTextCentered(canvas, m.Content, y, a.fontLarge, textColor)
+			a.drawCardText(canvas, m.Content, y, textColor)
 			y += lineHeight(a.fontLarge)
 		}
 	}
@@ -845,7 +862,7 @@ func (a *App) renderResult(canvas *image.RGBA) {
 	// Question text.
 	for _, m := range card.Question {
 		if m.Type == deck.Text {
-			a.drawTextCentered(canvas, m.Content, y, a.fontLarge, textColor)
+			a.drawCardText(canvas, m.Content, y, textColor)
 			y += lineHeight(a.fontLarge)
 		}
 	}
