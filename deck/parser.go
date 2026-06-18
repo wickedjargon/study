@@ -84,7 +84,23 @@ type Deck struct {
 	FontSize      int      // base font size in points (0 = use the app default)
 	Speed         float64  // audio playback speed multiplier (0 = use the app default of 1.0)
 	Cards         []Card
+
+	// Warnings collects non-fatal parse issues — directives whose value was
+	// malformed or out of range and therefore ignored. The caller prints these
+	// so a typo'd directive isn't silently dropped. (A fatal problem, e.g. a
+	// card with no answer, is returned as an error instead.)
+	Warnings []string
 }
+
+// warn records a non-fatal parse issue on the deck.
+func (d *Deck) warn(format string, args ...any) {
+	d.Warnings = append(d.Warnings, fmt.Sprintf(format, args...))
+}
+
+// maxTimeLimit caps a per-question time limit (in seconds). A value above this
+// is almost certainly a typo (a question timer measured in hours makes no
+// sense), so it's rejected with a warning rather than honored.
+const maxTimeLimit = 3600
 
 // Parse reads a deck file and returns a structured Deck.
 func Parse(path string) (*Deck, error) {
@@ -132,7 +148,7 @@ func Parse(path string) (*Deck, error) {
 	}
 
 	for _, block := range blocks {
-		card, err := parseCard(block, dir, deck.Mode)
+		card, err := parseCard(block, dir, deck.Mode, deck.warn)
 		if err != nil {
 			return nil, err
 		}
@@ -166,9 +182,11 @@ func applyDeckMetadata(deck *Deck, block []string) {
 	for _, line := range block {
 		trimmed := strings.TrimSpace(line)
 		if after, ok := strings.CutPrefix(trimmed, "# choices:"); ok {
-			n, err := strconv.Atoi(strings.TrimSpace(after))
-			if err == nil && n >= 2 {
+			v := strings.TrimSpace(after)
+			if n, err := strconv.Atoi(v); err == nil && n >= 2 {
 				deck.Choices = n
+			} else {
+				deck.warn("ignoring %q (# choices: needs an integer >= 2)", trimmed)
 			}
 		}
 		if after, ok := strings.CutPrefix(trimmed, "# mode:"); ok {
@@ -177,6 +195,8 @@ func applyDeckMetadata(deck *Deck, block []string) {
 				deck.Mode = ModeType
 			case "choice":
 				deck.Mode = ModeChoice
+			default:
+				deck.warn("ignoring %q (# mode: must be type or choice)", trimmed)
 			}
 		}
 		if after, ok := strings.CutPrefix(trimmed, "# case:"); ok {
@@ -185,11 +205,17 @@ func applyDeckMetadata(deck *Deck, block []string) {
 				deck.CaseSensitive = true
 			case "insensitive":
 				deck.CaseSensitive = false
+			default:
+				deck.warn("ignoring %q (# case: must be sensitive or insensitive)", trimmed)
 			}
 		}
 		if after, ok := strings.CutPrefix(trimmed, "# time:"); ok {
-			if n, ok := parseTimeLimit(after); ok && n > 0 {
-				deck.TimeLimit = n
+			if n, ok := parseTimeLimit(after); ok {
+				if n > 0 {
+					deck.TimeLimit = n
+				}
+			} else {
+				deck.warn("ignoring %q (# time: needs 0-%d seconds, or none)", trimmed, maxTimeLimit)
 			}
 		}
 		if after, ok := strings.CutPrefix(trimmed, "# order:"); ok {
@@ -198,16 +224,22 @@ func applyDeckMetadata(deck *Deck, block []string) {
 				deck.Sequential = true
 			case "shuffled":
 				deck.Sequential = false
+			default:
+				deck.warn("ignoring %q (# order: must be sequential or shuffled)", trimmed)
 			}
 		}
 		if after, ok := strings.CutPrefix(trimmed, "# font-size:"); ok {
 			if n, ok := parseFontSize(after); ok {
 				deck.FontSize = n
+			} else {
+				deck.warn("ignoring %q (# font-size: needs 8-48, or small/medium/large/x-large)", trimmed)
 			}
 		}
 		if after, ok := strings.CutPrefix(trimmed, "# speed:"); ok {
 			if x, ok := parseSpeed(after); ok {
 				deck.Speed = x
+			} else {
+				deck.warn("ignoring %q (# speed: needs 0.25-4.0)", trimmed)
 			}
 		}
 	}
@@ -236,9 +268,17 @@ func splitBlocks(lines []string) [][]string {
 	return blocks
 }
 
-// parseCard parses a block of lines into a Card.
-// Returns nil for comment-only blocks.
-func parseCard(block []string, baseDir string, defaultMode QuizMode) (*Card, error) {
+// parseCard parses a block of lines into a Card. Returns nil for comment-only
+// blocks. warn records non-fatal issues (e.g. a malformed per-card directive).
+func parseCard(block []string, baseDir string, defaultMode QuizMode, warn func(string, ...any)) (*Card, error) {
+	// A comment-only block carries no card. Leading ones are deck metadata
+	// (handled in applyDeckMetadata); any later one is just a comment. Return
+	// early so the per-card directive scan below doesn't double-report a bad
+	// value the deck-level pass already warned about.
+	if isCommentOnly(block) {
+		return nil, nil
+	}
+
 	// Check for per-card metadata before filtering comments.
 	cardMode := defaultMode
 	cardChoices := 0
@@ -251,12 +291,15 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode) (*Card, err
 				cardMode = ModeType
 			case "choice":
 				cardMode = ModeChoice
+			default:
+				warn("ignoring %q (# mode: must be type or choice)", trimmed)
 			}
 		}
 		if after, ok := strings.CutPrefix(trimmed, "# choices:"); ok {
-			n, err := strconv.Atoi(strings.TrimSpace(after))
-			if err == nil && n >= 2 {
+			if n, err := strconv.Atoi(strings.TrimSpace(after)); err == nil && n >= 2 {
 				cardChoices = n
+			} else {
+				warn("ignoring %q (# choices: needs an integer >= 2)", trimmed)
 			}
 		}
 		if after, ok := strings.CutPrefix(trimmed, "# time:"); ok {
@@ -266,6 +309,8 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode) (*Card, err
 				} else {
 					cardTime = n
 				}
+			} else {
+				warn("ignoring %q (# time: needs 0-%d seconds, or none)", trimmed, maxTimeLimit)
 			}
 		}
 	}
@@ -369,9 +414,11 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode) (*Card, err
 }
 
 // parseTimeLimit parses a time-limit metadata value. It accepts a plain
-// integer number of seconds, an optional trailing "s" (e.g. "30s"), or the
-// words "none"/"off"/"0" to mean no limit (returned as 0). The bool reports
-// whether the value was understood.
+// integer number of seconds (0 to maxTimeLimit), an optional trailing "s"
+// (e.g. "30s"), or the words "none"/"off"/"0" to mean no limit (returned as 0).
+// The bool reports whether the value was understood; a negative or absurdly
+// large value is rejected (ok=false) so the caller can warn rather than honor a
+// typo.
 func parseTimeLimit(s string) (int, bool) {
 	s = strings.TrimSpace(s)
 	switch strings.ToLower(s) {
@@ -380,7 +427,7 @@ func parseTimeLimit(s string) (int, bool) {
 	}
 	s = strings.TrimSuffix(s, "s")
 	n, err := strconv.Atoi(strings.TrimSpace(s))
-	if err != nil {
+	if err != nil || n < 0 || n > maxTimeLimit {
 		return 0, false
 	}
 	return n, true

@@ -486,3 +486,42 @@ a2
 		t.Errorf("expected card 1 choices=6, got %d", d.Cards[1].Choices)
 	}
 }
+
+func TestParseTimeLimitUpperBound(t *testing.T) {
+	// An absurd per-question limit is rejected (and warned) rather than honored.
+	d, err := Parse(writeTempDeck(t, "# time: 999999\n\nq\n---\na\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if d.TimeLimit != 0 {
+		t.Errorf("expected out-of-range time limit ignored (0), got %d", d.TimeLimit)
+	}
+	if len(d.Warnings) == 0 {
+		t.Error("expected a warning for the out-of-range # time:")
+	}
+}
+
+func TestParseWarnsOnInvalidDirective(t *testing.T) {
+	d, err := Parse(writeTempDeck(t, "# choices: banana\n# mode: sideways\n\nq\n---\na\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(d.Warnings) != 2 {
+		t.Errorf("expected 2 warnings, got %d: %v", len(d.Warnings), d.Warnings)
+	}
+	// The bad directives are ignored: defaults stand.
+	if d.Choices != 4 {
+		t.Errorf("expected default 4 choices after invalid value, got %d", d.Choices)
+	}
+}
+
+func TestParseValidDirectivesNoWarnings(t *testing.T) {
+	// A well-formed deck must not emit spurious warnings.
+	d, err := Parse(writeTempDeck(t, "# choices: 3\n# time: 30\n# mode: choice\n\nq\n---\na\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(d.Warnings) != 0 {
+		t.Errorf("expected no warnings, got %v", d.Warnings)
+	}
+}

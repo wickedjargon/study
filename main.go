@@ -69,6 +69,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Surface non-fatal parse issues (e.g. a typo'd directive that was ignored)
+	// so they aren't silently dropped.
+	for _, w := range d.Warnings {
+		fmt.Fprintf(os.Stderr, "study: %s\n", w)
+	}
+
 	// Check media viewers (audio only — images rendered in GUI).
 	viewer := media.NewViewer()
 
