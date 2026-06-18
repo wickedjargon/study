@@ -2,6 +2,7 @@ package gui
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/color"
 	"os"
@@ -111,9 +112,18 @@ func hasArabic(s string) bool {
 // text uses the original drawer. Falls back to the plain drawer if no Arabic
 // font loaded, so the text still appears (unshaped) rather than vanishing.
 func (a *App) drawCardText(canvas *image.RGBA, text string, y int, c color.RGBA) {
-	if a.arabicFace != nil && hasArabic(text) {
-		a.drawArabicCentered(canvas, text, y, c)
-		return
+	if hasArabic(text) {
+		if a.arabicFace != nil {
+			a.drawArabicCentered(canvas, text, y, c)
+			return
+		}
+		// No Arabic font: the plain drawer below still shows the text, but
+		// unshaped and left-to-right. Note it once so the degradation isn't a
+		// silent mystery.
+		if !a.arabicWarned {
+			fmt.Fprintln(os.Stderr, "study: no Arabic-capable font found; Arabic text shown unshaped (try installing fonts-noto-naskh-arabic)")
+			a.arabicWarned = true
+		}
 	}
 	a.drawTextCentered(canvas, text, y, a.fontLarge, c)
 }

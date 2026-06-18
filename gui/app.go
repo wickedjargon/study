@@ -169,8 +169,23 @@ type App struct {
 	arabicRenderer *render.Renderer
 	measureImg     *image.RGBA
 
-	// Cached question image (loaded from disk).
-	questionImg image.Image
+	// Cached question image (loaded from disk). questionImgFailed is set when the
+	// current card names an image that exists but couldn't be decoded (e.g. an
+	// unsupported format or a corrupt file), so the question can show a
+	// placeholder instead of silently dropping the image.
+	questionImg       image.Image
+	questionImgFailed bool
+
+	// One-shot warning guards so a degraded-feature notice is printed to stderr
+	// once rather than on every use: pasteWarned when clipboard atoms are
+	// unavailable, arabicWarned when Arabic text is shown without an Arabic font.
+	pasteWarned  bool
+	arabicWarned bool
+
+	// saveFailed is set when a progress save did not succeed (after a retry); the
+	// GUI then shows a persistent warning so the user knows results aren't being
+	// written. Cleared on the next successful save.
+	saveFailed bool
 
 	// Text input buffer (type mode).
 	inputBuf string
@@ -631,6 +646,10 @@ func (a *App) handleButton(ev xevent.ButtonPressEvent) {
 // event (handleSelectionNotify).
 func (a *App) requestPaste(selection xproto.Atom, t xproto.Timestamp) {
 	if selection == 0 || a.utf8Atom == 0 || a.selPropAtom == 0 {
+		if !a.pasteWarned {
+			fmt.Fprintln(os.Stderr, "study: clipboard paste unavailable (could not intern X selection atoms)")
+			a.pasteWarned = true
+		}
 		return
 	}
 	xproto.ConvertSelection(a.xu.Conn(), a.win.Id, selection, a.utf8Atom, a.selPropAtom, t)
@@ -677,17 +696,27 @@ func (a *App) quit() {
 func (a *App) saveProgress() {
 	// Sessions are endless by design and the only way to stop is to quit, so
 	// progress is flushed after every answer (not just at exit) — an ungraceful
-	// kill then loses at most nothing. Report a failed write instead of
-	// silently dropping the session's results.
-	if err := a.store.Save(); err != nil {
-		fmt.Fprintf(os.Stderr, "study: failed to save progress: %v\n", err)
+	// kill then loses at most nothing. Most save failures are transient (a brief
+	// filesystem hiccup), so retry once before giving up. A persistent failure
+	// is both logged and surfaced in-window (saveFailed) so the user knows
+	// results aren't being written, rather than silently dropping them.
+	err := a.store.Save()
+	if err != nil {
+		err = a.store.Save()
 	}
+	if err != nil {
+		a.saveFailed = true
+		fmt.Fprintf(os.Stderr, "study: failed to save progress: %v\n", err)
+		return
+	}
+	a.saveFailed = false
 }
 
 // ── Media Loading ───────────────────────────────────────────────────
 
 func (a *App) loadQuestionImage() {
 	a.questionImg = nil
+	a.questionImgFailed = false
 	card := a.engine.Current()
 	if card == nil {
 		return
@@ -696,6 +725,12 @@ func (a *App) loadQuestionImage() {
 		if m.Type == deck.Image {
 			if img, err := loadImage(m.Content); err == nil {
 				a.questionImg = img
+			} else {
+				// The file existed at parse time (it's stat-checked then) but
+				// won't decode now — unsupported format or corrupt/removed. Flag
+				// it so the question shows a placeholder instead of nothing.
+				a.questionImgFailed = true
+				fmt.Fprintf(os.Stderr, "study: could not load image %s: %v\n", m.Content, err)
 			}
 			return
 		}
@@ -765,6 +800,12 @@ func (a *App) render() {
 		a.renderSummary(canvas)
 	}
 
+	// Persistent warning when progress isn't being saved. Pinned to the very
+	// bottom edge, below the normal footer, so it's visible on every screen.
+	if a.saveFailed {
+		a.drawTextCentered(canvas, "progress not saved — see terminal", a.height-8, a.fontSmall, redColor)
+	}
+
 	// Convert and paint to X11 window.
 	ximg := xgraphics.NewConvert(a.xu, canvas)
 	ximg.XSurfaceSet(a.win.Id)
@@ -801,10 +842,7 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 	y += lineHeight(a.fontSmall)
 
 	// Question image.
-	if a.questionImg != nil {
-		imgH := a.renderImage(canvas, a.questionImg, y)
-		y += imgH + a.scaled(20)
-	}
+	y = a.renderQuestionImageBlock(canvas, y)
 
 	// Question text.
 	for _, m := range card.Question {
@@ -854,10 +892,7 @@ func (a *App) renderResult(canvas *image.RGBA) {
 	y += lineHeight(a.fontSmall)
 
 	// Question image.
-	if a.questionImg != nil {
-		imgH := a.renderImage(canvas, a.questionImg, y)
-		y += imgH + a.scaled(20)
-	}
+	y = a.renderQuestionImageBlock(canvas, y)
 
 	// Question text.
 	for _, m := range card.Question {
@@ -1017,6 +1052,26 @@ func (a *App) drawTextCentered(canvas *image.RGBA, text string, y int, face font
 	}
 	d.Dot = fixed.P(x, y)
 	d.DrawString(text)
+}
+
+// renderQuestionImageBlock draws the current question's image starting at y and
+// returns the y below it (including the trailing gap). If the image is present
+// it's scaled and centered; if it was named but failed to decode, a dimmed
+// "[image failed to load]" placeholder takes its place so the missing visual is
+// acknowledged rather than silently absent. With no image on the card, y is
+// returned unchanged.
+func (a *App) renderQuestionImageBlock(canvas *image.RGBA, y int) int {
+	switch {
+	case a.questionImg != nil:
+		imgH := a.renderImage(canvas, a.questionImg, y)
+		return y + imgH + a.scaled(20)
+	case a.questionImgFailed:
+		y += lineHeight(a.fontRegular)
+		a.drawTextCentered(canvas, "[image failed to load]", y, a.fontRegular, dimColor)
+		return y + a.scaled(20)
+	default:
+		return y
+	}
 }
 
 func (a *App) renderImage(canvas *image.RGBA, img image.Image, y int) int {
