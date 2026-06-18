@@ -81,6 +81,7 @@ type Deck struct {
 	TimeLimit     int      // global per-question time limit in seconds (0 = none)
 	Sequential    bool     // present cards in deck order (default: shuffled)
 	FontSize      int      // base font size in points (0 = use the app default)
+	Speed         float64  // audio playback speed multiplier (0 = use the app default of 1.0)
 	Cards         []Card
 }
 
@@ -201,6 +202,11 @@ func applyDeckMetadata(deck *Deck, block []string) {
 		if after, ok := strings.CutPrefix(trimmed, "# font-size:"); ok {
 			if n, ok := parseFontSize(after); ok {
 				deck.FontSize = n
+			}
+		}
+		if after, ok := strings.CutPrefix(trimmed, "# speed:"); ok {
+			if x, ok := parseSpeed(after); ok {
+				deck.Speed = x
 			}
 		}
 	}
@@ -390,6 +396,21 @@ func parseFontSize(s string) (int, bool) {
 		return 0, false
 	}
 	return n, true
+}
+
+// parseSpeed parses an audio-speed metadata value: a decimal multiplier, with
+// an optional trailing "x" (e.g. "0.75", "1.5x"). The value is rejected unless
+// it falls within the same playback range the GUI allows (0.25–4.0), so a deck
+// can't request a speed the runtime would only clamp away. The bool reports
+// whether the value was understood.
+func parseSpeed(s string) (float64, bool) {
+	s = strings.TrimSpace(s)
+	s = strings.TrimSuffix(strings.ToLower(s), "x")
+	x, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	if err != nil || x < 0.25 || x > 4.0 {
+		return 0, false
+	}
+	return x, true
 }
 
 // parseMediaLines converts raw text lines into Media elements.

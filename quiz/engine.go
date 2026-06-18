@@ -150,6 +150,12 @@ func (e *Engine) FontSize() int {
 	return e.deck.FontSize
 }
 
+// Speed returns the deck's configured audio playback speed multiplier,
+// or 0 if the deck doesn't set one (the GUI then uses its default of 1.0).
+func (e *Engine) Speed() float64 {
+	return e.deck.Speed
+}
+
 // Current returns the current card being quizzed.
 func (e *Engine) Current() *deck.Card {
 	return e.current

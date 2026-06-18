@@ -58,6 +58,7 @@ Comments at the top of the file configure deck-wide settings:
 | `# case:`        | `sensitive`, `insensitive` | `sensitive` |
 | `# time:`        | seconds (e.g. `20`, `20s`), or `none` | `none` |
 | `# order:`       | `sequential`, `shuffled` | `shuffled`   |
+| `# speed:`       | audio speed `0.25`–`4.0` (e.g. `0.75`, `1.5x`) | `1.0` |
 
 ## Features
 
@@ -221,6 +222,21 @@ hello
 
 Requires `mpv` or `aplay` on the system.
 
+#### Playback speed
+
+Audio plays at normal speed by default. While a question is showing, adjust the
+speed on the fly — handy for hearing a tricky phrase slowly:
+
+- `Ctrl`+`,` — slow down and replay
+- `Ctrl`+`.` — speed up and replay
+- `Ctrl`+`/` — reset to normal (1.00x)
+
+Speed steps by `0.25`, clamped to `0.25x`–`4.00x`, and the current value is shown
+in the footer. The setting carries across cards for the rest of the session. Set
+a different starting speed per deck with the `# speed:` header (e.g. `# speed: 0.75`
+for a beginner deck). Speed changes require `mpv`; pitch is preserved so slowed
+speech stays clear. (`aplay` always plays at normal speed.)
+
 ### Combined media
 
 A single card can have text, image, and audio together:
@@ -243,6 +259,8 @@ The image is displayed, the audio plays automatically, and the text is shown bel
 | Type + `Enter`   | Submit answer (type mode)       |
 | `Backspace`      | Delete character (type mode)    |
 | `Ctrl`+`R`       | Replay the question's audio     |
+| `Ctrl`+`,` / `Ctrl`+`.` | Slow down / speed up audio (and replay) |
+| `Ctrl`+`/`       | Reset audio speed to 1.00x      |
 | `Enter` / `Space`| Continue after result           |
 | `Escape`         | Quit                            |
 

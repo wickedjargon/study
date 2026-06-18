@@ -364,6 +364,35 @@ func TestParseFontSizeMetadata(t *testing.T) {
 	}
 }
 
+func TestParseSpeedMetadata(t *testing.T) {
+	cases := []struct {
+		name string
+		line string
+		want float64
+	}{
+		{"numeric", "# speed: 0.75", 0.75},
+		{"with x suffix", "# speed: 1.5x", 1.5},
+		{"min bound", "# speed: 0.25", 0.25},
+		{"max bound", "# speed: 4.0", 4.0},
+		{"below min", "# speed: 0.1", 0},    // rejected → unset
+		{"above max", "# speed: 8", 0},      // rejected → unset
+		{"unparseable", "# speed: fast", 0}, // rejected → unset
+		{"absent", "# choices: 4", 0},       // no directive → unset
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			content := tc.line + "\n\nq1\n---\na1\n"
+			d, err := Parse(writeTempDeck(t, content))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if d.Speed != tc.want {
+				t.Errorf("Speed = %v, want %v", d.Speed, tc.want)
+			}
+		})
+	}
+}
+
 func TestEffectiveTimeLimitNoDeckDefault(t *testing.T) {
 	// With no deck-global limit, an un-annotated card has no limit.
 	c := Card{TimeLimit: 0}

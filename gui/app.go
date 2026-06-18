@@ -166,6 +166,11 @@ type App struct {
 	// (e.g. no player installed) — we report it once rather than on every card.
 	audioWarned bool
 
+	// audioSpeed is the playback speed multiplier applied to question audio
+	// (1.0 = normal). It persists across cards and is adjusted at runtime with
+	// Ctrl+, / Ctrl+. (and reset with Ctrl+/), clamped to [minSpeed,maxSpeed].
+	audioSpeed float64
+
 	// Interned atoms for clipboard/primary paste. Zero until setupAtoms runs.
 	clipboardAtom xproto.Atom // CLIPBOARD selection (Ctrl+V source)
 	utf8Atom      xproto.Atom // UTF8_STRING conversion target
@@ -192,6 +197,16 @@ const (
 	fontMulSmall   = 0.75 // hints, progress, timer
 	fontMulRegular = 1.0  // prompts, answers, body
 	fontMulLarge   = 1.5  // card content, headers
+)
+
+// Audio playback speed. The multiplier starts at defaultSpeed (or the deck's
+// "# speed:" directive) and the user nudges it at runtime with Ctrl+, / Ctrl+.
+// in speedStep increments, clamped to [minSpeed,maxSpeed]; Ctrl+/ resets it.
+const (
+	defaultSpeed = 1.0
+	minSpeed     = 0.25
+	maxSpeed     = 4.0
+	speedStep    = 0.25
 )
 
 // Run launches the X11 quiz window.
@@ -225,6 +240,12 @@ func Run(engine *quiz.Engine, viewer *media.Viewer, store *progress.Store) error
 		app.baseFontPt = clampFontPt(float64(pt))
 	}
 	app.initialFontPt = app.baseFontPt // Ctrl+0 returns here
+
+	// Audio speed: the deck's "# speed:" directive if set, else default.
+	app.audioSpeed = defaultSpeed
+	if x := engine.Speed(); x > 0 {
+		app.audioSpeed = clampSpeed(x)
+	}
 
 	if err := app.loadFonts(); err != nil {
 		return fmt.Errorf("loading fonts: %w", err)
@@ -397,11 +418,27 @@ func (a *App) handleKey(ev xevent.KeyPressEvent) {
 
 	switch a.engine.State() {
 	case quiz.ShowQuestion:
-		// Ctrl+R replays the current question's audio, in either mode. Handled
-		// before mode dispatch so it never lands in the type-mode answer buffer.
-		if ev.State&xproto.ModMaskControl > 0 && (key == "r" || key == "R") {
-			a.playQuestionAudio()
-			return
+		// Audio controls work in either mode and are handled before mode dispatch
+		// so they never land in the type-mode answer buffer. Ctrl+R replays at the
+		// current speed; Ctrl+, / Ctrl+. slow down / speed up (and replay, so the
+		// change is heard immediately); Ctrl+/ resets to normal speed.
+		// LookupString collapses the keysyms to their characters, including the
+		// shifted variants (< > ?), so we match on those rather than names.
+		if ev.State&xproto.ModMaskControl > 0 {
+			switch {
+			case key == "r" || key == "R":
+				a.playQuestionAudio()
+				return
+			case key == "," || key == "<":
+				a.changeSpeed(-speedStep)
+				return
+			case key == "." || key == ">":
+				a.changeSpeed(speedStep)
+				return
+			case key == "/" || key == "?":
+				a.setSpeed(defaultSpeed)
+				return
+			}
 		}
 		if a.engine.Mode() == deck.ModeType {
 			a.handleTypeKey(key, ev)
@@ -660,11 +697,27 @@ func (a *App) playQuestionAudio() {
 		}
 	}
 	if len(audioMedia) > 0 {
-		if err := a.viewer.ShowMedia(audioMedia); err != nil && !a.audioWarned {
+		if err := a.viewer.ShowMedia(audioMedia, a.audioSpeed); err != nil && !a.audioWarned {
 			fmt.Fprintf(os.Stderr, "study: %v\n", err)
 			a.audioWarned = true
 		}
 	}
+}
+
+// audioHelp returns the footer hint for the audio controls — replay and the
+// current speed — or "" when the current question has no audio (so decks
+// without audio show no irrelevant hint).
+func (a *App) audioHelp() string {
+	card := a.engine.Current()
+	if card == nil {
+		return ""
+	}
+	for _, m := range card.Question {
+		if m.Type == deck.Audio {
+			return fmt.Sprintf("  |  ^R replay · ^,/. speed %.2fx", a.audioSpeed)
+		}
+	}
+	return ""
 }
 
 func loadImage(path string) (image.Image, error) {
@@ -753,7 +806,7 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 		y += lineHeight(a.fontRegular)
 
 		// Help.
-		a.drawTextCentered(canvas, "type answer + enter  |  esc: quit", a.footerY(y), a.fontSmall, dimColor)
+		a.drawTextCentered(canvas, "type answer + enter"+a.audioHelp()+"  |  esc: quit", a.footerY(y), a.fontSmall, dimColor)
 	} else {
 		// Choices.
 		opts := a.engine.Options()
@@ -764,7 +817,7 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 		}
 
 		// Help.
-		help := fmt.Sprintf("1-%d: answer  |  esc: quit", len(opts))
+		help := fmt.Sprintf("1-%d: answer%s  |  esc: quit", len(opts), a.audioHelp())
 		a.drawTextCentered(canvas, help, a.footerY(y), a.fontSmall, dimColor)
 	}
 }
@@ -1140,6 +1193,35 @@ func (a *App) setFontSize(pt float64) {
 // fontStepPt). Ctrl+= / Ctrl+- call this; Ctrl+0 calls setFontSize directly.
 func (a *App) changeFontSize(delta float64) {
 	a.setFontSize(a.baseFontPt + delta)
+}
+
+// clampSpeed keeps an audio speed multiplier within the playable range.
+func clampSpeed(x float64) float64 {
+	if x < minSpeed {
+		return minSpeed
+	}
+	if x > maxSpeed {
+		return maxSpeed
+	}
+	return x
+}
+
+// setSpeed sets the audio playback speed (clamped) and replays the current
+// question's audio at the new speed so the change is heard immediately. The
+// replay happens even when the value is unchanged (e.g. already at a clamp
+// bound), so pressing the key always gives audible feedback. Ctrl+/ resets to
+// defaultSpeed via this; the +/- keys go through changeSpeed.
+func (a *App) setSpeed(x float64) {
+	a.audioSpeed = clampSpeed(x)
+	if a.engine.State() == quiz.ShowQuestion {
+		a.playQuestionAudio()
+	}
+	a.render()
+}
+
+// changeSpeed nudges the audio speed by delta (one increment is speedStep).
+func (a *App) changeSpeed(delta float64) {
+	a.setSpeed(a.audioSpeed + delta)
 }
 
 // footerY returns the baseline for a bottom-anchored footer line. It pins the

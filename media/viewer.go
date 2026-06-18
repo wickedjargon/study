@@ -51,9 +51,10 @@ func NewViewer() *Viewer {
 	return v
 }
 
-// ShowMedia displays all media elements for a card side.
+// ShowMedia displays all media elements for a card side. Audio is played at the
+// given speed multiplier (1.0 = normal); images ignore it.
 // Returns an error if a required viewer is not available.
-func (v *Viewer) ShowMedia(media []deck.Media) error {
+func (v *Viewer) ShowMedia(media []deck.Media, speed float64) error {
 	for _, m := range media {
 		switch m.Type {
 		case deck.Image:
@@ -67,7 +68,7 @@ func (v *Viewer) ShowMedia(media []deck.Media) error {
 			if v.audioCmd == "" {
 				return fmt.Errorf("no audio player found (install mpv or aplay)")
 			}
-			if err := v.playAudio(m.Content); err != nil {
+			if err := v.playAudio(m.Content, speed); err != nil {
 				return err
 			}
 		}
@@ -113,7 +114,11 @@ func (v *Viewer) showImage(path string) error {
 
 // playAudio launches the audio player as a subprocess. Any clip already
 // playing is stopped first, so a replay restarts cleanly rather than overlapping.
-func (v *Viewer) playAudio(path string) error {
+//
+// speed is a playback multiplier (1.0 = normal). It is honoured only by mpv,
+// via --speed with pitch correction so slowed-down speech stays intelligible;
+// aplay has no speed control, so the clip plays at normal speed there.
+func (v *Viewer) playAudio(path string, speed float64) error {
 	v.StopAudio()
 
 	var args []string
@@ -122,6 +127,9 @@ func (v *Viewer) playAudio(path string) error {
 			args = append(args, p.args...)
 			break
 		}
+	}
+	if v.audioCmd == "mpv" && speed > 0 && speed != 1.0 {
+		args = append(args, fmt.Sprintf("--speed=%g", speed), "--audio-pitch-correction=yes")
 	}
 	args = append(args, path)
 
