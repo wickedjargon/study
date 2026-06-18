@@ -34,6 +34,8 @@ deck format:
   plain text, blank lines separate cards.
   --- or === separates question from answer.
   cards default to type-in; use # mode: choice for multiple choice.
+  a card with no separator but a {{...}} deletion is a fill-in-the-blank
+    (cloze) card: the braced text is blanked out and becomes the answer.
   @img <path>       image on question/answer side
   @audio <path>     audio on question/answer side
   ~ <text>          custom wrong answer (distractor)

@@ -102,6 +102,10 @@ func (d *Deck) warn(format string, args ...any) {
 // sense), so it's rejected with a warning rather than honored.
 const maxTimeLimit = 3600
 
+// clozeBlank is what a {{...}} deletion is replaced with in the displayed
+// question text.
+const clozeBlank = "____"
+
 // Parse reads a deck file and returns a structured Deck.
 func Parse(path string) (*Deck, error) {
 	absPath, err := filepath.Abs(path)
@@ -336,7 +340,13 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, warn func(s
 		}
 	}
 
+	// No separator: a cloze card (fill-in-the-blank) is allowed, where the
+	// answer comes from a {{...}} deletion in the text instead of a separate
+	// answer side. Anything else without a separator is malformed.
 	if sepIdx == -1 {
+		if card, ok, err := parseClozeCard(filtered, baseDir, cardMode, cardChoices, cardTime); ok || err != nil {
+			return card, err
+		}
 		return nil, fmt.Errorf("card missing --- or === separator: %q", strings.Join(filtered, " / "))
 	}
 	if sepIdx == 0 {
@@ -411,6 +421,105 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, warn func(s
 	}
 
 	return card, nil
+}
+
+// parseClozeCard builds a fill-in-the-blank card from a separator-less block
+// whose text contains one or more {{...}} deletions. Each deletion is blanked
+// out in the displayed question and its contents become the answer (multiple
+// deletions join with a space). It returns ok=false (with a nil error) when the
+// block has no deletion at all, so the caller can fall back to its normal
+// "missing separator" error; a malformed cloze (e.g. an empty {{}}) is a real
+// error. ~ distractor and = accepted-answer lines are honored as elsewhere.
+func parseClozeCard(filtered []string, baseDir string, mode QuizMode, choices, timeLimit int) (*Card, bool, error) {
+	var textLines, distractors, accepts []string
+	for _, line := range filtered {
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(trimmed, "~ "):
+			distractors = append(distractors, strings.TrimPrefix(trimmed, "~ "))
+		case strings.HasPrefix(trimmed, "~") && len(trimmed) > 1:
+			distractors = append(distractors, strings.TrimSpace(trimmed[1:]))
+		case strings.HasPrefix(trimmed, "= "):
+			accepts = append(accepts, strings.TrimPrefix(trimmed, "= "))
+		case strings.HasPrefix(trimmed, "=") && len(trimmed) > 1:
+			accepts = append(accepts, strings.TrimSpace(trimmed[1:]))
+		default:
+			textLines = append(textLines, line)
+		}
+	}
+
+	// Blank out the deletions, collecting their contents as the answer. Media
+	// lines (@img/@audio) pass through untouched.
+	var answerParts []string
+	displayLines := make([]string, 0, len(textLines))
+	sawCloze := false
+	for _, line := range textLines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "@img ") || strings.HasPrefix(trimmed, "@audio ") {
+			displayLines = append(displayLines, line)
+			continue
+		}
+		disp, parts := blankClozes(line)
+		if len(parts) > 0 {
+			sawCloze = true
+		}
+		displayLines = append(displayLines, disp)
+		answerParts = append(answerParts, parts...)
+	}
+	if !sawCloze {
+		return nil, false, nil // not a cloze card; let the caller report the missing separator
+	}
+
+	answerText := strings.Join(answerParts, " ")
+	if strings.TrimSpace(answerText) == "" {
+		return nil, true, fmt.Errorf("cloze card has an empty {{}} deletion: %q", strings.Join(filtered, " / "))
+	}
+
+	question, err := parseMediaLines(displayLines, baseDir)
+	if err != nil {
+		return nil, true, fmt.Errorf("parsing cloze question: %w", err)
+	}
+
+	return &Card{
+		ID:          cardID(textLines), // hash the authored text (with braces), so edits re-key the card
+		Question:    question,
+		Answer:      []Media{{Type: Text, Content: answerText}},
+		AnswerText:  answerText,
+		Accept:      accepts,
+		Distractors: distractors,
+		Mode:        mode,
+		Choices:     choices,
+		TimeLimit:   timeLimit,
+	}, true, nil
+}
+
+// blankClozes replaces every {{...}} run in a line with clozeBlank and returns
+// the blanked line together with the (trimmed, non-empty) contents of each
+// deletion in order. An unterminated "{{" is left as literal text.
+func blankClozes(line string) (string, []string) {
+	var b strings.Builder
+	var answers []string
+	rest := line
+	for {
+		i := strings.Index(rest, "{{")
+		if i < 0 {
+			b.WriteString(rest)
+			break
+		}
+		j := strings.Index(rest[i+2:], "}}")
+		if j < 0 {
+			b.WriteString(rest) // no closing braces — leave the remainder as-is
+			break
+		}
+		content := strings.TrimSpace(rest[i+2 : i+2+j])
+		b.WriteString(rest[:i])
+		b.WriteString(clozeBlank)
+		if content != "" {
+			answers = append(answers, content)
+		}
+		rest = rest[i+2+j+2:]
+	}
+	return b.String(), answers
 }
 
 // parseTimeLimit parses a time-limit metadata value. It accepts a plain

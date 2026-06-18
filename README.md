@@ -95,6 +95,26 @@ All of `hello`, `hi`, and `hey` are accepted. The first line stays the canonical
 answer (it's what's shown on the result screen and used as the correct option in
 choice mode). `=` accepted answers and `~` distractors can be mixed on one card.
 
+### Fill-in-the-blank (cloze)
+
+A card with **no separator** but a `{{...}}` deletion is a fill-in-the-blank
+card. The braced text is blanked out in the question and becomes the answer:
+
+```
+The capital of France is {{Paris}}.
+```
+
+shows `The capital of France is ____.` and accepts `Paris`. Multiple deletions in
+one card are all blanked, and their contents join (in order) to form the answer:
+
+```
+{{Romeo}} and {{Juliet}}
+```
+
+Cloze cards honour the card's mode — type-in by default, or multiple choice under
+`# mode: choice` (distractors are drawn from other cards as usual) — and accept
+`=` alternatives and `~` distractors like any other card.
+
 ### Multiple choice mode
 
 The user picks from numbered options. Opt in with `# mode: choice`.

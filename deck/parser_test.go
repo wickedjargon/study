@@ -3,6 +3,7 @@ package deck
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -484,6 +485,86 @@ a2
 	}
 	if d.Cards[1].Choices != 6 {
 		t.Errorf("expected card 1 choices=6, got %d", d.Cards[1].Choices)
+	}
+}
+
+// questionText joins a card's question-side text Media into one string,
+// matching how the GUI lays them out line by line.
+func questionText(c *Card) string {
+	var parts []string
+	for _, m := range c.Question {
+		if m.Type == Text {
+			parts = append(parts, m.Content)
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+func TestParseClozeBasic(t *testing.T) {
+	// A separator-less card with a {{...}} deletion is a fill-in-the-blank card:
+	// the braced text is blanked in the question and becomes the answer.
+	d, err := Parse(writeTempDeck(t, "The capital of France is {{Paris}}.\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(d.Cards) != 1 {
+		t.Fatalf("expected 1 card, got %d", len(d.Cards))
+	}
+	c := d.Cards[0]
+	if c.AnswerText != "Paris" {
+		t.Errorf("expected answer %q, got %q", "Paris", c.AnswerText)
+	}
+	if got := questionText(&c); got != "The capital of France is ____." {
+		t.Errorf("expected blanked question, got %q", got)
+	}
+}
+
+func TestParseClozeMultiple(t *testing.T) {
+	d, err := Parse(writeTempDeck(t, "{{Romeo}} and {{Juliet}}\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	c := d.Cards[0]
+	if c.AnswerText != "Romeo Juliet" {
+		t.Errorf("expected joined answer %q, got %q", "Romeo Juliet", c.AnswerText)
+	}
+	if got := questionText(&c); got != "____ and ____" {
+		t.Errorf("expected both deletions blanked, got %q", got)
+	}
+}
+
+func TestParseClozeWithAcceptAndDistractors(t *testing.T) {
+	content := `Water is H2{{O}}.
+= oxygen
+~ hydrogen
+`
+	d, err := Parse(writeTempDeck(t, content))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	c := d.Cards[0]
+	if c.AnswerText != "O" {
+		t.Errorf("expected answer %q, got %q", "O", c.AnswerText)
+	}
+	if len(c.Accept) != 1 || c.Accept[0] != "oxygen" {
+		t.Errorf("expected accept [oxygen], got %v", c.Accept)
+	}
+	if len(c.Distractors) != 1 || c.Distractors[0] != "hydrogen" {
+		t.Errorf("expected distractors [hydrogen], got %v", c.Distractors)
+	}
+}
+
+func TestParseClozeEmptyDeletionErrors(t *testing.T) {
+	if _, err := Parse(writeTempDeck(t, "an empty {{}} blank\n")); err == nil {
+		t.Fatal("expected error for empty {{}} deletion")
+	}
+}
+
+func TestParseClozeStillRequiresSeparatorWhenNoBraces(t *testing.T) {
+	// Without braces, a separator-less card is still the existing error, not a
+	// silently-accepted cloze.
+	if _, err := Parse(writeTempDeck(t, "no separator and no cloze\n")); err == nil {
+		t.Fatal("expected missing-separator error")
 	}
 }
 
