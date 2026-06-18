@@ -731,7 +731,7 @@ func (a *App) audioHelp() string {
 	}
 	for _, m := range card.Question {
 		if m.Type == deck.Audio {
-			return fmt.Sprintf("  |  ^R replay · ^,/. speed %.2fx", a.audioSpeed)
+			return fmt.Sprintf("  |  replay: ctrl+r  |  playback-speed: ctrl+, / ctrl+.  |  speed %.2fx", a.audioSpeed)
 		}
 	}
 	return ""
