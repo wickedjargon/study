@@ -4,6 +4,10 @@ package quiz
 import (
 	"math/rand"
 	"strings"
+	"unicode"
+
+	"golang.org/x/text/unicode/norm"
+
 	"study/deck"
 	"study/progress"
 )
@@ -217,13 +221,7 @@ func (e *Engine) AnswerTyped(input string) *Result {
 
 	expected := e.current.AnswerText
 	got := strings.TrimSpace(input)
-
-	correct := false
-	if e.caseSensitive {
-		correct = got == expected
-	} else {
-		correct = strings.EqualFold(got, expected)
-	}
+	correct := e.matchesAnswer(got)
 
 	result := &Result{
 		Card:    e.current,
@@ -245,6 +243,50 @@ func (e *Engine) AnswerTyped(input string) *Result {
 
 	e.state = ShowResult
 	return result
+}
+
+// matchesAnswer reports whether a typed answer counts as correct for the
+// current card. It is checked against the primary answer and every accepted
+// alternative ("= " lines). A case-sensitive deck requires an exact match
+// (after trimming); otherwise answers are compared leniently via
+// normalizeAnswer, so case, surrounding/embedded punctuation, and accents don't
+// cause a right answer to be marked wrong.
+func (e *Engine) matchesAnswer(got string) bool {
+	candidates := make([]string, 0, 1+len(e.current.Accept))
+	candidates = append(candidates, e.current.AnswerText)
+	candidates = append(candidates, e.current.Accept...)
+
+	got = strings.TrimSpace(got)
+	for _, c := range candidates {
+		if e.caseSensitive {
+			if got == strings.TrimSpace(c) {
+				return true
+			}
+		} else if normalizeAnswer(got) == normalizeAnswer(c) {
+			return true
+		}
+	}
+	return false
+}
+
+// normalizeAnswer canonicalizes a typed answer for lenient comparison: it
+// lowercases, strips diacritics (so "salâm" matches "salam"), drops punctuation
+// and symbols (so "i'm" matches "im" and "hello!" matches "hello"), and
+// collapses runs of whitespace to single spaces. Letters and digits of any
+// script are kept, so CJK and Arabic answers are unaffected beyond spacing.
+func normalizeAnswer(s string) string {
+	var b strings.Builder
+	for _, r := range norm.NFD.String(s) {
+		switch {
+		case unicode.Is(unicode.Mn, r): // combining mark (accent) — drop
+		case unicode.IsLetter(r) || unicode.IsNumber(r):
+			b.WriteRune(unicode.ToLower(r))
+		case unicode.IsSpace(r):
+			b.WriteRune(' ')
+		default: // punctuation, symbols — drop
+		}
+	}
+	return strings.Join(strings.Fields(b.String()), " ")
 }
 
 // TimeLimit returns the time limit in seconds for the current card, taking

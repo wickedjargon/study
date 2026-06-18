@@ -44,6 +44,7 @@ type Card struct {
 	Question    []Media  // question side elements
 	Answer      []Media  // answer side elements
 	AnswerText  string   // plain text of the answer (for choice generation)
+	Accept      []string // extra answers accepted in type mode ("= " lines)
 	Distractors []string // optional custom wrong answers
 	Mode        QuizMode // per-card mode (choice or type)
 	Choices     int      // per-card choice count (0 = use deck default)
@@ -304,16 +305,25 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode) (*Card, err
 		return nil, fmt.Errorf("card has no answer (nothing after separator): %q", strings.Join(filtered, " / "))
 	}
 
-	// Separate answer lines from distractor lines (~ prefix).
+	// Separate the answer lines from distractor lines (~ prefix) and extra
+	// accepted-answer lines (= prefix). Distractors are wrong answers shown in
+	// choice mode; accepted answers are additional spellings counted correct in
+	// type mode (e.g. "= hi" alongside the primary answer "hello").
 	var answerLines []string
 	var distractors []string
+	var accepts []string
 	for _, line := range afterSep {
 		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "~ ") {
+		switch {
+		case strings.HasPrefix(trimmed, "~ "):
 			distractors = append(distractors, strings.TrimPrefix(trimmed, "~ "))
-		} else if strings.HasPrefix(trimmed, "~") && len(trimmed) > 1 {
+		case strings.HasPrefix(trimmed, "~") && len(trimmed) > 1:
 			distractors = append(distractors, strings.TrimSpace(trimmed[1:]))
-		} else {
+		case strings.HasPrefix(trimmed, "= "):
+			accepts = append(accepts, strings.TrimPrefix(trimmed, "= "))
+		case strings.HasPrefix(trimmed, "=") && len(trimmed) > 1:
+			accepts = append(accepts, strings.TrimSpace(trimmed[1:]))
+		default:
 			answerLines = append(answerLines, line)
 		}
 	}
@@ -348,6 +358,7 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode) (*Card, err
 		Question:    question,
 		Answer:      answer,
 		AnswerText:  answerText,
+		Accept:      accepts,
 		Distractors: distractors,
 		Mode:        cardMode,
 		Choices:     cardChoices,

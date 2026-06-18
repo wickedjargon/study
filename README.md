@@ -73,7 +73,27 @@ What is 10 - 3?
 ```
 
 Type-in is active recall — you produce the answer rather than recognizing it —
-so it's the default. Use `# case: insensitive` to ignore capitalization.
+so it's the default.
+
+By default (`# case: insensitive`) matching is lenient, so a right answer isn't
+marked wrong over trivia: case, surrounding/embedded punctuation, accents, and
+extra spaces are ignored — `Hello!`, `hello`, and `HELLO` all match `hello`, and
+`salam` matches `salâm`. Set `# case: sensitive` for exact, character-for-character
+matching instead.
+
+### Accepted alternatives
+
+When more than one answer should count as correct, list extras with `=` lines:
+
+```
+hello
+= hi
+= hey
+```
+
+All of `hello`, `hi`, and `hey` are accepted. The first line stays the canonical
+answer (it's what's shown on the result screen and used as the correct option in
+choice mode). `=` accepted answers and `~` distractors can be mixed on one card.
 
 ### Multiple choice mode
 

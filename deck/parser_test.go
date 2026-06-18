@@ -175,6 +175,31 @@ correct answer
 	}
 }
 
+func TestParseAcceptedAlternatives(t *testing.T) {
+	content := `question
+---
+hello
+= hi
+=hey
+~ goodbye
+`
+	d, err := Parse(writeTempDeck(t, content))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	card := d.Cards[0]
+	if card.AnswerText != "hello" {
+		t.Errorf("AnswerText = %q, want \"hello\"", card.AnswerText)
+	}
+	if len(card.Accept) != 2 || card.Accept[0] != "hi" || card.Accept[1] != "hey" {
+		t.Errorf("Accept = %v, want [hi hey]", card.Accept)
+	}
+	// The = lines must not leak into the distractor set.
+	if len(card.Distractors) != 1 || card.Distractors[0] != "goodbye" {
+		t.Errorf("Distractors = %v, want [goodbye]", card.Distractors)
+	}
+}
+
 func TestParseWithImage(t *testing.T) {
 	dir := t.TempDir()
 

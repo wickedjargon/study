@@ -28,6 +28,75 @@ func testDeck(n int) *deck.Deck {
 	}
 }
 
+// typedDeck builds a single-card type-mode deck for answer-matching tests.
+func typedDeck(answer string, accept []string, caseSensitive bool) *deck.Deck {
+	return &deck.Deck{
+		Name:          "t",
+		Choices:       4,
+		CaseSensitive: caseSensitive,
+		Cards: []deck.Card{{
+			ID:         "c1",
+			Question:   []deck.Media{{Type: deck.Text, Content: "q"}},
+			Answer:     []deck.Media{{Type: deck.Text, Content: answer}},
+			AnswerText: answer,
+			Accept:     accept,
+			Mode:       deck.ModeType,
+		}},
+	}
+}
+
+func TestAnswerTypedMatching(t *testing.T) {
+	cases := []struct {
+		name   string
+		answer string
+		accept []string
+		input  string
+		want   bool
+	}{
+		{"exact", "hello", nil, "hello", true},
+		{"case insensitive", "hello", nil, "HeLLo", true},
+		{"surrounding space", "hello", nil, "  hello ", true},
+		{"trailing punctuation", "hello", nil, "hello!", true},
+		{"diacritic folded", "salâm", nil, "salam", true},
+		{"apostrophe dropped", "i'm fine", nil, "im fine", true},
+		{"collapsed whitespace", "good morning", nil, "good   morning", true},
+		{"accepted alternative", "hello", []string{"hi", "hey"}, "hey", true},
+		{"alternative normalized", "hello", []string{"salâm"}, "SALAM", true},
+		{"genuinely wrong", "hello", []string{"hi"}, "goodbye", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := NewEngine(typedDeck(tc.answer, tc.accept, false), false, 0, nil)
+			r := e.AnswerTyped(tc.input)
+			if r == nil {
+				t.Fatal("nil result")
+			}
+			if r.Correct != tc.want {
+				t.Errorf("AnswerTyped(%q) correct=%v, want %v", tc.input, r.Correct, tc.want)
+			}
+		})
+	}
+}
+
+func TestAnswerTypedCaseSensitive(t *testing.T) {
+	// A case-sensitive deck still accepts alternatives but compares exactly:
+	// no case folding, no punctuation/diacritic leniency.
+	e := NewEngine(typedDeck("Hello", []string{"Hi"}, true), false, 0, nil)
+	if !e.AnswerTyped("Hello").Correct {
+		t.Error("exact match should be correct")
+	}
+
+	e = NewEngine(typedDeck("Hello", []string{"Hi"}, true), false, 0, nil)
+	if e.AnswerTyped("hello").Correct {
+		t.Error("case-sensitive deck should reject differing case")
+	}
+
+	e = NewEngine(typedDeck("Hello", []string{"Hi"}, true), false, 0, nil)
+	if !e.AnswerTyped("Hi").Correct {
+		t.Error("accepted alternative should be correct even when case-sensitive")
+	}
+}
+
 func TestEngineBasicFlow(t *testing.T) {
 	d := testDeck(4)
 	e := NewEngine(d, false, 0, nil)
