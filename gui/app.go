@@ -786,7 +786,7 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 	remaining := a.engine.Remaining()
 	prog := fmt.Sprintf("[%d/%d]", seen+1, seen+remaining)
 	if a.engine.IsRetry() {
-		prog += "  ↻ retry"
+		prog += "  retry"
 	}
 	a.drawText(canvas, prog, padding, y, a.fontSmall, dimColor)
 
