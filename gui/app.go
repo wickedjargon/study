@@ -128,13 +128,21 @@ func detectTheme() string {
 
 // ── App ─────────────────────────────────────────────────────────────
 
+// progressStore is the subset of *progress.Store the GUI depends on. Declaring
+// it as an interface (rather than the concrete type) lets tests substitute a
+// fake — e.g. one whose Save fails — to exercise the save-failure handling.
+type progressStore interface {
+	Save() error
+	Summary() (totalCorrect, totalWrong, cardsStudied int)
+}
+
 // App holds the GUI state.
 type App struct {
 	xu     *xgbutil.XUtil
 	win    *xwindow.Window
 	engine *quiz.Engine
 	viewer *media.Viewer
-	store  *progress.Store
+	store  progressStore
 	result *quiz.Result
 	start  time.Time
 	width  int
