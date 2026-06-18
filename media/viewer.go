@@ -121,19 +121,7 @@ func (v *Viewer) showImage(path string) error {
 func (v *Viewer) playAudio(path string, speed float64) error {
 	v.StopAudio()
 
-	var args []string
-	for _, p := range audioPlayers {
-		if p.cmd == v.audioCmd {
-			args = append(args, p.args...)
-			break
-		}
-	}
-	if v.audioCmd == "mpv" && speed > 0 && speed != 1.0 {
-		args = append(args, fmt.Sprintf("--speed=%g", speed), "--audio-pitch-correction=yes")
-	}
-	args = append(args, path)
-
-	cmd := exec.Command(v.audioCmd, args...)
+	cmd := exec.Command(v.audioCmd, audioArgs(v.audioCmd, path, speed)...)
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	if err := cmd.Start(); err != nil {
@@ -141,4 +129,23 @@ func (v *Viewer) playAudio(path string, speed float64) error {
 	}
 	v.audioProcs = append(v.audioProcs, cmd.Process)
 	return nil
+}
+
+// audioArgs builds the argument list (excluding the command name itself) for
+// playing path on audioCmd at the given speed multiplier. The player's fixed
+// flags come first; then, for mpv only and a non-default speed, --speed with
+// pitch correction so slowed speech stays intelligible. aplay has no speed
+// control, so speed is ignored there. The file path is always last.
+func audioArgs(audioCmd, path string, speed float64) []string {
+	var args []string
+	for _, p := range audioPlayers {
+		if p.cmd == audioCmd {
+			args = append(args, p.args...)
+			break
+		}
+	}
+	if audioCmd == "mpv" && speed > 0 && speed != 1.0 {
+		args = append(args, fmt.Sprintf("--speed=%g", speed), "--audio-pitch-correction=yes")
+	}
+	return append(args, path)
 }
