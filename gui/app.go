@@ -853,12 +853,7 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 	y = a.renderQuestionImageBlock(canvas, y)
 
 	// Question text.
-	for _, m := range card.Question {
-		if m.Type == deck.Text {
-			a.drawCardText(canvas, m.Content, y, textColor)
-			y += lineHeight(a.fontLarge)
-		}
-	}
+	y = a.renderQuestionText(canvas, card, y)
 
 	y += a.scaled(10)
 
@@ -903,12 +898,7 @@ func (a *App) renderResult(canvas *image.RGBA) {
 	y = a.renderQuestionImageBlock(canvas, y)
 
 	// Question text.
-	for _, m := range card.Question {
-		if m.Type == deck.Text {
-			a.drawCardText(canvas, m.Content, y, textColor)
-			y += lineHeight(a.fontLarge)
-		}
-	}
+	y = a.renderQuestionText(canvas, card, y)
 
 	y += a.scaled(10)
 
@@ -1080,6 +1070,27 @@ func (a *App) renderQuestionImageBlock(canvas *image.RGBA, y int) int {
 	default:
 		return y
 	}
+}
+
+// renderQuestionText draws the card's question text line(s) starting at top y
+// (the value returned by renderQuestionImageBlock, which is the top of the next
+// element). drawCardText positions text by its baseline, so the first line is
+// shifted down by the font's ascent — otherwise its glyphs render upward into
+// the image above and overlap it. Returns the y below the text.
+func (a *App) renderQuestionText(canvas *image.RGBA, card *deck.Card, y int) int {
+	first := true
+	for _, m := range card.Question {
+		if m.Type != deck.Text {
+			continue
+		}
+		if first {
+			y += a.fontLarge.Metrics().Ascent.Ceil()
+			first = false
+		}
+		a.drawCardText(canvas, m.Content, y, textColor)
+		y += lineHeight(a.fontLarge)
+	}
+	return y
 }
 
 func (a *App) renderImage(canvas *image.RGBA, img image.Image, y int) int {
