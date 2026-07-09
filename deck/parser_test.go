@@ -256,7 +256,9 @@ func TestParseEmptyDeck(t *testing.T) {
 	}
 }
 
-func TestParseMissingImage(t *testing.T) {
+func TestParseMissingImageOnlyQuestionErrors(t *testing.T) {
+	// A missing media file is skipped with a warning, but if that leaves the
+	// question side empty the card is unusable and the deck must not load.
 	content := `@img nonexistent.png
 ---
 answer
@@ -264,7 +266,130 @@ answer
 	path := writeTempDeck(t, content)
 	_, err := Parse(path)
 	if err == nil {
-		t.Fatal("expected error for missing image")
+		t.Fatal("expected error for question that is only a missing image")
+	}
+}
+
+func TestParseMissingAudioSkippedWithWarning(t *testing.T) {
+	// A card that still has text works without its missing clip; the deck
+	// loads and the problem is surfaced as a warning, not a fatal error.
+	content := `@audio nonexistent.mp3
+salam
+---
+hello
+`
+	d, err := Parse(writeTempDeck(t, content))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	c := d.Cards[0]
+	if len(c.Question) != 1 || c.Question[0].Type != Text {
+		t.Errorf("question = %+v, want just the text line (audio skipped)", c.Question)
+	}
+	if len(d.Warnings) != 1 || !strings.Contains(d.Warnings[0], "missing audio") {
+		t.Errorf("warnings = %v, want one about the missing audio", d.Warnings)
+	}
+}
+
+func TestCardIDIgnoresMediaLines(t *testing.T) {
+	// The ID hashes only the question's text, so renaming a media file must
+	// not re-key the card (which would orphan its saved progress). The old
+	// media-inclusive hash is kept as LegacyID for one-time migration.
+	withAudio, err := Parse(writeTempDeck(t, "@audio a.mp3\nsalam\n---\nhello\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	textOnly, err := Parse(writeTempDeck(t, "salam\n---\nhello\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if withAudio.Cards[0].ID != textOnly.Cards[0].ID {
+		t.Errorf("IDs differ with/without media line: %q vs %q",
+			withAudio.Cards[0].ID, textOnly.Cards[0].ID)
+	}
+	if withAudio.Cards[0].LegacyID == "" {
+		t.Error("card with media has no LegacyID for migration")
+	}
+	if textOnly.Cards[0].LegacyID != "" {
+		t.Errorf("text-only card has LegacyID %q, want none (ID never changed)", textOnly.Cards[0].LegacyID)
+	}
+}
+
+func TestCardIDMediaOnlyQuestionStillUnique(t *testing.T) {
+	// With no text to hash, media-only questions fall back to hashing the
+	// media lines — two image cards must not collapse into one ID.
+	id1, legacy1 := stableCardID([]string{"@img a.png"})
+	id2, _ := stableCardID([]string{"@img b.png"})
+	if id1 == id2 {
+		t.Error("two different media-only questions share an ID")
+	}
+	if legacy1 != "" {
+		t.Errorf("media-only question has LegacyID %q, want none (hash unchanged)", legacy1)
+	}
+}
+
+func TestParseDirPack(t *testing.T) {
+	dir := t.TempDir()
+	a := "# mode: type\n\nsalam\n---\nhello\n\nkhodahafez\n---\ngoodbye\n"
+	// b repeats a card from a (cross-deck reuse) and adds one of its own.
+	b := "# mode: type\n\nsalam\n---\nhello\n\nmamnun\n---\nthanks\n"
+	if err := os.WriteFile(filepath.Join(dir, "a.deck"), []byte(a), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b.deck"), []byte(b), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	d, err := Parse(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(d.Cards) != 3 {
+		t.Fatalf("merged pack has %d cards, want 3 (duplicate deduped)", len(d.Cards))
+	}
+	if d.Path != dir {
+		t.Errorf("pack path = %q, want %q", d.Path, dir)
+	}
+	if d.Name != filepath.Base(dir) {
+		t.Errorf("pack name = %q, want %q", d.Name, filepath.Base(dir))
+	}
+}
+
+func TestParseDirConflictingHeadersWarn(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.deck"), []byte("# mode: type\n\nq1\n---\na1\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b.deck"), []byte("# mode: choice\n\nq2\n---\na2\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	d, err := Parse(dir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if d.Mode != ModeType {
+		t.Errorf("pack mode = %v, want the first file's ModeType", d.Mode)
+	}
+	found := false
+	for _, w := range d.Warnings {
+		if strings.Contains(w, "header settings differ") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("warnings = %v, want one about conflicting headers", d.Warnings)
+	}
+	// Per-card modes still honor each card's own file.
+	if d.Cards[1].Mode != ModeChoice {
+		t.Errorf("second file's card mode = %v, want ModeChoice", d.Cards[1].Mode)
+	}
+}
+
+func TestParseEmptyDirErrors(t *testing.T) {
+	if _, err := Parse(t.TempDir()); err == nil {
+		t.Fatal("expected error for a directory with no .deck files")
 	}
 }
 
@@ -516,6 +641,9 @@ func TestParseClozeBasic(t *testing.T) {
 	}
 	if got := questionText(&c); got != "The capital of France is ____." {
 		t.Errorf("expected blanked question, got %q", got)
+	}
+	if !c.Cloze {
+		t.Error("expected Cloze flag set (reverse mode skips cloze cards)")
 	}
 }
 

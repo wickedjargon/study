@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -40,7 +41,12 @@ type Media struct {
 
 // Card represents a single question/answer pair.
 type Card struct {
-	ID          string   // stable hash of question content
+	ID string // stable hash of the question's text lines
+	// LegacyID is the hash an older version of the parser produced for this
+	// card (it included @img/@audio lines, so renaming a media file re-keyed
+	// the card and orphaned its progress). Set only when it differs from ID;
+	// used once at load time to migrate saved progress, never for new writes.
+	LegacyID    string
 	Question    []Media  // question side elements
 	Answer      []Media  // answer side elements
 	AnswerText  string   // plain text of the answer (for choice generation)
@@ -50,6 +56,7 @@ type Card struct {
 	Choices     int      // per-card choice count (0 = use deck default)
 	TimeLimit   int      // per-card time limit in seconds
 	// (0 = inherit deck default, -1 = explicitly unlimited)
+	Cloze bool // fill-in-the-blank card ({{...}} deletion, no separator)
 }
 
 // EffectiveTimeLimit returns the time limit in seconds that applies to this
@@ -106,11 +113,17 @@ const maxTimeLimit = 3600
 // question text.
 const clozeBlank = "____"
 
-// Parse reads a deck file and returns a structured Deck.
+// Parse reads a deck file and returns a structured Deck. A directory is a
+// pack: every *.deck file inside (sorted by name) is parsed and merged into
+// one combined deck (see parseDir).
 func Parse(path string) (*Deck, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return nil, fmt.Errorf("resolving path: %w", err)
+	}
+
+	if info, err := os.Stat(absPath); err == nil && info.IsDir() {
+		return parseDir(absPath)
 	}
 
 	f, err := os.Open(absPath)
@@ -166,6 +179,57 @@ func Parse(path string) (*Deck, error) {
 	}
 
 	return deck, nil
+}
+
+// parseDir parses a pack: a directory containing *.deck files. The files are
+// parsed individually (each resolves its own media paths and per-card
+// directives) and their cards concatenated in sorted-filename order. Deck-level
+// settings come from the first file; a later file that sets a conflicting value
+// gets a warning rather than silently changing the session's behavior halfway
+// through the card list. Cards whose ID already appeared are skipped — packs
+// deliberately reuse a phrase across their decks, and one combined session
+// shouldn't drill the same card twice under one progress entry.
+func parseDir(absDir string) (*Deck, error) {
+	entries, err := filepath.Glob(filepath.Join(absDir, "*.deck"))
+	if err != nil {
+		return nil, fmt.Errorf("scanning pack: %w", err)
+	}
+	sort.Strings(entries)
+	if len(entries) == 0 {
+		return nil, fmt.Errorf("no .deck files in %s", absDir)
+	}
+
+	var merged *Deck
+	seen := make(map[string]bool)
+	for _, path := range entries {
+		d, err := Parse(path)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", filepath.Base(path), err)
+		}
+		if merged == nil {
+			merged = d
+			merged.Name = deckName(absDir)
+			merged.Path = absDir
+			for i := range merged.Cards {
+				seen[merged.Cards[i].ID] = true
+			}
+			continue
+		}
+		if d.Mode != merged.Mode || d.CaseSensitive != merged.CaseSensitive ||
+			d.TimeLimit != merged.TimeLimit || d.Sequential != merged.Sequential {
+			merged.warn("%s: header settings differ from %s; using the first file's",
+				filepath.Base(path), filepath.Base(entries[0]))
+		}
+		merged.Warnings = append(merged.Warnings, d.Warnings...)
+		for i := range d.Cards {
+			if seen[d.Cards[i].ID] {
+				continue
+			}
+			seen[d.Cards[i].ID] = true
+			merged.Cards = append(merged.Cards, d.Cards[i])
+		}
+	}
+	return merged, nil
 }
 
 // isCommentOnly reports whether every line in a block is a comment (blocks from
@@ -344,7 +408,7 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, warn func(s
 	// answer comes from a {{...}} deletion in the text instead of a separate
 	// answer side. Anything else without a separator is malformed.
 	if sepIdx == -1 {
-		if card, ok, err := parseClozeCard(filtered, baseDir, cardMode, cardChoices, cardTime); ok || err != nil {
+		if card, ok, err := parseClozeCard(filtered, baseDir, cardMode, cardChoices, cardTime, warn); ok || err != nil {
 			return card, err
 		}
 		return nil, fmt.Errorf("card missing --- or === separator: %q", strings.Join(filtered, " / "))
@@ -387,15 +451,12 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, warn func(s
 		return nil, fmt.Errorf("card has no answer (only distractors after ---): %q", strings.Join(filtered, " / "))
 	}
 
-	question, err := parseMediaLines(questionLines, baseDir)
-	if err != nil {
-		return nil, fmt.Errorf("parsing question: %w", err)
+	question := parseMediaLines(questionLines, baseDir, warn)
+	if len(question) == 0 {
+		return nil, fmt.Errorf("card question is empty (its media files are missing): %q", strings.Join(filtered, " / "))
 	}
 
-	answer, err := parseMediaLines(answerLines, baseDir)
-	if err != nil {
-		return nil, fmt.Errorf("parsing answer: %w", err)
-	}
+	answer := parseMediaLines(answerLines, baseDir, warn)
 
 	// Build answer text from text elements on the answer side.
 	answerText := extractText(answer)
@@ -408,8 +469,10 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, warn func(s
 		return nil, fmt.Errorf("card answer must be a single line: %q", strings.Join(filtered, " / "))
 	}
 
+	id, legacyID := stableCardID(questionLines)
 	card := &Card{
-		ID:          cardID(questionLines),
+		ID:          id,
+		LegacyID:    legacyID,
 		Question:    question,
 		Answer:      answer,
 		AnswerText:  answerText,
@@ -430,7 +493,7 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, warn func(s
 // block has no deletion at all, so the caller can fall back to its normal
 // "missing separator" error; a malformed cloze (e.g. an empty {{}}) is a real
 // error. ~ distractor and = accepted-answer lines are honored as elsewhere.
-func parseClozeCard(filtered []string, baseDir string, mode QuizMode, choices, timeLimit int) (*Card, bool, error) {
+func parseClozeCard(filtered []string, baseDir string, mode QuizMode, choices, timeLimit int, warn func(string, ...any)) (*Card, bool, error) {
 	var textLines, distractors, accepts []string
 	for _, line := range filtered {
 		trimmed := strings.TrimSpace(line)
@@ -475,13 +538,16 @@ func parseClozeCard(filtered []string, baseDir string, mode QuizMode, choices, t
 		return nil, true, fmt.Errorf("cloze card has an empty {{}} deletion: %q", strings.Join(filtered, " / "))
 	}
 
-	question, err := parseMediaLines(displayLines, baseDir)
-	if err != nil {
-		return nil, true, fmt.Errorf("parsing cloze question: %w", err)
+	question := parseMediaLines(displayLines, baseDir, warn)
+	if len(question) == 0 {
+		return nil, true, fmt.Errorf("cloze card question is empty (its media files are missing): %q", strings.Join(filtered, " / "))
 	}
 
+	// Hash the authored text (with braces), so edits re-key the card.
+	id, legacyID := stableCardID(textLines)
 	return &Card{
-		ID:          cardID(textLines), // hash the authored text (with braces), so edits re-key the card
+		ID:          id,
+		LegacyID:    legacyID,
 		Question:    question,
 		Answer:      []Media{{Type: Text, Content: answerText}},
 		AnswerText:  answerText,
@@ -490,6 +556,7 @@ func parseClozeCard(filtered []string, baseDir string, mode QuizMode, choices, t
 		Mode:        mode,
 		Choices:     choices,
 		TimeLimit:   timeLimit,
+		Cloze:       true,
 	}, true, nil
 }
 
@@ -580,8 +647,12 @@ func parseSpeed(s string) (float64, bool) {
 	return x, true
 }
 
-// parseMediaLines converts raw text lines into Media elements.
-func parseMediaLines(lines []string, baseDir string) ([]Media, error) {
+// parseMediaLines converts raw text lines into Media elements. A named media
+// file that doesn't exist is skipped with a warning rather than failing the
+// whole deck — one missing clip (e.g. audio not yet generated, or a single
+// failed TTS run) shouldn't make every other card unreachable. The card still
+// works; it just shows/plays less.
+func parseMediaLines(lines []string, baseDir string, warn func(string, ...any)) []Media {
 	var media []Media
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -590,21 +661,23 @@ func parseMediaLines(lines []string, baseDir string) ([]Media, error) {
 			relPath := strings.TrimSpace(strings.TrimPrefix(trimmed, "@img "))
 			absPath := resolvePath(relPath, baseDir)
 			if _, err := os.Stat(absPath); err != nil {
-				return nil, fmt.Errorf("image not found: %s", absPath)
+				warn("skipping missing image: %s", absPath)
+				continue
 			}
 			media = append(media, Media{Type: Image, Content: absPath})
 		} else if strings.HasPrefix(trimmed, "@audio ") {
 			relPath := strings.TrimSpace(strings.TrimPrefix(trimmed, "@audio "))
 			absPath := resolvePath(relPath, baseDir)
 			if _, err := os.Stat(absPath); err != nil {
-				return nil, fmt.Errorf("audio not found: %s", absPath)
+				warn("skipping missing audio: %s", absPath)
+				continue
 			}
 			media = append(media, Media{Type: Audio, Content: absPath})
 		} else {
 			media = append(media, Media{Type: Text, Content: trimmed})
 		}
 	}
-	return media, nil
+	return media
 }
 
 // isSeparator reports whether a line is a question/answer separator: a run of
@@ -650,6 +723,38 @@ func cardID(questionLines []string) string {
 		h.Write([]byte(line))
 	}
 	return fmt.Sprintf("%x", h.Sum(nil))[:12]
+}
+
+// stableCardID returns the card's ID and, when it differs, the legacy ID an
+// older parser produced. The ID hashes only the question's text lines, so
+// renaming a media file no longer re-keys the card (and thus no longer orphans
+// its saved progress). A card whose question is media-only has no text to hash,
+// so it keeps hashing the media lines — that's also exactly what the old parser
+// did, hence no legacy ID either.
+func stableCardID(questionLines []string) (id, legacyID string) {
+	texts := textOnlyLines(questionLines)
+	if len(texts) == 0 {
+		return cardID(questionLines), ""
+	}
+	id = cardID(texts)
+	if legacy := cardID(questionLines); legacy != id {
+		legacyID = legacy
+	}
+	return id, legacyID
+}
+
+// textOnlyLines filters out @img/@audio directive lines, leaving the lines
+// that carry the card's authored text.
+func textOnlyLines(lines []string) []string {
+	var out []string
+	for _, l := range lines {
+		t := strings.TrimSpace(l)
+		if strings.HasPrefix(t, "@img ") || strings.HasPrefix(t, "@audio ") {
+			continue
+		}
+		out = append(out, l)
+	}
+	return out
 }
 
 // deckName extracts a human-readable name from the deck file path.
