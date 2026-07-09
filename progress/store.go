@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"study/deck"
 	"time"
 )
@@ -159,6 +160,51 @@ func (s *Store) Reset() {
 	}
 }
 
+// reversePrefix namespaces the IDs of reversed cards (deck.Reversed) so a
+// card's forward and reverse recall accumulate progress independently.
+const reversePrefix = "r:"
+
+// ResetDirection clears progress for one direction of the deck only: the
+// reversed cards ("r:"-prefixed IDs) when reverse is true, the forward cards
+// otherwise. --forget uses this so forgetting one direction of a language deck
+// doesn't destroy the other's history.
+func (s *Store) ResetDirection(reverse bool) {
+	for id := range s.data.Cards {
+		if strings.HasPrefix(id, reversePrefix) == reverse {
+			delete(s.data.Cards, id)
+		}
+	}
+}
+
+// MigrateIDs moves progress saved under each card's legacy ID (see
+// deck.Card.LegacyID: the old hash included media lines, so renaming an audio
+// file re-keyed the card) to its current ID, in both the forward and reverse
+// namespaces. An entry already present under the new ID wins — real progress
+// isn't overwritten by stale history. Reports whether anything moved, so the
+// caller knows to save.
+func (s *Store) MigrateIDs(cards []deck.Card) bool {
+	moved := false
+	for i := range cards {
+		c := &cards[i]
+		if c.LegacyID == "" {
+			continue
+		}
+		for _, pre := range []string{"", reversePrefix} {
+			from, to := pre+c.LegacyID, pre+c.ID
+			cp, ok := s.data.Cards[from]
+			if !ok {
+				continue
+			}
+			if _, exists := s.data.Cards[to]; !exists {
+				s.data.Cards[to] = cp
+			}
+			delete(s.data.Cards, from)
+			moved = true
+		}
+	}
+	return moved
+}
+
 // Confidence returns a 0-100 score indicating how well the user knows this card.
 // Factors: accuracy, streak length, and number of times seen.
 func (cp *CardProgress) Confidence() float64 {
@@ -213,9 +259,26 @@ func (s *Store) PrioritizeCards(cards []deck.Card) []deck.Card {
 	return active
 }
 
-// Summary returns aggregate stats for display.
+// Summary returns aggregate stats over every stored entry, including orphaned
+// progress from removed/edited cards and the other study direction.
 func (s *Store) Summary() (totalCorrect, totalWrong, cardsStudied int) {
 	for _, cp := range s.data.Cards {
+		totalCorrect += cp.TimesCorrect
+		totalWrong += cp.TimesWrong
+		cardsStudied++
+	}
+	return
+}
+
+// SummaryFor returns aggregate stats scoped to the given card IDs — i.e. the
+// deck as it exists now, in the direction being studied — so orphaned progress
+// and the opposite direction's history don't inflate the numbers.
+func (s *Store) SummaryFor(ids []string) (totalCorrect, totalWrong, cardsStudied int) {
+	for _, id := range ids {
+		cp, ok := s.data.Cards[id]
+		if !ok || cp.TimesCorrect+cp.TimesWrong == 0 {
+			continue
+		}
 		totalCorrect += cp.TimesCorrect
 		totalWrong += cp.TimesWrong
 		cardsStudied++

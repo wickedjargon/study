@@ -91,6 +91,104 @@ func TestStoreReset(t *testing.T) {
 	}
 }
 
+func testStore(t *testing.T) *Store {
+	t.Helper()
+	dir := t.TempDir()
+	return &Store{
+		dir:  dir,
+		path: dir + "/test.json",
+		data: &DeckProgress{
+			DeckPath: "/test/deck",
+			Cards:    make(map[string]*CardProgress),
+		},
+	}
+}
+
+func TestStoreResetDirection(t *testing.T) {
+	s := testStore(t)
+	s.RecordCorrect("fwd1")
+	s.RecordCorrect("r:rev1")
+
+	s.ResetDirection(true) // clear reverse only
+	if _, ok := s.data.Cards["r:rev1"]; ok {
+		t.Error("reverse entry survived ResetDirection(true)")
+	}
+	if _, ok := s.data.Cards["fwd1"]; !ok {
+		t.Error("forward entry was destroyed by ResetDirection(true)")
+	}
+
+	s.RecordCorrect("r:rev1")
+	s.ResetDirection(false) // clear forward only
+	if _, ok := s.data.Cards["fwd1"]; ok {
+		t.Error("forward entry survived ResetDirection(false)")
+	}
+	if _, ok := s.data.Cards["r:rev1"]; !ok {
+		t.Error("reverse entry was destroyed by ResetDirection(false)")
+	}
+}
+
+func TestStoreMigrateIDs(t *testing.T) {
+	s := testStore(t)
+	// History saved under the old (media-inclusive) hash, both directions.
+	s.RecordCorrect("old1")
+	s.RecordCorrect("old1")
+	s.RecordWrong("r:old1")
+
+	cards := []deck.Card{
+		{ID: "new1", LegacyID: "old1"},
+		{ID: "new2"}, // no legacy — untouched
+	}
+	if !s.MigrateIDs(cards) {
+		t.Fatal("MigrateIDs reported nothing moved")
+	}
+
+	if cp := s.Get("new1"); cp.TimesCorrect != 2 {
+		t.Errorf("forward history not migrated: %+v", cp)
+	}
+	if cp := s.Get("r:new1"); cp.TimesWrong != 1 {
+		t.Errorf("reverse history not migrated: %+v", cp)
+	}
+	if _, ok := s.data.Cards["old1"]; ok {
+		t.Error("legacy forward entry not removed")
+	}
+	if _, ok := s.data.Cards["r:old1"]; ok {
+		t.Error("legacy reverse entry not removed")
+	}
+	if s.MigrateIDs(cards) {
+		t.Error("second MigrateIDs still reports movement")
+	}
+}
+
+func TestStoreMigrateIDsKeepsNewerEntry(t *testing.T) {
+	s := testStore(t)
+	s.RecordWrong("old1") // stale history under the legacy ID
+	s.RecordCorrect("new1")
+	s.RecordCorrect("new1") // real progress already under the new ID
+
+	s.MigrateIDs([]deck.Card{{ID: "new1", LegacyID: "old1"}})
+
+	cp := s.Get("new1")
+	if cp.TimesCorrect != 2 || cp.TimesWrong != 0 {
+		t.Errorf("existing entry was overwritten by legacy history: %+v", cp)
+	}
+	if _, ok := s.data.Cards["old1"]; ok {
+		t.Error("legacy entry not cleaned up")
+	}
+}
+
+func TestSummaryFor(t *testing.T) {
+	s := testStore(t)
+	s.RecordCorrect("card1")
+	s.RecordWrong("card1")
+	s.RecordCorrect("r:card1") // other direction — out of scope
+	s.RecordCorrect("orphan")  // removed card — out of scope
+
+	correct, wrong, studied := s.SummaryFor([]string{"card1", "card2"})
+	if correct != 1 || wrong != 1 || studied != 1 {
+		t.Errorf("SummaryFor = (%d, %d, %d), want (1, 1, 1)", correct, wrong, studied)
+	}
+}
+
 func TestStorePrioritize(t *testing.T) {
 	dir := t.TempDir()
 	s := &Store{
