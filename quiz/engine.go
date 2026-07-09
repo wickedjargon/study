@@ -85,34 +85,19 @@ type retryCard struct {
 // minRepeats is the minimum number of times a wrong card is repeated.
 const minRepeats = 3
 
-// NewEngine creates a quiz engine from a parsed deck.
-// If shuffle is true, the card order is randomized.
-func NewEngine(d *deck.Deck, shuffle bool, choicesOverride int, store *progress.Store) *Engine {
+// NewEngine creates a quiz engine from a parsed deck. Cards are presented in
+// the deck's existing order (the caller shuffles/prioritizes beforehand).
+func NewEngine(d *deck.Deck, store *progress.Store) *Engine {
 	choices := d.Choices
-	if choicesOverride > 0 {
-		choices = choicesOverride
-	}
 	if choices < 2 {
 		choices = 2
 	}
 
-	// Build card pointer slice.
-	cards := make([]*deck.Card, len(d.Cards))
-	for i := range d.Cards {
-		cards[i] = &d.Cards[i]
-	}
-
-	if shuffle {
-		rand.Shuffle(len(cards), func(i, j int) {
-			cards[i], cards[j] = cards[j], cards[i]
-		})
-	}
-
 	// Seed the main queue with due ticks matching the incoming order, so the
 	// first pass presents cards in their (already shuffled/prioritized) order.
-	main := make([]queuedCard, len(cards))
-	for i, c := range cards {
-		main[i] = queuedCard{card: c, due: i}
+	main := make([]queuedCard, len(d.Cards))
+	for i := range d.Cards {
+		main[i] = queuedCard{card: &d.Cards[i], due: i}
 	}
 
 	allCards := make([]*deck.Card, len(d.Cards))
@@ -163,6 +148,24 @@ func (e *Engine) Speed() float64 {
 // Current returns the current card being quizzed.
 func (e *Engine) Current() *deck.Card {
 	return e.current
+}
+
+// CardIDs returns the IDs of every card in the session's deck, for scoping
+// all-time stats to the deck (and direction) actually being studied.
+func (e *Engine) CardIDs() []string {
+	ids := make([]string, len(e.allCards))
+	for i, c := range e.allCards {
+		ids[i] = c.ID
+	}
+	return ids
+}
+
+// End finishes the session: the quiz transitions to Done so the GUI can show
+// the summary screen. Sessions are endless by design, so this — the user
+// deciding to stop — is the only way Done is reached.
+func (e *Engine) End() {
+	e.current = nil
+	e.state = Done
 }
 
 // Options returns the current multiple choice answer strings.

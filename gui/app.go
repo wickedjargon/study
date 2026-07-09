@@ -133,7 +133,7 @@ func detectTheme() string {
 // fake — e.g. one whose Save fails — to exercise the save-failure handling.
 type progressStore interface {
 	Save() error
-	Summary() (totalCorrect, totalWrong, cardsStudied int)
+	SummaryFor(ids []string) (totalCorrect, totalWrong, cardsStudied int)
 }
 
 // App holds the GUI state.
@@ -184,6 +184,10 @@ type App struct {
 	questionImg       image.Image
 	questionImgFailed bool
 
+	// revealImg is the reversed card's answer-side image, loaded when the
+	// reveal is shown (reverse mode only) and cleared on the next card.
+	revealImg image.Image
+
 	// One-shot warning guards so a degraded-feature notice is printed to stderr
 	// once rather than on every use: pasteWarned when clipboard atoms are
 	// unavailable, arabicWarned when Arabic text is shown without an Arabic font.
@@ -197,6 +201,12 @@ type App struct {
 
 	// Text input buffer (type mode).
 	inputBuf string
+
+	// reverse is set when the session runs a flipped deck (--reverse): the prompt
+	// is the English and the user produces the target language, so the native
+	// script and audio are held back until the result screen, which renders the
+	// reveal (card.Answer) and speaks it.
+	reverse bool
 
 	// audioWarned suppresses repeat stderr warnings when audio playback fails
 	// (e.g. no player installed) — we report it once rather than on every card.
@@ -245,8 +255,10 @@ const (
 	speedStep    = 0.25
 )
 
-// Run launches the X11 quiz window.
-func Run(engine *quiz.Engine, viewer *media.Viewer, store *progress.Store) error {
+// Run launches the X11 quiz window. reverse is true when the deck was flipped
+// for production practice (--reverse), which changes how the result screen
+// reveals the answer (native script + audio) rather than the quiz mechanics.
+func Run(engine *quiz.Engine, viewer *media.Viewer, store *progress.Store, reverse bool) error {
 	// Detect and apply theme.
 	if detectTheme() == "light" {
 		applyScheme(lightScheme)
@@ -261,13 +273,14 @@ func Run(engine *quiz.Engine, viewer *media.Viewer, store *progress.Store) error
 	defer xu.Conn().Close()
 
 	app := &App{
-		xu:     xu,
-		engine: engine,
-		viewer: viewer,
-		store:  store,
-		start:  time.Now(),
-		width:  defaultWidth,
-		height: defaultHeight,
+		xu:      xu,
+		engine:  engine,
+		viewer:  viewer,
+		store:   store,
+		start:   time.Now(),
+		width:   defaultWidth,
+		height:  defaultHeight,
+		reverse: reverse,
 	}
 
 	// Base font size: the deck's "# font-size:" directive if set, else default.
@@ -413,6 +426,10 @@ func (a *App) tick() {
 	// Time's up — count the card as wrong, just like an incorrect answer.
 	a.deadline = time.Time{}
 	a.result = a.engine.AnswerTimeout()
+	// Reveal (and, in reverse mode, speak) the answer just as a typed miss does.
+	if a.reverse {
+		a.showReveal()
+	}
 	// The engine records the outcome to the store; persist it now so an
 	// ungraceful exit can't lose this answer.
 	a.saveProgress()
@@ -487,33 +504,61 @@ func (a *App) handleKey(ev xevent.KeyPressEvent) {
 		}
 
 	case quiz.ShowResult:
+		// Audio controls stay live on the result screen: Ctrl+R replays the
+		// clip that matters here (in reverse mode, the reveal — the one moment
+		// replay is most wanted), and the speed keys adjust + replay it.
+		if ev.State&xproto.ModMaskControl > 0 {
+			switch {
+			case key == "r" || key == "R":
+				a.replayAudio()
+				return
+			case key == "," || key == "<":
+				a.changeSpeed(-speedStep)
+				return
+			case key == "." || key == ">":
+				a.changeSpeed(speedStep)
+				return
+			case key == "/" || key == "?":
+				a.setSpeed(defaultSpeed)
+				return
+			}
+		}
 		switch key {
 		case "Return", "space":
 			a.viewer.CloseAll()
 			a.engine.Next()
 			a.result = nil
+			a.revealImg = nil
 			a.inputBuf = ""
 
 			if a.engine.State() == quiz.ShowQuestion {
 				a.loadQuestionImage()
 				a.playQuestionAudio()
 				a.startTimer()
-			} else if a.engine.State() == quiz.Done {
-				a.deadline = time.Time{}
-				a.viewer.CloseAll()
-				a.saveProgress()
 			}
 			a.render()
 		case "Escape":
-			a.quit()
+			a.endSession()
 		}
 
 	case quiz.Done:
 		switch key {
-		case "Escape", "Return":
+		case "Escape", "Return", "q":
 			a.quit()
 		}
 	}
+}
+
+// endSession stops the endless quiz at the user's request and shows the
+// summary screen (a second Escape there exits). Progress was already persisted
+// after every answer, so this only has to close media and switch state.
+func (a *App) endSession() {
+	a.viewer.CloseAll()
+	a.deadline = time.Time{}
+	a.result = nil
+	a.revealImg = nil
+	a.engine.End()
+	a.render()
 }
 
 func (a *App) handleChoiceKey(key string) {
@@ -530,7 +575,7 @@ func (a *App) handleChoiceKey(key string) {
 		a.saveProgress()
 		a.render()
 	case "Escape":
-		a.quit()
+		a.endSession()
 	}
 }
 
@@ -538,6 +583,11 @@ func (a *App) handleTypeKey(key string, ev xevent.KeyPressEvent) {
 	switch key {
 	case "Return":
 		a.result = a.engine.AnswerTyped(a.inputBuf)
+		// In reverse mode the prompt was silent; reveal the target language now
+		// that the answer is in — speak its clip and load its image.
+		if a.reverse {
+			a.showReveal()
+		}
 		// The engine records the outcome; persist immediately so an ungraceful
 		// exit can't lose this answer.
 		a.saveProgress()
@@ -550,7 +600,7 @@ func (a *App) handleTypeKey(key string, ev xevent.KeyPressEvent) {
 			a.render()
 		}
 	case "Escape":
-		a.quit()
+		a.endSession()
 	default:
 		// Ctrl combos are commands, not text. Ctrl+V pastes the CLIPBOARD
 		// selection; every other Ctrl combo is swallowed so it can't leak a
@@ -772,7 +822,13 @@ func (a *App) audioHelp() string {
 	if card == nil {
 		return ""
 	}
-	for _, m := range card.Question {
+	return a.audioHelpFor(card.Question)
+}
+
+// audioHelpFor is audioHelp for an explicit card side — the result screen
+// passes the reveal (answer) side in reverse mode, where the audio lives.
+func (a *App) audioHelpFor(side []deck.Media) string {
+	for _, m := range side {
 		if m.Type == deck.Audio {
 			return fmt.Sprintf("  |  replay: ctrl+r  |  playback-speed: ctrl+, / ctrl+.  |  speed %.2fx", a.audioSpeed)
 		}
@@ -864,7 +920,7 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 		y += lineHeight(a.fontRegular)
 
 		// Help.
-		a.drawTextCentered(canvas, "type answer + enter"+a.audioHelp()+"  |  esc: quit", a.footerY(y), a.fontSmall, dimColor)
+		a.drawTextCentered(canvas, "type answer + enter"+a.audioHelp()+"  |  esc: end", a.footerY(y), a.fontSmall, dimColor)
 	} else {
 		// Choices.
 		opts := a.engine.Options()
@@ -875,7 +931,7 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 		}
 
 		// Help.
-		help := fmt.Sprintf("1-%d: answer%s  |  esc: quit", len(opts), a.audioHelp())
+		help := fmt.Sprintf("1-%d: answer%s  |  esc: end", len(opts), a.audioHelp())
 		a.drawTextCentered(canvas, help, a.footerY(y), a.fontSmall, dimColor)
 	}
 }
@@ -904,14 +960,28 @@ func (a *App) renderResult(canvas *image.RGBA) {
 
 	if a.engine.Mode() == deck.ModeType {
 		// Show what was typed.
-		if a.result.Correct {
-			a.drawText(canvas, "> "+a.result.Typed+"  ✓", padding+20, y, a.fontRegular, greenColor)
-		} else {
-			a.drawText(canvas, "> "+a.result.Typed+"  X", padding+20, y, a.fontRegular, redColor)
-			y += lineHeight(a.fontRegular)
-			a.drawText(canvas, "= "+a.result.Answer, padding+20, y, a.fontRegular, greenColor)
+		mark, markColor := "  ✓", greenColor
+		if !a.result.Correct {
+			mark, markColor = "  X", redColor
 		}
+		a.drawText(canvas, "> "+a.result.Typed+mark, padding+20, y, a.fontRegular, markColor)
 		y += lineHeight(a.fontRegular)
+
+		if a.reverse {
+			// Reveal the target language the user was asked to produce — native
+			// script + romanization, plus any image that rode along — always
+			// (right or wrong). The clip was spoken by showReveal when the
+			// result appeared. This replaces the plain "= answer" line, since
+			// the reveal already includes it.
+			y += a.scaled(6)
+			if a.revealImg != nil {
+				y += a.renderImage(canvas, a.revealImg, y) + a.scaled(20)
+			}
+			y = a.renderTextMedia(canvas, a.result.Card.Answer, y, greenColor)
+		} else if !a.result.Correct {
+			a.drawText(canvas, "= "+a.result.Answer, padding+20, y, a.fontRegular, greenColor)
+			y += lineHeight(a.fontRegular)
+		}
 	} else {
 		// Choices with highlighting.
 		opts := a.engine.Options()
@@ -944,8 +1014,13 @@ func (a *App) renderResult(canvas *image.RGBA) {
 	}
 	y += lineHeight(a.fontBold)
 
-	// Help.
-	a.drawTextCentered(canvas, "enter: continue  •  esc: quit", a.footerY(y), a.fontSmall, dimColor)
+	// Help. The audio hint follows the side the clip lives on: the reveal
+	// (answer) side in reverse mode, the question side otherwise.
+	audioSide := card.Question
+	if a.reverse {
+		audioSide = card.Answer
+	}
+	a.drawTextCentered(canvas, "enter: continue"+a.audioHelpFor(audioSide)+"  •  esc: end", a.footerY(y), a.fontSmall, dimColor)
 }
 
 func (a *App) renderSummary(canvas *image.RGBA) {
@@ -992,8 +1067,9 @@ func (a *App) renderSummary(canvas *image.RGBA) {
 		y += lineHeight(a.fontRegular)
 	}
 
-	// All-time stats.
-	totalCorrect, totalWrong, cardsStudied := a.store.Summary()
+	// All-time stats, scoped to this deck's cards in this direction (orphaned
+	// progress from removed cards and the other direction's history excluded).
+	totalCorrect, totalWrong, cardsStudied := a.store.SummaryFor(a.engine.CardIDs())
 	if cardsStudied > 0 {
 		y += a.scaled(20)
 		a.drawTextCentered(canvas, "── All-time ──", y, a.fontSmall, dimColor)
@@ -1006,7 +1082,7 @@ func (a *App) renderSummary(canvas *image.RGBA) {
 		y += lineHeight(a.fontRegular)
 	}
 
-	a.drawTextCentered(canvas, "esc: exit", a.footerY(y), a.fontSmall, dimColor)
+	a.drawTextCentered(canvas, "enter / esc: exit", a.footerY(y), a.fontSmall, dimColor)
 }
 
 // ── Drawing Helpers ─────────────────────────────────────────────────
@@ -1078,8 +1154,15 @@ func (a *App) renderQuestionImageBlock(canvas *image.RGBA, y int) int {
 // shifted down by the font's ascent — otherwise its glyphs render upward into
 // the image above and overlap it. Returns the y below the text.
 func (a *App) renderQuestionText(canvas *image.RGBA, card *deck.Card, y int) int {
+	return a.renderTextMedia(canvas, card.Question, y, textColor)
+}
+
+// renderTextMedia draws the text elements of a card side (skipping image/audio),
+// one per line and script-shaped, in the given color. It's shared by the
+// question prompt and — in reverse mode — the answer reveal.
+func (a *App) renderTextMedia(canvas *image.RGBA, media []deck.Media, y int, c color.RGBA) int {
 	first := true
-	for _, m := range card.Question {
+	for _, m := range media {
 		if m.Type != deck.Text {
 			continue
 		}
@@ -1087,10 +1170,73 @@ func (a *App) renderQuestionText(canvas *image.RGBA, card *deck.Card, y int) int
 			y += a.fontLarge.Metrics().Ascent.Ceil()
 			first = false
 		}
-		a.drawCardText(canvas, m.Content, y, textColor)
+		a.drawCardText(canvas, m.Content, y, c)
 		y += lineHeight(a.fontLarge)
 	}
 	return y
+}
+
+// showReveal presents the reversed card's held-back answer side once the user
+// has answered: its audio is spoken and its image (if any) loaded for the
+// result screen.
+func (a *App) showReveal() {
+	a.playRevealAudio()
+	a.loadRevealImage()
+}
+
+// loadRevealImage caches the current card's answer-side image (reverse mode:
+// the original prompt's image, riding along on the reveal). Nil when the card
+// has none or it fails to decode.
+func (a *App) loadRevealImage() {
+	a.revealImg = nil
+	card := a.engine.Current()
+	if card == nil {
+		return
+	}
+	for _, m := range card.Answer {
+		if m.Type == deck.Image {
+			img, err := loadImage(m.Content)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "study: could not load image %s: %v\n", m.Content, err)
+				return
+			}
+			a.revealImg = img
+			return
+		}
+	}
+}
+
+// replayAudio replays whichever clip belongs to what's on screen: the
+// question's audio while the question shows, and — in reverse mode — the
+// reveal's audio on the result screen (there the question side is silent).
+func (a *App) replayAudio() {
+	if a.engine.State() == quiz.ShowResult && a.reverse {
+		a.playRevealAudio()
+		return
+	}
+	a.playQuestionAudio()
+}
+
+// playRevealAudio speaks the current card's reveal audio — the clip that, in a
+// reversed deck, lives on the answer (reveal) side and must not sound until the
+// user has answered. A no-op for a card without answer-side audio.
+func (a *App) playRevealAudio() {
+	card := a.engine.Current()
+	if card == nil {
+		return
+	}
+	var audioMedia []deck.Media
+	for _, m := range card.Answer {
+		if m.Type == deck.Audio {
+			audioMedia = append(audioMedia, m)
+		}
+	}
+	if len(audioMedia) > 0 {
+		if err := a.viewer.ShowMedia(audioMedia, a.audioSpeed); err != nil && !a.audioWarned {
+			fmt.Fprintf(os.Stderr, "study: %v\n", err)
+			a.audioWarned = true
+		}
+	}
 }
 
 func (a *App) renderImage(canvas *image.RGBA, img image.Image, y int) int {
@@ -1297,15 +1443,15 @@ func clampSpeed(x float64) float64 {
 	return x
 }
 
-// setSpeed sets the audio playback speed (clamped) and replays the current
-// question's audio at the new speed so the change is heard immediately. The
-// replay happens even when the value is unchanged (e.g. already at a clamp
-// bound), so pressing the key always gives audible feedback. Ctrl+/ resets to
-// defaultSpeed via this; the +/- keys go through changeSpeed.
+// setSpeed sets the audio playback speed (clamped) and replays the on-screen
+// clip at the new speed so the change is heard immediately. The replay happens
+// even when the value is unchanged (e.g. already at a clamp bound), so pressing
+// the key always gives audible feedback. Ctrl+/ resets to defaultSpeed via
+// this; the +/- keys go through changeSpeed.
 func (a *App) setSpeed(x float64) {
 	a.audioSpeed = clampSpeed(x)
-	if a.engine.State() == quiz.ShowQuestion {
-		a.playQuestionAudio()
+	if s := a.engine.State(); s == quiz.ShowQuestion || s == quiz.ShowResult {
+		a.replayAudio()
 	}
 	a.render()
 }

@@ -66,7 +66,7 @@ func TestAnswerTypedMatching(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			e := NewEngine(typedDeck(tc.answer, tc.accept, false), false, 0, nil)
+			e := NewEngine(typedDeck(tc.answer, tc.accept, false), nil)
 			r := e.AnswerTyped(tc.input)
 			if r == nil {
 				t.Fatal("nil result")
@@ -81,17 +81,17 @@ func TestAnswerTypedMatching(t *testing.T) {
 func TestAnswerTypedCaseSensitive(t *testing.T) {
 	// A case-sensitive deck still accepts alternatives but compares exactly:
 	// no case folding, no punctuation/diacritic leniency.
-	e := NewEngine(typedDeck("Hello", []string{"Hi"}, true), false, 0, nil)
+	e := NewEngine(typedDeck("Hello", []string{"Hi"}, true), nil)
 	if !e.AnswerTyped("Hello").Correct {
 		t.Error("exact match should be correct")
 	}
 
-	e = NewEngine(typedDeck("Hello", []string{"Hi"}, true), false, 0, nil)
+	e = NewEngine(typedDeck("Hello", []string{"Hi"}, true), nil)
 	if e.AnswerTyped("hello").Correct {
 		t.Error("case-sensitive deck should reject differing case")
 	}
 
-	e = NewEngine(typedDeck("Hello", []string{"Hi"}, true), false, 0, nil)
+	e = NewEngine(typedDeck("Hello", []string{"Hi"}, true), nil)
 	if !e.AnswerTyped("Hi").Correct {
 		t.Error("accepted alternative should be correct even when case-sensitive")
 	}
@@ -99,7 +99,7 @@ func TestAnswerTypedCaseSensitive(t *testing.T) {
 
 func TestEngineBasicFlow(t *testing.T) {
 	d := testDeck(4)
-	e := NewEngine(d, false, 0, nil)
+	e := NewEngine(d, nil)
 
 	if e.State() != ShowQuestion {
 		t.Fatal("expected ShowQuestion state")
@@ -116,7 +116,7 @@ func TestEngineBasicFlow(t *testing.T) {
 
 func TestEngineCorrectAnswer(t *testing.T) {
 	d := testDeck(2)
-	e := NewEngine(d, false, 0, nil)
+	e := NewEngine(d, nil)
 
 	// Find the correct answer index.
 	opts := e.Options()
@@ -148,7 +148,7 @@ func TestEngineCorrectAnswer(t *testing.T) {
 
 func TestEngineWrongAnswerCreatesRetry(t *testing.T) {
 	d := testDeck(4)
-	e := NewEngine(d, false, 0, nil)
+	e := NewEngine(d, nil)
 
 	// Find a wrong answer index.
 	opts := e.Options()
@@ -171,7 +171,7 @@ func TestEngineWrongAnswerCreatesRetry(t *testing.T) {
 
 func TestEngineCorrectAnswerCycle(t *testing.T) {
 	d := testDeck(3)
-	e := NewEngine(d, false, 0, nil)
+	e := NewEngine(d, nil)
 
 	// Answer each card correctly once (3 cards).
 	for i := 0; i < 3; i++ {
@@ -202,7 +202,7 @@ func TestEngineCorrectAnswerCycle(t *testing.T) {
 
 func TestEngineRetryGraduation(t *testing.T) {
 	d := testDeck(5)
-	e := NewEngine(d, false, 0, nil)
+	e := NewEngine(d, nil)
 
 	// Answer first card wrong.
 	firstCard := e.Current()
@@ -233,7 +233,7 @@ func TestEngineTimeLimit(t *testing.T) {
 	d.Cards[1].TimeLimit = 5  // per-card override
 	d.Cards[2].TimeLimit = -1 // explicitly unlimited
 
-	e := NewEngine(d, false, 0, nil) // sequential order preserved
+	e := NewEngine(d, nil) // sequential order preserved
 
 	answerCorrectly := func() {
 		opts := e.Options()
@@ -267,7 +267,7 @@ func TestEngineTimeLimit(t *testing.T) {
 
 func TestEngineAnswerTimeout(t *testing.T) {
 	d := testDeck(4)
-	e := NewEngine(d, false, 0, nil)
+	e := NewEngine(d, nil)
 
 	card := e.Current()
 	result := e.AnswerTimeout()
@@ -294,7 +294,8 @@ func TestEngineAnswerTimeout(t *testing.T) {
 
 func TestEngineChoiceCountClamped(t *testing.T) {
 	d := testDeck(2)
-	e := NewEngine(d, false, 10, nil) // request 10 choices but only 2 cards
+	d.Choices = 10 // deck requests 10 choices but has only 2 cards
+	e := NewEngine(d, nil)
 
 	opts := e.Options()
 	if len(opts) != 2 {
@@ -317,7 +318,7 @@ func TestEngineCustomDistractors(t *testing.T) {
 		},
 	}
 
-	e := NewEngine(d, false, 0, nil)
+	e := NewEngine(d, nil)
 	opts := e.Options()
 
 	if len(opts) != 4 {
@@ -358,7 +359,7 @@ func TestEngineCustomDistractors(t *testing.T) {
 // every subsequent drill rep must read true so it is skipped.
 func TestEngineIsRetryTimingInvariant(t *testing.T) {
 	d := testDeck(4)
-	e := NewEngine(d, false, 0, nil)
+	e := NewEngine(d, nil)
 
 	if e.IsRetry() {
 		t.Fatal("first card comes from the main queue; IsRetry must be false")
@@ -392,5 +393,35 @@ func TestEngineIsRetryTimingInvariant(t *testing.T) {
 	}
 	if !e.IsRetry() {
 		t.Error("a correct drill rep must still report IsRetry true")
+	}
+}
+
+func TestEngineEnd(t *testing.T) {
+	// Sessions are endless (correct cards re-queue forever), so Done is only
+	// reachable through End() — the user deciding to stop.
+	e := NewEngine(testDeck(3), nil)
+	if e.State() != ShowQuestion {
+		t.Fatalf("state = %v, want ShowQuestion", e.State())
+	}
+	e.End()
+	if e.State() != Done {
+		t.Errorf("state after End = %v, want Done", e.State())
+	}
+	if e.Current() != nil {
+		t.Error("current card should be nil after End")
+	}
+}
+
+func TestEngineCardIDs(t *testing.T) {
+	e := NewEngine(testDeck(3), nil)
+	ids := e.CardIDs()
+	if len(ids) != 3 {
+		t.Fatalf("CardIDs returned %d ids, want 3", len(ids))
+	}
+	want := map[string]bool{"alpha": true, "beta": true, "gamma": true}
+	for _, id := range ids {
+		if !want[id] {
+			t.Errorf("unexpected card id %q", id)
+		}
 	}
 }

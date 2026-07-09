@@ -15,13 +15,20 @@ Installs to `~/.local/bin` by default. Override with `PREFIX=/usr/local sudo mak
 ## Usage
 
 ```
-study [flags] <deck-file>
+study [flags] <deck-file | pack-directory>
 ```
+
+Passing a directory studies it as a **pack**: every `*.deck` file inside
+(sorted by name) is merged into one combined session. Deck-level settings come
+from the first file (a warning is printed if a later file disagrees), and a
+card that appears in several decks of the pack is included once. Pack progress
+is saved separately from the individual decks' progress.
 
 | Flag             | Description                              |
 |------------------|------------------------------------------|
+| `--reverse`      | Flip the deck: see the English, produce the target language |
 | `--stats`        | Print saved progress summary for the deck and exit |
-| `--forget`       | Clear saved progress for this deck       |
+| `--forget`       | Clear saved progress for this deck — the studied direction only (combine with `--reverse` to clear reverse progress) |
 | `--help`         | Show help                                |
 
 All per-deck settings (choices, time, order, …) live in the deck file header — see below.
@@ -55,7 +62,7 @@ Comments at the top of the file configure deck-wide settings:
 |------------------|-------------------------|---------------|
 | `# mode:`        | `choice`, `type`        | `type`        |
 | `# choices:`     | any integer ≥ 2         | `4`           |
-| `# case:`        | `sensitive`, `insensitive` | `sensitive` |
+| `# case:`        | `sensitive`, `insensitive` | `insensitive` |
 | `# time:`        | seconds (e.g. `20`, `20s`), or `none` | `none` |
 | `# order:`       | `sequential`, `shuffled` | `shuffled`   |
 | `# speed:`       | audio speed `0.25`–`4.0` (e.g. `0.75`, `1.5x`) | `1.0` |
@@ -114,6 +121,32 @@ one card are all blanked, and their contents join (in order) to form the answer:
 Cloze cards honour the card's mode — type-in by default, or multiple choice under
 `# mode: choice` (distractors are drawn from other cards as usual) — and accept
 `=` alternatives and `~` distractors like any other card.
+
+### Reverse mode (production practice)
+
+By default a card shows the prompt side (for a language deck, the target language
+and its audio) and you type the answer side (the English) — recognition. Pass
+`--reverse` to flip it: the card prompts with the English and you produce the
+target language, with the native script and audio held back until you answer.
+
+```
+study --reverse level1-foundations.deck
+```
+
+The last text line of the original prompt (the romanization, or the word itself
+for a Latin-script deck) is the answer to type; the native script, if any, is
+accepted too. Matching stays lenient, so `salam` is accepted for `salâm` and
+`ni hao` for `nǐ hǎo`. Reverse recall is a different skill from recognition, so
+its progress is tracked separately from the forward direction of the same deck.
+Producing the answer is inherently active recall, so reverse is always type-in
+(multiple choice, which can't be reversed, falls back to typing).
+
+Cards that can't be meaningfully reversed are skipped: cloze cards (their
+"question" is the blanked-out sentence), media-only prompts (nothing to type),
+and cards whose answer-to-produce contains no Latin letters (e.g. single-line
+script drills like `あ → a` — native script can't be typed without an IME,
+which the X11 input path doesn't receive). A deck with no reversible cards is
+rejected with an error.
 
 ### Multiple choice mode
 
@@ -248,7 +281,10 @@ What country is this?
 France
 ```
 
-Paths are relative to the directory containing the `.deck` file.
+Paths are relative to the directory containing the `.deck` file. A media file
+that doesn't exist is skipped with a warning (the card still runs without it)
+rather than failing the whole deck — so a pack whose audio hasn't been
+generated yet still loads.
 
 ### Right-to-left scripts (Arabic, Persian, …)
 
@@ -316,15 +352,16 @@ The image is displayed, the audio plays automatically, and the text is shown bel
 | `1`-`9`          | Select answer (choice mode)     |
 | Type + `Enter`   | Submit answer (type mode)       |
 | `Backspace`      | Delete character (type mode)    |
-| `Ctrl`+`R`       | Replay the question's audio     |
+| `Ctrl`+`R`       | Replay audio (on the result screen too — in reverse mode this replays the reveal) |
 | `Ctrl`+`,` / `Ctrl`+`.` | Slow down / speed up audio (and replay) |
 | `Ctrl`+`/`       | Reset audio speed to 1.00x      |
 | `Enter` / `Space`| Continue after result           |
-| `Escape`         | Quit                            |
+| `Escape`         | End the session (shows the summary; `Escape` again exits) |
 
 ## How It Works
 
+- Sessions are endless: cards keep cycling (weak ones more often) until you press `Escape`, which shows the session summary.
 - Wrong answers (including questions that hit their time limit) are repeated immediately, then re-queued for 3 additional correct attempts before graduating.
 - Confidence scores are tracked per card. High-confidence cards appear less often.
-- Progress is saved to `~/.local/share/study/` and persists between sessions.
+- Progress is saved to `~/.local/share/study/` and persists between sessions. Cards are keyed by a hash of their question **text**, so renaming a card's media files keeps its history (editing the text re-keys it).
 - Theme is detected automatically (dark/light) via gsettings or `~/.config/theme-mode`.

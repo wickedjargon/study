@@ -31,7 +31,7 @@ func answerCurrent(e *Engine, correct bool) {
 // user knew keep cycling.
 func TestWrongCardReappearsAfterGraduation(t *testing.T) {
 	d := testDeck(5)
-	e := NewEngine(d, false, 0, nil)
+	e := NewEngine(d, nil)
 
 	missedID := e.Current().ID
 
@@ -78,7 +78,7 @@ func TestWrongCardReappearsAfterGraduation(t *testing.T) {
 // and previously buried the tail forever).
 func TestNoCardStarvation(t *testing.T) {
 	d := testDeck(5)
-	e := NewEngine(d, false, 0, nil)
+	e := NewEngine(d, nil)
 
 	seen := make(map[string]bool)
 	for i := 0; i < 40 && len(seen) < len(d.Cards); i++ {

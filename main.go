@@ -1,6 +1,6 @@
 // study — a suckless quiz tool for flashcard-style learning.
 //
-// Usage: study [flags] <deck-file>
+// Usage: study [flags] <deck-file | pack-directory>
 //
 // Requires: sxiv or feh (for image decks), mpv or aplay (for audio decks)
 package main
@@ -23,11 +23,15 @@ import (
 
 const helpText = `study — suckless quiz tool
 
-usage: study [flags] <deck-file>
+usage: study [flags] <deck-file | pack-directory>
+
+a directory is a pack: every *.deck file inside is merged into one session.
 
 flags:
+  --reverse         flip the deck: see English, produce the target language
   --stats           print saved progress summary for the deck and exit
-  --forget          clear saved progress for this deck
+  --forget          clear saved progress for this deck (this direction only;
+                    combine with --reverse to clear reverse progress)
   --help            show this help
 
 deck format:
@@ -38,16 +42,21 @@ deck format:
     (cloze) card: the braced text is blanked out and becomes the answer.
   @img <path>       image on question/answer side
   @audio <path>     audio on question/answer side
+  = <text>          extra accepted answer (type mode)
   ~ <text>          custom wrong answer (distractor)
-  # comment         comment or metadata
-                    (# choices: N, # time: N, # order: sequential)
+  # comment         comment or metadata: # mode: choice|type,
+                    # choices: N, # case: sensitive|insensitive,
+                    # time: N|none, # order: sequential|shuffled,
+                    # font-size: N, # speed: X
 
 examples:
   study japanese.deck
+  study study-farsi.deck/          (a pack directory)
   study --stats mahjong.deck
   study --forget vocab.deck`
 
 func main() {
+	reverse := flag.Bool("reverse", false, "flip the deck: see English, produce the target language")
 	stats := flag.Bool("stats", false, "print saved progress summary for the deck and exit")
 	forget := flag.Bool("forget", false, "clear saved progress for this deck")
 	help := flag.Bool("help", false, "show help")
@@ -77,6 +86,20 @@ func main() {
 		fmt.Fprintf(os.Stderr, "study: %s\n", w)
 	}
 
+	// --reverse flips the deck for production practice (see English, type the
+	// target language). Applied before progress is loaded and cards are ordered
+	// so the whole session — stats, prioritization, the quiz itself — operates on
+	// the reversed cards, whose "r:"-prefixed IDs track separately from forward.
+	if *reverse {
+		d = d.Reversed()
+		// Cards that can't be reversed (cloze, media-only prompts, answers with
+		// no typeable Latin text) are dropped; a deck of nothing else can't run.
+		if len(d.Cards) == 0 {
+			fmt.Fprintf(os.Stderr, "✗ %s has no reversible cards\n", d.Name)
+			os.Exit(1)
+		}
+	}
+
 	// Check media viewers (audio only — images rendered in GUI).
 	viewer := media.NewViewer()
 
@@ -85,6 +108,16 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "✗ progress: %v\n", err)
 		os.Exit(1)
+	}
+
+	// One-time migration: progress saved under a card's legacy ID (the old
+	// hash included @audio/@img lines, so renaming a media file orphaned the
+	// card's history) is moved to its current ID.
+	if store.MigrateIDs(d.Cards) {
+		if err := store.Save(); err != nil {
+			fmt.Fprintf(os.Stderr, "✗ saving migrated progress: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	// --stats: print the saved summary for this deck and exit without
@@ -97,14 +130,20 @@ func main() {
 
 	// --forget clears saved progress and exits without launching the quiz,
 	// mirroring --stats. It's a maintenance action, not the start of a study
-	// session.
+	// session. Only the direction being studied is cleared: plain --forget
+	// resets forward progress, --forget --reverse resets reverse progress —
+	// so forgetting one skill doesn't destroy the other's history.
 	if *forget {
-		store.Reset()
+		store.ResetDirection(*reverse)
 		if err := store.Save(); err != nil {
 			fmt.Fprintf(os.Stderr, "✗ saving reset: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Println("✓ progress reset for", d.Name)
+		direction := "forward"
+		if *reverse {
+			direction = "reverse"
+		}
+		fmt.Printf("✓ %s progress reset for %s\n", direction, d.Name)
 		os.Exit(0)
 	}
 
@@ -122,10 +161,10 @@ func main() {
 	}
 	d.Cards = store.PrioritizeCards(d.Cards)
 
-	engine := quiz.NewEngine(d, false, 0, store)
+	engine := quiz.NewEngine(d, store)
 
 	// Run GUI.
-	if err := gui.Run(engine, viewer, store); err != nil {
+	if err := gui.Run(engine, viewer, store, *reverse); err != nil {
 		fmt.Fprintf(os.Stderr, "✗ %v\n", err)
 		os.Exit(1)
 	}

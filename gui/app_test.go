@@ -57,7 +57,7 @@ func (f *fakeStore) Save() error {
 	return nil
 }
 
-func (f *fakeStore) Summary() (int, int, int) { return 0, 0, 0 }
+func (f *fakeStore) SummaryFor([]string) (int, int, int) { return 0, 0, 0 }
 
 func TestSaveProgress(t *testing.T) {
 	cases := []struct {
@@ -203,5 +203,5 @@ func appForDeck(t *testing.T, dir, body string) *App {
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
-	return &App{engine: quiz.NewEngine(d, false, 0, store)}
+	return &App{engine: quiz.NewEngine(d, store)}
 }

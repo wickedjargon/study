@@ -32,7 +32,7 @@ func TestMissedCardAppearsMoreOftenDespiteHistory(t *testing.T) {
 		}
 	}
 
-	e := NewEngine(d, false, 0, store)
+	e := NewEngine(d, store)
 
 	// Miss the first two distinct cards we are shown (cold recall), then drill
 	// each back to graduation, then answer everything correctly for a while.
