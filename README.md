@@ -46,29 +46,69 @@ separates question from answer.
 
 ```
 # Farsi phrases
-# answer-mode: type
 # time-limit: 20
 
-@img img/greeting.png
-@audio audio/salam.mp3
 سلام
 salâm
 ---
 hello
-= hi
 ```
 
 ### Card syntax
 
-| Line | Meaning |
-|------|---------|
-| `= text` (answer side) | Extra accepted answer (type mode) |
-| `= text` (question side) | Alternative prompt wording — accepted in `--reverse`, never displayed, doesn't re-key the card |
-| `~ text` | Custom wrong answer (choice-mode distractor) |
-| `@img path` | Image, shown with the question (path relative to the deck file) |
-| `@audio path` | Audio clip, plays automatically (needs `mpv` or `aplay`) |
-| `{{...}}` and no separator | Cloze card: the braced text is blanked (`____`) and becomes the answer; multiple deletions join in order |
-| `# answer-mode:` / `# choice-count:` / `# time-limit:` inside a card block | Per-card override (`# time-limit: none` exempts one card) |
+**Accepted answers and distractors** — `=` adds an extra accepted answer
+(type mode), `~` a custom wrong option (choice mode):
+
+```
+bonjour
+---
+hello
+= hi
+~ goodbye
+```
+
+**Question-side `=`** — an alternative wording of the prompt, accepted when
+the prompt is what you type (`--reverse`); never displayed, and adding one
+doesn't re-key the card:
+
+```
+¿Prefiere ventanilla o pasillo?
+= prefieres ventanilla o pasillo
+---
+do you prefer window or aisle
+```
+
+**Media** — `@img` and `@audio` ride on the side they're written on; paths
+are relative to the deck file, audio plays automatically (needs `mpv` or
+`aplay`):
+
+```
+@img flags/japan.png
+@audio audio/konnichiwa.mp3
+How do you say "hello"?
+---
+こんにちは
+```
+
+**Cloze** — a card with no separator and a `{{...}}` deletion blanks the
+braced text (`____`) and makes it the answer; multiple deletions join in
+order:
+
+```
+The capital of France is {{Paris}}.
+```
+
+**Per-card overrides** — `# answer-mode:`, `# choice-count:`, and
+`# time-limit:` inside a card block apply to that card only (`# time-limit:
+none` exempts it):
+
+```
+# answer-mode: choice
+# time-limit: none
+What is 1 + 1?
+---
+2
+```
 
 - Type-mode matching is lenient by default: case, punctuation, accents, and
   extra spaces are ignored (`salam` matches `salâm`); `# answer-case:
