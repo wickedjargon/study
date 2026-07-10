@@ -19,6 +19,41 @@ type CardProgress struct {
 	TimesWrong   int       `json:"times_wrong"`
 	Streak       int       `json:"streak"` // consecutive correct
 	LastSeen     time.Time `json:"last_seen"`
+
+	// Between-session scheduling state (successive relearning). Level counts
+	// completed successful sessions and indexes reviewLadder; Due is when the
+	// card should next be reviewed. Zero values (including progress saved by
+	// older versions) mean "due now".
+	Level int       `json:"level,omitempty"`
+	Due   time.Time `json:"due,omitempty"`
+}
+
+// reviewLadder is the between-session interval schedule, in days: each
+// successful session moves a card one rung up, so reviews spread out as the
+// card is retained across sessions. Distributing retrieval practice across
+// days is the most robust effect in the learning literature (successive
+// relearning: Rawson & Dunlosky); expanding the gaps keeps it efficient.
+var reviewLadder = []int{1, 3, 7, 14, 30, 60, 120}
+
+// Schedule records that a card met its session criterion and sets its next
+// review. A clean session moves the card one rung up the ladder; a session
+// with a lapse (any miss) sends it back to the bottom — the card was
+// forgotten, so its spacing must be rebuilt.
+func (s *Store) Schedule(cardID string, lapsed bool) {
+	cp := s.ensure(cardID)
+	if lapsed {
+		cp.Level = 1
+	} else if cp.Level < len(reviewLadder) {
+		cp.Level++
+	}
+	days := reviewLadder[cp.Level-1]
+	cp.Due = time.Now().Add(time.Duration(days) * 24 * time.Hour)
+}
+
+// DueNow reports whether the card should be reviewed now. Cards with no
+// recorded schedule (new cards, or progress from older versions) are due.
+func (cp *CardProgress) DueNow(now time.Time) bool {
+	return cp.Due.IsZero() || !cp.Due.After(now)
 }
 
 // Accuracy returns the percentage of correct answers (0-100).
@@ -257,6 +292,24 @@ func (s *Store) PrioritizeCards(cards []deck.Card) []deck.Card {
 	// Append mastered cards at the end (they'll rarely be reached).
 	active = append(active, mastered...)
 	return active
+}
+
+// WeakThreshold is the confidence score below which a card counts as weak for
+// a "# order: weak-only" cram session. Never-studied cards score 0, so they
+// are always included; a mastered card scores well above it.
+const WeakThreshold = 50
+
+// FilterWeak returns only the cards worth cramming: those whose confidence is
+// below WeakThreshold. May return an empty slice — a deck in good shape has
+// nothing to cram.
+func (s *Store) FilterWeak(cards []deck.Card) []deck.Card {
+	var weak []deck.Card
+	for _, c := range cards {
+		if s.Get(c.ID).Confidence() < WeakThreshold {
+			weak = append(weak, c)
+		}
+	}
+	return weak
 }
 
 // Summary returns aggregate stats over every stored entry, including orphaned
