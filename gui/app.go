@@ -246,7 +246,7 @@ const (
 )
 
 // Audio playback speed. The multiplier starts at defaultSpeed (or the deck's
-// "# speed:" directive) and the user nudges it at runtime with Ctrl+, / Ctrl+.
+// "# audio-speed:" directive) and the user nudges it at runtime with Ctrl+, / Ctrl+.
 // in speedStep increments, clamped to [minSpeed,maxSpeed]; Ctrl+/ resets it.
 const (
 	defaultSpeed = 1.0
@@ -290,7 +290,7 @@ func Run(engine *quiz.Engine, viewer *media.Viewer, store *progress.Store, rever
 	}
 	app.initialFontPt = app.baseFontPt // Ctrl+0 returns here
 
-	// Audio speed: the deck's "# speed:" directive if set, else default.
+	// Audio speed: the deck's "# audio-speed:" directive if set, else default.
 	app.audioSpeed = defaultSpeed
 	if x := engine.Speed(); x > 0 {
 		app.audioSpeed = clampSpeed(x)
@@ -337,14 +337,9 @@ func Run(engine *quiz.Engine, viewer *media.Viewer, store *progress.Store, rever
 
 	win.Map()
 
-	// Load first card's media.
-	app.loadQuestionImage()
-
-	// Play audio if any.
-	app.playQuestionAudio()
-
-	// Start the countdown for the first card (if it has a time limit).
-	app.startTimer()
+	// Load the first card's media, play its audio, and arm its countdown (or,
+	// on a first-viewing preview, reveal the answer side instead).
+	app.presentCard()
 
 	// Set up event handlers.
 	keybind.Initialize(xu)
@@ -399,6 +394,21 @@ func Run(engine *quiz.Engine, viewer *media.Viewer, store *progress.Store, rever
 			return nil
 		}
 	}
+}
+
+// presentCard loads and plays the media for a freshly served card. On a
+// first-viewing preview the answer side is revealed too (its image and audio)
+// and the countdown stays disarmed — the timer belongs to recall, which only
+// begins once the reveal is confirmed.
+func (a *App) presentCard() {
+	a.loadQuestionImage()
+	a.playQuestionAudio()
+	if a.engine.State() == quiz.ShowPreview {
+		a.showReveal()
+		a.deadline = time.Time{}
+		return
+	}
+	a.startTimer()
 }
 
 // startTimer arms the countdown for the current question. If the current card
@@ -531,9 +541,43 @@ func (a *App) handleKey(ev xevent.KeyPressEvent) {
 			a.revealImg = nil
 			a.inputBuf = ""
 
-			if a.engine.State() == quiz.ShowQuestion {
-				a.loadQuestionImage()
-				a.playQuestionAudio()
+			if s := a.engine.State(); s == quiz.ShowQuestion || s == quiz.ShowPreview {
+				a.presentCard()
+			}
+			a.render()
+		case "Escape":
+			a.endSession()
+		}
+
+	case quiz.ShowPreview:
+		// Audio controls stay live so the revealed clip can be re-heard while
+		// studying the new card.
+		if ev.State&xproto.ModMaskControl > 0 {
+			switch {
+			case key == "r" || key == "R":
+				a.replayAudio()
+				return
+			case key == "," || key == "<":
+				a.changeSpeed(-speedStep)
+				return
+			case key == "." || key == ">":
+				a.changeSpeed(speedStep)
+				return
+			case key == "/" || key == "?":
+				a.setSpeed(defaultSpeed)
+				return
+			}
+		}
+		switch key {
+		case "Return", "space":
+			a.engine.ConfirmPreview()
+			if a.engine.State() == quiz.ShowPreview {
+				// Flip-through: a new card was served, still answer-visible.
+				a.viewer.CloseAll()
+				a.presentCard()
+			} else {
+				// First-viewing reveal: study time is over — quiz the very same
+				// card. The countdown (if any) starts now, when recall begins.
 				a.startTimer()
 			}
 			a.render()
@@ -549,9 +593,9 @@ func (a *App) handleKey(ev xevent.KeyPressEvent) {
 	}
 }
 
-// endSession stops the endless quiz at the user's request and shows the
-// summary screen (a second Escape there exits). Progress was already persisted
-// after every answer, so this only has to close media and switch state.
+// endSession stops the quiz early at the user's request and shows the summary
+// screen (a second Escape there exits). Progress was already persisted after
+// every answer, so this only has to close media and switch state.
 func (a *App) endSession() {
 	a.viewer.CloseAll()
 	a.deadline = time.Time{}
@@ -752,9 +796,8 @@ func (a *App) quit() {
 }
 
 func (a *App) saveProgress() {
-	// Sessions are endless by design and the only way to stop is to quit, so
-	// progress is flushed after every answer (not just at exit) — an ungraceful
-	// kill then loses at most nothing. Most save failures are transient (a brief
+	// Progress is flushed after every answer (not just at session end) — an
+	// ungraceful kill then loses at most nothing. Most save failures are transient (a brief
 	// filesystem hiccup), so retry once before giving up. A persistent failure
 	// is both logged and surfaced in-window (saveFailed) so the user knows
 	// results aren't being written, rather than silently dropping them.
@@ -860,6 +903,8 @@ func (a *App) render() {
 		a.renderQuestion(canvas)
 	case quiz.ShowResult:
 		a.renderResult(canvas)
+	case quiz.ShowPreview:
+		a.renderPreview(canvas)
 	case quiz.Done:
 		a.renderSummary(canvas)
 	}
@@ -1023,6 +1068,60 @@ func (a *App) renderResult(canvas *image.RGBA) {
 	a.drawTextCentered(canvas, "enter: continue"+a.audioHelpFor(audioSide)+"  •  esc: end", a.footerY(y), a.fontSmall, dimColor)
 }
 
+// renderPreview draws an answer-visible card: the first-viewing reveal (study
+// a brand-new card once before it's quizzed) and flip-through mode (every card,
+// no quizzing) share this screen.
+func (a *App) renderPreview(canvas *image.RGBA) {
+	card := a.engine.Current()
+	if card == nil {
+		return
+	}
+	flip := a.engine.Order() == deck.OrderFlipThrough
+
+	y := padding
+
+	// Progress indicator, tagged so it's clear nothing is being scored.
+	// Flip-through shows the position within the wrapping lap; the reveal shows
+	// the usual session counter.
+	if flip {
+		size := a.engine.DeckSize()
+		prog := fmt.Sprintf("[%d/%d]  flip-through", a.engine.TotalSeen%size+1, size)
+		a.drawText(canvas, prog, padding, y, a.fontSmall, dimColor)
+	} else {
+		seen := a.engine.TotalSeen
+		remaining := a.engine.Remaining()
+		prog := fmt.Sprintf("[%d/%d]  new card", seen+1, seen+remaining)
+		a.drawText(canvas, prog, padding, y, a.fontSmall, accentColor)
+	}
+	y += lineHeight(a.fontSmall)
+
+	// Question side.
+	y = a.renderQuestionImageBlock(canvas, y)
+	y = a.renderQuestionText(canvas, card, y)
+
+	y += a.scaled(10)
+
+	// Answer side, revealed: its image (loaded by showReveal) and every text
+	// line in green — the same presentation as a reverse-mode result reveal.
+	if a.revealImg != nil {
+		y += a.renderImage(canvas, a.revealImg, y) + a.scaled(20)
+	}
+	y = a.renderTextMedia(canvas, card.Answer, y, greenColor)
+
+	y += a.scaled(16)
+
+	// Help. Audio may live on either side of the card; hint whichever has it.
+	audio := a.audioHelpFor(card.Question)
+	if audio == "" {
+		audio = a.audioHelpFor(card.Answer)
+	}
+	action := "enter: quiz this card"
+	if flip {
+		action = "enter: next"
+	}
+	a.drawTextCentered(canvas, action+audio+"  |  esc: end", a.footerY(y), a.fontSmall, dimColor)
+}
+
 func (a *App) renderSummary(canvas *image.RGBA) {
 	elapsed := time.Since(a.start).Round(time.Second)
 	y := a.height / 4
@@ -1030,46 +1129,69 @@ func (a *App) renderSummary(canvas *image.RGBA) {
 	a.drawTextCentered(canvas, "Session Complete", y, a.fontLarge, accentColor)
 	y += lineHeight(a.fontLarge) + a.scaled(20)
 
-	stats := []struct {
+	type statRow struct {
 		label string
 		value string
 		color color.RGBA
-	}{
-		{"Cards studied", fmt.Sprintf("%d", a.engine.TotalSeen), textColor},
-		{"Correct", fmt.Sprintf("%d", a.engine.TotalCorrect), greenColor},
-		{"Wrong", fmt.Sprintf("%d", a.engine.TotalWrong), redColor},
+	}
+	var stats []statRow
+
+	// Flip-through is reading, not recall: no answers were given, so correct/
+	// wrong/accuracy would all be meaningless zeros.
+	flip := a.engine.Order() == deck.OrderFlipThrough
+	if flip {
+		stats = []statRow{
+			{"Cards viewed", fmt.Sprintf("%d", a.engine.TotalSeen), textColor},
+			{"Time", elapsed.String(), textColor},
+		}
+	} else {
+		stats = []statRow{
+			{"Cards studied", fmt.Sprintf("%d", a.engine.TotalSeen), textColor},
+			{"Correct", fmt.Sprintf("%d", a.engine.TotalCorrect), greenColor},
+			{"Wrong", fmt.Sprintf("%d", a.engine.TotalWrong), redColor},
+		}
+
+		// Accuracy.
+		acc := float64(0)
+		if a.engine.TotalSeen > 0 {
+			acc = float64(a.engine.TotalCorrect) / float64(a.engine.TotalSeen) * 100
+		}
+		accColor := greenColor
+		if acc < 80 {
+			accColor = redColor
+		}
+		stats = append(stats,
+			statRow{"Accuracy", fmt.Sprintf("%.0f%%", acc), accColor},
+			statRow{"Time", elapsed.String(), textColor})
 	}
 
-	// Accuracy.
-	acc := float64(0)
-	if a.engine.TotalSeen > 0 {
-		acc = float64(a.engine.TotalCorrect) / float64(a.engine.TotalSeen) * 100
-	}
-	accColor := greenColor
-	if acc < 80 {
-		accColor = redColor
-	}
-	stats = append(stats, struct {
-		label string
-		value string
-		color color.RGBA
-	}{"Accuracy", fmt.Sprintf("%.0f%%", acc), accColor})
-
-	stats = append(stats, struct {
-		label string
-		value string
-		color color.RGBA
-	}{"Time", elapsed.String(), textColor})
-
+	// Two-column table centered as a block: labels right-aligned, values
+	// left-aligned. Padding tricks don't align in a proportional font.
+	maxLabelW, maxValueW := 0, 0
 	for _, s := range stats {
-		line := fmt.Sprintf("%-16s %s", s.label, s.value)
-		a.drawTextCentered(canvas, line, y, a.fontRegular, s.color)
+		if w := font.MeasureString(a.fontRegular, s.label).Round(); w > maxLabelW {
+			maxLabelW = w
+		}
+		if w := font.MeasureString(a.fontRegular, s.value).Round(); w > maxValueW {
+			maxValueW = w
+		}
+	}
+	colGap := a.scaled(28)
+	labelRight := (a.width-maxLabelW-colGap-maxValueW)/2 + maxLabelW
+	valueLeft := labelRight + colGap
+	for _, s := range stats {
+		a.drawTextRight(canvas, s.label, labelRight, y, a.fontRegular, s.color)
+		a.drawText(canvas, s.value, valueLeft, y, a.fontRegular, s.color)
 		y += lineHeight(a.fontRegular)
 	}
 
 	// All-time stats, scoped to this deck's cards in this direction (orphaned
 	// progress from removed cards and the other direction's history excluded).
-	totalCorrect, totalWrong, cardsStudied := a.store.SummaryFor(a.engine.CardIDs())
+	// Skipped for flip-through, which doesn't touch the record.
+	totalCorrect, totalWrong, cardsStudied := 0, 0, 0
+	if !flip {
+		totalCorrect, totalWrong, cardsStudied = a.store.SummaryFor(a.engine.CardIDs())
+	}
 	if cardsStudied > 0 {
 		y += a.scaled(20)
 		a.drawTextCentered(canvas, "── All-time ──", y, a.fontSmall, dimColor)
@@ -1211,6 +1333,13 @@ func (a *App) loadRevealImage() {
 // reveal's audio on the result screen (there the question side is silent).
 func (a *App) replayAudio() {
 	if a.engine.State() == quiz.ShowResult && a.reverse {
+		a.playRevealAudio()
+		return
+	}
+	if a.engine.State() == quiz.ShowPreview {
+		// Both sides are on screen; replay both sides' clips. Decks put audio
+		// on one side, so in practice this replays whichever one exists.
+		a.playQuestionAudio()
 		a.playRevealAudio()
 		return
 	}
@@ -1450,7 +1579,7 @@ func clampSpeed(x float64) float64 {
 // this; the +/- keys go through changeSpeed.
 func (a *App) setSpeed(x float64) {
 	a.audioSpeed = clampSpeed(x)
-	if s := a.engine.State(); s == quiz.ShowQuestion || s == quiz.ShowResult {
+	if s := a.engine.State(); s == quiz.ShowQuestion || s == quiz.ShowResult || s == quiz.ShowPreview {
 		a.replayAudio()
 	}
 	a.render()
