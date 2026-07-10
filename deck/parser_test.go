@@ -49,7 +49,7 @@ bar
 }
 
 func TestParseDefaultModeIsType(t *testing.T) {
-	// A deck with no # mode: header defaults to type-in (active recall).
+	// A deck with no # answer-mode: header defaults to type-in (active recall).
 	d, err := Parse(writeTempDeck(t, "2 + 2\n---\n4\n"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -61,13 +61,13 @@ func TestParseDefaultModeIsType(t *testing.T) {
 		t.Errorf("expected card default mode ModeType, got %v", d.Cards[0].Mode)
 	}
 
-	// # mode: choice still opts a deck into multiple choice.
-	d, err = Parse(writeTempDeck(t, "# mode: choice\n\n2 + 2\n---\n4\n"))
+	// # answer-mode: choice still opts a deck into multiple choice.
+	d, err = Parse(writeTempDeck(t, "# answer-mode: choice\n\n2 + 2\n---\n4\n"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if d.Mode != ModeChoice {
-		t.Errorf("expected ModeChoice with '# mode: choice', got %v", d.Mode)
+		t.Errorf("expected ModeChoice with '# answer-mode: choice', got %v", d.Mode)
 	}
 }
 
@@ -105,7 +105,7 @@ func TestIsSeparator(t *testing.T) {
 }
 
 func TestParseChoicesMetadata(t *testing.T) {
-	content := `# choices: 6
+	content := `# choice-count: 6
 
 q1
 ---
@@ -122,31 +122,191 @@ a1
 }
 
 func TestParseOrderMetadata(t *testing.T) {
-	// Default (no header) is shuffled.
+	cases := []struct {
+		name string
+		line string // "" = no directive
+		want OrderMode
+	}{
+		{"default", "", OrderAdaptive},
+		{"adaptive", "# order: adaptive", OrderAdaptive},
+		{"sequential", "# order: sequential", OrderSequential},
+		{"flip-through", "# order: flip-through", OrderFlipThrough},
+		{"weak-only", "# order: weak-only", OrderWeakOnly},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			content := "q1\n---\na1\n"
+			if tc.line != "" {
+				content = tc.line + "\n\n" + content
+			}
+			d, err := Parse(writeTempDeck(t, content))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if d.Order != tc.want {
+				t.Errorf("Order = %v, want %v", d.Order, tc.want)
+			}
+		})
+	}
+
+	// Malformed values — including the names of removed modes — are ignored
+	// with a warning.
+	for _, v := range []string{"random", "shuffled", "sequential-strict", "stale-first", "new-first"} {
+		d, err := Parse(writeTempDeck(t, "# order: "+v+"\n\nq1\n---\na1\n"))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if d.Order != OrderAdaptive {
+			t.Errorf("%q: expected default order, got %v", v, d.Order)
+		}
+		if len(d.Warnings) != 1 {
+			t.Errorf("%q: expected 1 warning, got %v", v, d.Warnings)
+		}
+	}
+}
+
+func TestLegacyDirectiveNamesWarn(t *testing.T) {
+	// The pre-rename directive names were removed, not aliased: they take no
+	// effect, and each produces a warning naming its replacement so an old deck
+	// fails loudly rather than silently running on defaults.
+	content := "# mode: choice\n# time: 20\n\nq1\n---\na1\n\n# choices: 6\nq2\n---\na2\n"
+	d, err := Parse(writeTempDeck(t, content))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if d.Mode != ModeType {
+		t.Errorf("legacy # mode: took effect: got %v, want ModeType", d.Mode)
+	}
+	if d.TimeLimit != 0 {
+		t.Errorf("legacy # time: took effect: got %d, want 0", d.TimeLimit)
+	}
+	if d.Cards[1].Choices != 0 {
+		t.Errorf("legacy per-card # choices: took effect: got %d, want 0", d.Cards[1].Choices)
+	}
+	if len(d.Warnings) != 3 {
+		t.Fatalf("expected 3 warnings, got %v", d.Warnings)
+	}
+	for i, want := range []string{"answer-mode", "time-limit", "choice-count"} {
+		if !strings.Contains(d.Warnings[i], want) {
+			t.Errorf("warning %d = %q, want mention of %q", i, d.Warnings[i], want)
+		}
+	}
+}
+
+func TestParseRenamedDirectives(t *testing.T) {
+	// Every renamed directive, deck-level and per-card, lands on its field.
+	content := `# answer-mode: choice
+# choice-count: 6
+# answer-case: sensitive
+# time-limit: 20
+# audio-speed: 0.75
+# preview-new: on
+
+q1
+---
+a1
+
+# answer-mode: type
+# time-limit: none
+q2
+---
+a2
+`
+	d, err := Parse(writeTempDeck(t, content))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(d.Warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", d.Warnings)
+	}
+	if d.Mode != ModeChoice {
+		t.Errorf("answer-mode: got %v, want ModeChoice", d.Mode)
+	}
+	if d.Choices != 6 {
+		t.Errorf("choice-count: got %d, want 6", d.Choices)
+	}
+	if !d.CaseSensitive {
+		t.Errorf("answer-case: got insensitive, want sensitive")
+	}
+	if d.TimeLimit != 20 {
+		t.Errorf("time-limit: got %d, want 20", d.TimeLimit)
+	}
+	if d.Speed != 0.75 {
+		t.Errorf("audio-speed: got %v, want 0.75", d.Speed)
+	}
+	if !d.Preview {
+		t.Errorf("preview-new: got off, want on")
+	}
+	// Per-card renames on the second card.
+	if len(d.Cards) != 2 {
+		t.Fatalf("got %d cards, want 2", len(d.Cards))
+	}
+	if d.Cards[1].Mode != ModeType {
+		t.Errorf("per-card answer-mode: got %v, want ModeType", d.Cards[1].Mode)
+	}
+	if d.Cards[1].TimeLimit != -1 {
+		t.Errorf("per-card time-limit none: got %d, want -1", d.Cards[1].TimeLimit)
+	}
+}
+
+func TestParseNewPerSessionMetadata(t *testing.T) {
+	cases := []struct {
+		name string
+		line string // "" = no directive
+		want int
+	}{
+		{"default", "", 20},
+		{"explicit", "# new-per-session: 5", 5},
+		{"zero (reviews only)", "# new-per-session: 0", 0},
+		{"all", "# new-per-session: all", -1},
+		{"malformed", "# new-per-session: lots", 20}, // rejected → default
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			content := "q1\n---\na1\n"
+			if tc.line != "" {
+				content = tc.line + "\n\n" + content
+			}
+			d, err := Parse(writeTempDeck(t, content))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if d.NewPerSession != tc.want {
+				t.Errorf("NewPerSession = %d, want %d", d.NewPerSession, tc.want)
+			}
+		})
+	}
+}
+
+func TestParsePreviewMetadata(t *testing.T) {
+	// Default (no header) is off.
 	d, err := Parse(writeTempDeck(t, "q1\n---\na1\n"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if d.Sequential {
-		t.Errorf("expected Sequential=false by default")
+	if d.Preview {
+		t.Errorf("expected Preview=false by default")
 	}
 
-	// # order: sequential opts into deck order.
-	d, err = Parse(writeTempDeck(t, "# order: sequential\n\nq1\n---\na1\n"))
+	// # preview-new: on opts into the first-viewing reveal.
+	d, err = Parse(writeTempDeck(t, "# preview-new: on\n\nq1\n---\na1\n"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !d.Sequential {
-		t.Errorf("expected Sequential=true with '# order: sequential'")
+	if !d.Preview {
+		t.Errorf("expected Preview=true with '# preview-new: on'")
 	}
 
-	// # order: shuffled is the explicit default.
-	d, err = Parse(writeTempDeck(t, "# order: shuffled\n\nq1\n---\na1\n"))
+	// A malformed value is ignored with a warning.
+	d, err = Parse(writeTempDeck(t, "# preview-new: yes\n\nq1\n---\na1\n"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if d.Sequential {
-		t.Errorf("expected Sequential=false with '# order: shuffled'")
+	if d.Preview {
+		t.Errorf("expected Preview=false with malformed '# preview-new: yes'")
+	}
+	if len(d.Warnings) != 1 {
+		t.Errorf("expected 1 warning for malformed value, got %v", d.Warnings)
 	}
 }
 
@@ -198,6 +358,51 @@ hello
 	// The = lines must not leak into the distractor set.
 	if len(card.Distractors) != 1 || card.Distractors[0] != "goodbye" {
 		t.Errorf("Distractors = %v, want [goodbye]", card.Distractors)
+	}
+}
+
+func TestParseQuestionSideAlternatives(t *testing.T) {
+	content := `¿Prefiere ventanilla o pasillo?
+= prefieres ventanilla o pasillo
+=prefiere usted ventanilla o pasillo
+---
+do you prefer window or aisle
+= would you prefer window or aisle
+`
+	d, err := Parse(writeTempDeck(t, content))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	card := d.Cards[0]
+
+	// The = lines are stored for reverse mode, never displayed.
+	want := []string{"prefieres ventanilla o pasillo", "prefiere usted ventanilla o pasillo"}
+	if len(card.QuestionAccept) != 2 || card.QuestionAccept[0] != want[0] || card.QuestionAccept[1] != want[1] {
+		t.Errorf("QuestionAccept = %v, want %v", card.QuestionAccept, want)
+	}
+	if len(card.Question) != 1 || card.Question[0].Content != "¿Prefiere ventanilla o pasillo?" {
+		t.Errorf("Question = %+v, want only the prompt line", card.Question)
+	}
+
+	// They must not leak into the answer-side accept list, and vice versa.
+	if len(card.Accept) != 1 || card.Accept[0] != "would you prefer window or aisle" {
+		t.Errorf("Accept = %v, want the answer-side alternative only", card.Accept)
+	}
+
+	// Adding a = line must not re-key the card (that would orphan progress).
+	plain, err := Parse(writeTempDeck(t, "¿Prefiere ventanilla o pasillo?\n---\ndo you prefer window or aisle\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if card.ID != plain.Cards[0].ID {
+		t.Errorf("ID changed when = alternatives were added: %q vs %q", card.ID, plain.Cards[0].ID)
+	}
+}
+
+func TestParseQuestionOnlyAlternativesIsError(t *testing.T) {
+	_, err := Parse(writeTempDeck(t, "= no prompt here\n---\nanswer\n"))
+	if err == nil {
+		t.Fatal("expected error for a card whose question is only = lines")
 	}
 }
 
@@ -331,9 +536,9 @@ func TestCardIDMediaOnlyQuestionStillUnique(t *testing.T) {
 
 func TestParseDirPack(t *testing.T) {
 	dir := t.TempDir()
-	a := "# mode: type\n\nsalam\n---\nhello\n\nkhodahafez\n---\ngoodbye\n"
+	a := "# answer-mode: type\n\nsalam\n---\nhello\n\nkhodahafez\n---\ngoodbye\n"
 	// b repeats a card from a (cross-deck reuse) and adds one of its own.
-	b := "# mode: type\n\nsalam\n---\nhello\n\nmamnun\n---\nthanks\n"
+	b := "# answer-mode: type\n\nsalam\n---\nhello\n\nmamnun\n---\nthanks\n"
 	if err := os.WriteFile(filepath.Join(dir, "a.deck"), []byte(a), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -358,10 +563,10 @@ func TestParseDirPack(t *testing.T) {
 
 func TestParseDirConflictingHeadersWarn(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "a.deck"), []byte("# mode: type\n\nq1\n---\na1\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "a.deck"), []byte("# answer-mode: type\n\nq1\n---\na1\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "b.deck"), []byte("# mode: choice\n\nq2\n---\na2\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "b.deck"), []byte("# answer-mode: choice\n\nq2\n---\na2\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -423,18 +628,18 @@ func TestCardIDStable(t *testing.T) {
 }
 
 func TestParseTimeLimitMetadata(t *testing.T) {
-	content := `# time: 15
+	content := `# time-limit: 15
 
 q1
 ---
 a1
 
-# time: 30s
+# time-limit: 30s
 q2
 ---
 a2
 
-# time: none
+# time-limit: none
 q3
 ---
 a3
@@ -499,7 +704,7 @@ func TestParseFontSizeMetadata(t *testing.T) {
 		{"named x-large", "# font-size: x-large", 26},
 		{"out of range", "# font-size: 200", 0}, // rejected → unset
 		{"unparseable", "# font-size: huge", 0}, // rejected → unset
-		{"absent", "# choices: 4", 0},           // no directive → unset
+		{"absent", "# choice-count: 4", 0},      // no directive → unset
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -521,14 +726,14 @@ func TestParseSpeedMetadata(t *testing.T) {
 		line string
 		want float64
 	}{
-		{"numeric", "# speed: 0.75", 0.75},
-		{"with x suffix", "# speed: 1.5x", 1.5},
-		{"min bound", "# speed: 0.25", 0.25},
-		{"max bound", "# speed: 4.0", 4.0},
-		{"below min", "# speed: 0.1", 0},    // rejected → unset
-		{"above max", "# speed: 8", 0},      // rejected → unset
-		{"unparseable", "# speed: fast", 0}, // rejected → unset
-		{"absent", "# choices: 4", 0},       // no directive → unset
+		{"numeric", "# audio-speed: 0.75", 0.75},
+		{"with x suffix", "# audio-speed: 1.5x", 1.5},
+		{"min bound", "# audio-speed: 0.25", 0.25},
+		{"max bound", "# audio-speed: 4.0", 4.0},
+		{"below min", "# audio-speed: 0.1", 0},    // rejected → unset
+		{"above max", "# audio-speed: 8", 0},      // rejected → unset
+		{"unparseable", "# audio-speed: fast", 0}, // rejected → unset
+		{"absent", "# choice-count: 4", 0},        // no directive → unset
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -560,9 +765,9 @@ func TestEffectiveTimeLimitNoDeckDefault(t *testing.T) {
 func TestParseHeaderDirectivesAcrossBlankLines(t *testing.T) {
 	// Deck-level directives are read from every leading comment-only block, so a
 	// blank line separating header directives must not drop the ones after it.
-	content := `# choices: 6
+	content := `# choice-count: 6
 
-# mode: choice
+# answer-mode: choice
 # order: sequential
 
 q1
@@ -579,19 +784,19 @@ a1
 	if d.Mode != ModeChoice {
 		t.Errorf("expected ModeChoice from directive after a blank line, got %v", d.Mode)
 	}
-	if !d.Sequential {
-		t.Errorf("expected Sequential=true from directive after a blank line")
+	if d.Order != OrderSequential {
+		t.Errorf("expected sequential order from directive after a blank line, got %v", d.Order)
 	}
 }
 
 func TestParsePerCardChoices(t *testing.T) {
-	content := `# choices: 4
+	content := `# choice-count: 4
 
 q1
 ---
 a1
 
-# choices: 6
+# choice-count: 6
 q2
 ---
 a2
@@ -698,7 +903,7 @@ func TestParseClozeStillRequiresSeparatorWhenNoBraces(t *testing.T) {
 
 func TestParseTimeLimitUpperBound(t *testing.T) {
 	// An absurd per-question limit is rejected (and warned) rather than honored.
-	d, err := Parse(writeTempDeck(t, "# time: 999999\n\nq\n---\na\n"))
+	d, err := Parse(writeTempDeck(t, "# time-limit: 999999\n\nq\n---\na\n"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -706,12 +911,12 @@ func TestParseTimeLimitUpperBound(t *testing.T) {
 		t.Errorf("expected out-of-range time limit ignored (0), got %d", d.TimeLimit)
 	}
 	if len(d.Warnings) == 0 {
-		t.Error("expected a warning for the out-of-range # time:")
+		t.Error("expected a warning for the out-of-range # time-limit:")
 	}
 }
 
 func TestParseWarnsOnInvalidDirective(t *testing.T) {
-	d, err := Parse(writeTempDeck(t, "# choices: banana\n# mode: sideways\n\nq\n---\na\n"))
+	d, err := Parse(writeTempDeck(t, "# choice-count: banana\n# answer-mode: sideways\n\nq\n---\na\n"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -726,7 +931,7 @@ func TestParseWarnsOnInvalidDirective(t *testing.T) {
 
 func TestParseValidDirectivesNoWarnings(t *testing.T) {
 	// A well-formed deck must not emit spurious warnings.
-	d, err := Parse(writeTempDeck(t, "# choices: 3\n# time: 30\n# mode: choice\n\nq\n---\na\n"))
+	d, err := Parse(writeTempDeck(t, "# choice-count: 3\n# time-limit: 30\n# answer-mode: choice\n\nq\n---\na\n"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

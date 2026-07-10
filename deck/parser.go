@@ -2,12 +2,14 @@
 //
 // Deck format (sent-inspired):
 //
-//	# Comment or metadata (# choices: N)
+//	# Comment or metadata (# choice-count: N)
 //	@img path/to/image.png
 //	@audio path/to/audio.mp3
 //	Question text
+//	= Alternative question wording (accepted in --reverse; never displayed)
 //	---                        (or === — both separate question from answer)
 //	Answer text
+//	= Alternative accepted answer
 //	~ Optional custom distractor
 //
 //	(blank line separates cards)
@@ -46,15 +48,21 @@ type Card struct {
 	// card (it included @img/@audio lines, so renaming a media file re-keyed
 	// the card and orphaned its progress). Set only when it differs from ID;
 	// used once at load time to migrate saved progress, never for new writes.
-	LegacyID    string
-	Question    []Media  // question side elements
-	Answer      []Media  // answer side elements
-	AnswerText  string   // plain text of the answer (for choice generation)
-	Accept      []string // extra answers accepted in type mode ("= " lines)
-	Distractors []string // optional custom wrong answers
-	Mode        QuizMode // per-card mode (choice or type)
-	Choices     int      // per-card choice count (0 = use deck default)
-	TimeLimit   int      // per-card time limit in seconds
+	LegacyID   string
+	Question   []Media  // question side elements
+	Answer     []Media  // answer side elements
+	AnswerText string   // plain text of the answer (for choice generation)
+	Accept     []string // extra answers accepted in type mode ("= " lines)
+	// QuestionAccept holds "= " lines authored on the question side: alternative
+	// wordings of the prompt. They are never displayed and play no role in a
+	// forward session (the question isn't typed); a reversed card folds them into
+	// its Accept list, so a learner producing the target language can answer with
+	// any authored variant.
+	QuestionAccept []string
+	Distractors    []string // optional custom wrong answers
+	Mode           QuizMode // per-card mode (choice or type)
+	Choices        int      // per-card choice count (0 = use deck default)
+	TimeLimit      int      // per-card time limit in seconds
 	// (0 = inherit deck default, -1 = explicitly unlimited)
 	Cloze bool // fill-in-the-blank card ({{...}} deletion, no separator)
 }
@@ -82,14 +90,20 @@ const (
 // Deck represents a parsed deck file.
 type Deck struct {
 	Name          string
-	Path          string   // absolute path to deck file
-	Choices       int      // number of answer choices (default 4)
-	Mode          QuizMode // choice or type
-	CaseSensitive bool     // case-sensitive matching for type mode
-	TimeLimit     int      // global per-question time limit in seconds (0 = none)
-	Sequential    bool     // present cards in deck order (default: shuffled)
-	FontSize      int      // base font size in points (0 = use the app default)
-	Speed         float64  // audio playback speed multiplier (0 = use the app default of 1.0)
+	Path          string    // absolute path to deck file
+	Choices       int       // number of answer choices (default 4)
+	Mode          QuizMode  // choice or type
+	CaseSensitive bool      // case-sensitive matching for type mode
+	TimeLimit     int       // global per-question time limit in seconds (0 = none)
+	Order         OrderMode // session ordering mode ("# order:", default adaptive)
+	// NewPerSession caps how many never-studied cards enter one adaptive
+	// session (default defaultNewPerSession; -1 = unlimited). Introducing new
+	// material in bounded batches keeps the 3-recall learning criterion
+	// tractable on large decks.
+	NewPerSession int
+	Preview       bool    // reveal a never-studied card's answer once before quizzing it
+	FontSize      int     // base font size in points (0 = use the app default)
+	Speed         float64 // audio playback speed multiplier (0 = use the app default of 1.0)
 	Cards         []Card
 
 	// Warnings collects non-fatal parse issues — directives whose value was
@@ -97,6 +111,63 @@ type Deck struct {
 	// so a typo'd directive isn't silently dropped. (A fatal problem, e.g. a
 	// card with no answer, is returned as an error instead.)
 	Warnings []string
+}
+
+// OrderMode selects what a session serves and how it schedules the cards.
+// See the README's ordering table for the full behavior of each.
+type OrderMode int
+
+const (
+	// OrderAdaptive is the default: an evidence-based review session — cards
+	// due for review (most overdue first) plus a bounded batch of new cards,
+	// each studied to its session criterion with spaced repetitions, the next
+	// review scheduled days out on completion.
+	OrderAdaptive OrderMode = iota
+	// OrderSequential cycles the deck in authored order forever; the order
+	// never changes (misses drill immediately). A rote tool for material
+	// where the sequence is the content — verse, digits, procedures.
+	OrderSequential
+	// OrderFlipThrough shows each card with its answer visible, in authored
+	// order, wrapping at the end. No quizzing, nothing recorded.
+	OrderFlipThrough
+	// OrderWeakOnly restricts the session to weak/never-studied cards (cram
+	// mode, ignoring due dates); criterion scheduling within the session.
+	OrderWeakOnly
+)
+
+// ParseOrderMode resolves an order-mode name — a "# order:" directive value or
+// a --order flag value — to its mode. The bool reports whether the name is
+// known.
+func ParseOrderMode(v string) (OrderMode, bool) {
+	m, ok := orderModes[v]
+	return m, ok
+}
+
+// orderModes maps order-mode names to their modes.
+var orderModes = map[string]OrderMode{
+	"adaptive":     OrderAdaptive,
+	"sequential":   OrderSequential,
+	"flip-through": OrderFlipThrough,
+	"weak-only":    OrderWeakOnly,
+}
+
+// defaultNewPerSession is the default cap on never-studied cards per adaptive
+// session.
+const defaultNewPerSession = 20
+
+// ParseNewPerSession parses a "# new-per-session:" directive or
+// --new-per-session flag value: a non-negative integer, or "all" for no cap
+// (returned as -1). The bool reports whether the value was understood.
+func ParseNewPerSession(s string) (int, bool) {
+	s = strings.TrimSpace(s)
+	if strings.EqualFold(s, "all") {
+		return -1, true
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 0 {
+		return 0, false
+	}
+	return n, true
 }
 
 // warn records a non-fatal parse issue on the deck.
@@ -134,10 +205,11 @@ func Parse(path string) (*Deck, error) {
 
 	dir := filepath.Dir(absPath)
 	deck := &Deck{
-		Name:    deckName(absPath),
-		Path:    absPath,
-		Choices: 4,
-		Mode:    ModeType, // default to active recall; # mode: choice opts in
+		Name:          deckName(absPath),
+		Path:          absPath,
+		Choices:       4,
+		Mode:          ModeType, // default to active recall; # answer-mode: choice opts in
+		NewPerSession: defaultNewPerSession,
 	}
 
 	var lines []string
@@ -216,7 +288,8 @@ func parseDir(absDir string) (*Deck, error) {
 			continue
 		}
 		if d.Mode != merged.Mode || d.CaseSensitive != merged.CaseSensitive ||
-			d.TimeLimit != merged.TimeLimit || d.Sequential != merged.Sequential {
+			d.TimeLimit != merged.TimeLimit || d.Order != merged.Order ||
+			d.Preview != merged.Preview || d.NewPerSession != merged.NewPerSession {
 			merged.warn("%s: header settings differ from %s; using the first file's",
 				filepath.Base(path), filepath.Base(entries[0]))
 		}
@@ -244,70 +317,109 @@ func isCommentOnly(block []string) bool {
 	return true
 }
 
+// legacyDirectives maps removed directive names to their replacements. The old
+// names are no longer honored; recognizing them purely to warn means an old
+// deck fails loudly with the fix spelled out, instead of silently running on
+// defaults because its directives became plain comments.
+var legacyDirectives = map[string]string{
+	"mode":    "answer-mode",
+	"choices": "choice-count",
+	"case":    "answer-case",
+	"time":    "time-limit",
+	"preview": "preview-new",
+	"speed":   "audio-speed",
+}
+
+// warnLegacyDirective emits a warning if the line uses a removed directive
+// name, naming its replacement.
+func warnLegacyDirective(line string, warn func(string, ...any)) {
+	for old, replacement := range legacyDirectives {
+		if _, ok := strings.CutPrefix(line, "# "+old+":"); ok {
+			warn("ignoring %q (directive renamed: use # %s:)", line, replacement)
+			return
+		}
+	}
+}
+
 // applyDeckMetadata reads deck-level directives from a comment-only block and
 // applies them to the deck.
 func applyDeckMetadata(deck *Deck, block []string) {
 	for _, line := range block {
 		trimmed := strings.TrimSpace(line)
-		if after, ok := strings.CutPrefix(trimmed, "# choices:"); ok {
+		warnLegacyDirective(trimmed, deck.warn)
+		if after, ok := strings.CutPrefix(trimmed, "# choice-count:"); ok {
 			v := strings.TrimSpace(after)
 			if n, err := strconv.Atoi(v); err == nil && n >= 2 {
 				deck.Choices = n
 			} else {
-				deck.warn("ignoring %q (# choices: needs an integer >= 2)", trimmed)
+				deck.warn("ignoring %q (# choice-count: needs an integer >= 2)", trimmed)
 			}
 		}
-		if after, ok := strings.CutPrefix(trimmed, "# mode:"); ok {
+		if after, ok := strings.CutPrefix(trimmed, "# answer-mode:"); ok {
 			switch strings.TrimSpace(after) {
 			case "type":
 				deck.Mode = ModeType
 			case "choice":
 				deck.Mode = ModeChoice
 			default:
-				deck.warn("ignoring %q (# mode: must be type or choice)", trimmed)
+				deck.warn("ignoring %q (# answer-mode: must be type or choice)", trimmed)
 			}
 		}
-		if after, ok := strings.CutPrefix(trimmed, "# case:"); ok {
+		if after, ok := strings.CutPrefix(trimmed, "# answer-case:"); ok {
 			switch strings.TrimSpace(after) {
 			case "sensitive":
 				deck.CaseSensitive = true
 			case "insensitive":
 				deck.CaseSensitive = false
 			default:
-				deck.warn("ignoring %q (# case: must be sensitive or insensitive)", trimmed)
+				deck.warn("ignoring %q (# answer-case: must be sensitive or insensitive)", trimmed)
 			}
 		}
-		if after, ok := strings.CutPrefix(trimmed, "# time:"); ok {
-			if n, ok := parseTimeLimit(after); ok {
+		if after, ok := strings.CutPrefix(trimmed, "# time-limit:"); ok {
+			if n, ok := ParseTimeLimit(after); ok {
 				if n > 0 {
 					deck.TimeLimit = n
 				}
 			} else {
-				deck.warn("ignoring %q (# time: needs 0-%d seconds, or none)", trimmed, maxTimeLimit)
+				deck.warn("ignoring %q (# time-limit: needs 0-%d seconds, or none)", trimmed, maxTimeLimit)
 			}
 		}
 		if after, ok := strings.CutPrefix(trimmed, "# order:"); ok {
+			if m, ok := ParseOrderMode(strings.TrimSpace(after)); ok {
+				deck.Order = m
+			} else {
+				deck.warn("ignoring %q (# order: must be adaptive, sequential, flip-through, or weak-only)", trimmed)
+			}
+		}
+		if after, ok := strings.CutPrefix(trimmed, "# new-per-session:"); ok {
+			if n, ok := ParseNewPerSession(after); ok {
+				deck.NewPerSession = n
+			} else {
+				deck.warn("ignoring %q (# new-per-session: needs an integer >= 0, or all)", trimmed)
+			}
+		}
+		if after, ok := strings.CutPrefix(trimmed, "# preview-new:"); ok {
 			switch strings.TrimSpace(after) {
-			case "sequential":
-				deck.Sequential = true
-			case "shuffled":
-				deck.Sequential = false
+			case "on":
+				deck.Preview = true
+			case "off":
+				deck.Preview = false
 			default:
-				deck.warn("ignoring %q (# order: must be sequential or shuffled)", trimmed)
+				deck.warn("ignoring %q (# preview-new: must be on or off)", trimmed)
 			}
 		}
 		if after, ok := strings.CutPrefix(trimmed, "# font-size:"); ok {
-			if n, ok := parseFontSize(after); ok {
+			if n, ok := ParseFontSize(after); ok {
 				deck.FontSize = n
 			} else {
 				deck.warn("ignoring %q (# font-size: needs 8-48, or small/medium/large/x-large)", trimmed)
 			}
 		}
-		if after, ok := strings.CutPrefix(trimmed, "# speed:"); ok {
-			if x, ok := parseSpeed(after); ok {
+		if after, ok := strings.CutPrefix(trimmed, "# audio-speed:"); ok {
+			if x, ok := ParseSpeed(after); ok {
 				deck.Speed = x
 			} else {
-				deck.warn("ignoring %q (# speed: needs 0.25-4.0)", trimmed)
+				deck.warn("ignoring %q (# audio-speed: needs 0.25-4.0)", trimmed)
 			}
 		}
 	}
@@ -353,32 +465,33 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, warn func(s
 	cardTime := 0
 	for _, line := range block {
 		trimmed := strings.TrimSpace(line)
-		if after, ok := strings.CutPrefix(trimmed, "# mode:"); ok {
+		warnLegacyDirective(trimmed, warn)
+		if after, ok := strings.CutPrefix(trimmed, "# answer-mode:"); ok {
 			switch strings.TrimSpace(after) {
 			case "type":
 				cardMode = ModeType
 			case "choice":
 				cardMode = ModeChoice
 			default:
-				warn("ignoring %q (# mode: must be type or choice)", trimmed)
+				warn("ignoring %q (# answer-mode: must be type or choice)", trimmed)
 			}
 		}
-		if after, ok := strings.CutPrefix(trimmed, "# choices:"); ok {
+		if after, ok := strings.CutPrefix(trimmed, "# choice-count:"); ok {
 			if n, err := strconv.Atoi(strings.TrimSpace(after)); err == nil && n >= 2 {
 				cardChoices = n
 			} else {
-				warn("ignoring %q (# choices: needs an integer >= 2)", trimmed)
+				warn("ignoring %q (# choice-count: needs an integer >= 2)", trimmed)
 			}
 		}
-		if after, ok := strings.CutPrefix(trimmed, "# time:"); ok {
-			if n, ok := parseTimeLimit(after); ok {
+		if after, ok := strings.CutPrefix(trimmed, "# time-limit:"); ok {
+			if n, ok := ParseTimeLimit(after); ok {
 				if n <= 0 {
 					cardTime = -1 // explicitly unlimited
 				} else {
 					cardTime = n
 				}
 			} else {
-				warn("ignoring %q (# time: needs 0-%d seconds, or none)", trimmed, maxTimeLimit)
+				warn("ignoring %q (# time-limit: needs 0-%d seconds, or none)", trimmed, maxTimeLimit)
 			}
 		}
 	}
@@ -419,6 +532,27 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, warn func(s
 
 	questionLines := filtered[:sepIdx]
 	afterSep := filtered[sepIdx+1:]
+
+	// "=" lines on the question side are alternative wordings of the prompt,
+	// accepted when the card is reversed (where the question becomes the answer
+	// to type). They're stripped here so they neither display nor participate in
+	// the card ID — adding one to an existing card must not orphan its progress.
+	var qAccepts, qLines []string
+	for _, line := range questionLines {
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(trimmed, "= "):
+			qAccepts = append(qAccepts, strings.TrimPrefix(trimmed, "= "))
+		case strings.HasPrefix(trimmed, "=") && len(trimmed) > 1:
+			qAccepts = append(qAccepts, strings.TrimSpace(trimmed[1:]))
+		default:
+			qLines = append(qLines, line)
+		}
+	}
+	questionLines = qLines
+	if len(questionLines) == 0 {
+		return nil, fmt.Errorf("card question has only = alternatives, no prompt: %q", strings.Join(filtered, " / "))
+	}
 
 	if len(afterSep) == 0 {
 		return nil, fmt.Errorf("card has no answer (nothing after separator): %q", strings.Join(filtered, " / "))
@@ -471,16 +605,17 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, warn func(s
 
 	id, legacyID := stableCardID(questionLines)
 	card := &Card{
-		ID:          id,
-		LegacyID:    legacyID,
-		Question:    question,
-		Answer:      answer,
-		AnswerText:  answerText,
-		Accept:      accepts,
-		Distractors: distractors,
-		Mode:        cardMode,
-		Choices:     cardChoices,
-		TimeLimit:   cardTime,
+		ID:             id,
+		LegacyID:       legacyID,
+		Question:       question,
+		Answer:         answer,
+		AnswerText:     answerText,
+		Accept:         accepts,
+		QuestionAccept: qAccepts,
+		Distractors:    distractors,
+		Mode:           cardMode,
+		Choices:        cardChoices,
+		TimeLimit:      cardTime,
 	}
 
 	return card, nil
@@ -589,13 +724,13 @@ func blankClozes(line string) (string, []string) {
 	return b.String(), answers
 }
 
-// parseTimeLimit parses a time-limit metadata value. It accepts a plain
+// ParseTimeLimit parses a time-limit metadata value. It accepts a plain
 // integer number of seconds (0 to maxTimeLimit), an optional trailing "s"
 // (e.g. "30s"), or the words "none"/"off"/"0" to mean no limit (returned as 0).
 // The bool reports whether the value was understood; a negative or absurdly
 // large value is rejected (ok=false) so the caller can warn rather than honor a
 // typo.
-func parseTimeLimit(s string) (int, bool) {
+func ParseTimeLimit(s string) (int, bool) {
 	s = strings.TrimSpace(s)
 	switch strings.ToLower(s) {
 	case "none", "off", "unlimited":
@@ -609,11 +744,11 @@ func parseTimeLimit(s string) (int, bool) {
 	return n, true
 }
 
-// parseFontSize parses a font-size metadata value. It accepts a plain integer
+// ParseFontSize parses a font-size metadata value. It accepts a plain integer
 // point size (e.g. "20") or one of the named sizes small/medium/large/x-large,
 // which map onto the app's increment grid. The bool reports whether the value
 // was understood; sizes outside a sane range are rejected.
-func parseFontSize(s string) (int, bool) {
+func ParseFontSize(s string) (int, bool) {
 	s = strings.TrimSpace(s)
 	switch strings.ToLower(s) {
 	case "small":
@@ -632,12 +767,12 @@ func parseFontSize(s string) (int, bool) {
 	return n, true
 }
 
-// parseSpeed parses an audio-speed metadata value: a decimal multiplier, with
+// ParseSpeed parses an audio-speed metadata value: a decimal multiplier, with
 // an optional trailing "x" (e.g. "0.75", "1.5x"). The value is rejected unless
 // it falls within the same playback range the GUI allows (0.25–4.0), so a deck
 // can't request a speed the runtime would only clamp away. The bool reports
 // whether the value was understood.
-func parseSpeed(s string) (float64, bool) {
+func ParseSpeed(s string) (float64, bool) {
 	s = strings.TrimSpace(s)
 	s = strings.TrimSuffix(strings.ToLower(s), "x")
 	x, err := strconv.ParseFloat(strings.TrimSpace(s), 64)

@@ -1,5 +1,5 @@
-# mode: type
-# case: insensitive
+# answer-mode: type
+# answer-case: insensitive
 #
 # Manual test deck for Unicode text input (#5) and clipboard paste (#11).
 # Each question shows the exact string to enter; copy the matching line from
