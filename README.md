@@ -1,10 +1,6 @@
 # study
 
-A flashcard quiz tool inspired by suckless sent. Decks are plain text files
-you write in any editor; sessions run in a minimal X11 window. Answers are
-typed (active recall), and the default schedule follows the spaced-repetition
-evidence: new cards are learned to a three-recall criterion, reviews come due
-on expanding intervals, and a session ends when everything due is done.
+A flashcard quiz tool inspired by suckless sent. Decks are plain text files you write in any editor; sessions run in a minimal X11 window. The default schedule follows evidence-based spaced-repetition: new cards are learned to a three-recall criterion, reviews come due on expanding intervals, and a session ends when everything due is done.
 
 ## Getting started
 
@@ -15,14 +11,15 @@ Requires Go. Installs to `~/.local/bin`; override with
 make clean install
 ```
 
-Save this as `example.deck` — a type-in card and a multiple choice card:
+Save this as `example.deck` — a type-in card and a multiple choice card
+(`~` lines are the wrong options, and their presence is what makes the card
+multiple choice):
 
 ```
 2 + 2
 ---
 4
 
-# answer-mode: choice
 What is 2 + 2?
 ---
 ~ 3
@@ -110,8 +107,7 @@ do you prefer window or aisle
 ### Media
 
 `@img` and `@audio` ride on the side they're written on; paths are relative
-to the deck file, audio plays automatically (needs `mpv` or `aplay`). While
-studying, `Ctrl+R` replays a clip and `Ctrl+,` / `Ctrl+.` change its speed:
+to the deck file, audio plays automatically (needs `mpv` or `aplay`):
 
 ```
 @img flags/japan.png
@@ -147,7 +143,7 @@ What is 1 + 1?
 
 | Header | Values | Default |
 |--------|--------|---------|
-| `# answer-mode:` | `choice`, `type` | `type` |
+| `# answer-mode:` | `choice`, `type` (a card with `~` distractors is `choice` automatically) | `type` |
 | `# choice-count:` | any integer ≥ 2 | `4` |
 | `# answer-case:` | `sensitive`, `insensitive` | `insensitive` |
 | `# time-limit:` | seconds (e.g. `20`, `20s`), or `none`; expiry counts as wrong | `none` |
@@ -156,3 +152,18 @@ What is 1 + 1?
 | `# new-per-session:` | integer ≥ 0, or `all` | `20` |
 | `# font-size:` | 8–48, or `small`/`medium`/`large`/`x-large` | `14` |
 | `# audio-speed:` | `0.25`–`4.0` (e.g. `0.75`, `1.5x`) | `1.0` |
+
+## Controls
+
+| Key | Action |
+|-----|--------|
+| `1`–`9` | Select answer (choice mode) |
+| Type + `Enter` | Submit answer (type mode) |
+| `Backspace` | Delete character (type mode) |
+| `Ctrl`+`V` / middle-click | Paste clipboard / primary selection (type mode) |
+| `Enter` / `Space` | Continue after result / preview |
+| `Ctrl`+`R` | Replay audio (in reverse mode, the reveal's clip on the result screen) |
+| `Ctrl`+`,` / `Ctrl`+`.` | Slow down / speed up audio and replay (0.25 steps, 0.25–4x; needs `mpv`) |
+| `Ctrl`+`/` | Reset audio speed |
+| `Ctrl`+`=` / `Ctrl`+`-` / `Ctrl`+`0` | Grow / shrink / reset font size |
+| `Escape` | End session (summary screen; `Escape` again exits) |
