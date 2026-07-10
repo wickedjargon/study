@@ -1,6 +1,6 @@
 # study
 
-A flashcard quiz tool inspired by suckless sent. Decks are plain text files you write in any editor; sessions run in a minimal X11 window. The default schedule follows evidence-based spaced-repetition: new cards are learned to a three-recall criterion, reviews come due on expanding intervals, and a session ends when everything due is done.
+A flashcard quiz tool inspired by suckless sent. Decks are plain text files you write in any editor. Sessions run in a minimal X11 window. The default schedule follows evidence-based spaced repetition: new cards are learned to a three-recall criterion, reviews come due on expanding intervals, and a session ends when everything due is done.
 
 ![study showing a mahjong tile card](screenshot.png)
 
@@ -22,12 +22,12 @@ multiple choice):
 ---
 4
 
-What is 2 + 2?
+1 + 1?
 ---
+~ 0
+~ 1
+2
 ~ 3
-4
-~ 5
-~ 6
 ```
 
 Run it:
