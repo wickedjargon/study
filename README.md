@@ -81,23 +81,23 @@ Set with the `--order` flag or the `# order:` deck header:
 Plain text. Blank lines separate cards; `---` or `===` (any length ≥ 3)
 separates question from answer.
 
-A minimal card — type-in is the default, you produce the answer:
+**Minimal type-in example** — the default; you type the answer:
 
 ```
-What is the capital of France?
+2 + 2
 ---
-Paris
+4
 ```
 
-Multiple choice — opt in with `# answer-mode: choice`; wrong options are
-drawn from the other cards' answers:
+**Minimal multiple choice example** — wrong options are drawn from the other
+cards' answers:
 
 ```
 # answer-mode: choice
 
-What is 3 + 5?
+2 + 2
 ---
-8
+4
 ```
 
 ### Card syntax
