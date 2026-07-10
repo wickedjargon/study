@@ -81,14 +81,23 @@ Set with the `--order` flag or the `# order:` deck header:
 Plain text. Blank lines separate cards; `---` or `===` (any length ≥ 3)
 separates question from answer.
 
-```
-# Farsi phrases
-# time-limit: 20
+A minimal card — type-in is the default, you produce the answer:
 
-سلام
-salâm
+```
+What is the capital of France?
 ---
-hello
+Paris
+```
+
+Multiple choice — opt in with `# answer-mode: choice`; wrong options are
+drawn from the other cards' answers:
+
+```
+# answer-mode: choice
+
+What is 3 + 5?
+---
+8
 ```
 
 ### Card syntax
@@ -147,6 +156,8 @@ What is 1 + 1?
 2
 ```
 
+- A card side can hold several text lines, shown stacked — e.g. native
+  script above its romanization.
 - Type-mode matching is lenient by default: case, punctuation, accents, and
   extra spaces are ignored (`salam` matches `salâm`); `# answer-case:
   sensitive` requires exact matches.
