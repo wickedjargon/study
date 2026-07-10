@@ -79,9 +79,12 @@ Set with the `--order` flag or the `# order:` deck header:
 ## Deck format
 
 Plain text. Blank lines separate cards; `---` or `===` (any length ≥ 3)
-separates question from answer.
+separates question from answer. See [examples/basic.deck](examples/basic.deck)
+for a beginner deck, and the
+[language packs](https://github.com/wickedjargon/study-language-packages) for
+full-size decks with audio, script, and pack directories.
 
-**Minimal type-in example** — the default; you type the answer:
+### Minimal type-in example
 
 ```
 2 + 2
@@ -89,33 +92,34 @@ separates question from answer.
 4
 ```
 
-**Minimal multiple choice example** — wrong options are drawn from the other
-cards' answers:
+### Minimal multiple choice example
 
 ```
 # answer-mode: choice
-
-2 + 2
+What is 2 + 2?
 ---
+~ 3
 4
+~ 5
+~ 6
 ```
 
-### Card syntax
+### Accepted answers
 
-**Accepted answers and distractors** — `=` adds an extra accepted answer
-(type mode), `~` a custom wrong option (choice mode):
+`=` after the answer adds an extra accepted answer (type mode):
 
 ```
 bonjour
 ---
 hello
 = hi
-~ goodbye
 ```
 
-**Question-side `=`** — an alternative wording of the prompt, accepted when
-the prompt is what you type (`--reverse`); never displayed, and adding one
-doesn't re-key the card:
+### Alternative prompt wordings
+
+`=` on the question side is an alternative wording of the prompt, accepted
+when the prompt is what you type (`--reverse`); it's never displayed, and
+adding one doesn't re-key the card:
 
 ```
 ¿Prefiere ventanilla o pasillo?
@@ -124,9 +128,10 @@ doesn't re-key the card:
 do you prefer window or aisle
 ```
 
-**Media** — `@img` and `@audio` ride on the side they're written on; paths
-are relative to the deck file, audio plays automatically (needs `mpv` or
-`aplay`):
+### Media
+
+`@img` and `@audio` ride on the side they're written on; paths are relative
+to the deck file, audio plays automatically (needs `mpv` or `aplay`):
 
 ```
 @img flags/japan.png
@@ -136,41 +141,27 @@ How do you say "hello"?
 こんにちは
 ```
 
-**Cloze** — a card with no separator and a `{{...}}` deletion blanks the
-braced text (`____`) and makes it the answer; multiple deletions join in
-order:
+### Cloze
+
+A card with no separator and a `{{...}}` deletion blanks the braced text
+(`____`) and makes it the answer; multiple deletions join in order:
 
 ```
 The capital of France is {{Paris}}.
 ```
 
-**Per-card overrides** — `# answer-mode:`, `# choice-count:`, and
-`# time-limit:` inside a card block apply to that card only (`# time-limit:
-none` exempts it):
+### Per-card overrides
+
+`# answer-mode:`, `# choice-count:`, and `# time-limit:` inside a card block
+apply to that card only (`# time-limit: none` exempts it):
 
 ```
-# answer-mode: choice
+# choice-count: 2
 # time-limit: none
 What is 1 + 1?
 ---
 2
 ```
-
-- A card side can hold several text lines, shown stacked — e.g. native
-  script above its romanization.
-- Type-mode matching is lenient by default: case, punctuation, accents, and
-  extra spaces are ignored (`salam` matches `salâm`); `# answer-case:
-  sensitive` requires exact matches.
-- Choice mode fills missing distractors with other cards' answers.
-- A missing media file is skipped with a warning; the card still runs.
-- In `--reverse`, the expected answer is the prompt's **last text line** (the
-  romanization); the native script and question-side `=` lines are accepted
-  too. Cloze cards, media-only prompts, and answers without Latin characters
-  are skipped as unreversible.
-- Rendering RTL scripts needs an Arabic-capable font (Noto Naskh/Sans Arabic,
-  Vazirmatn); without one the text falls back unshaped.
-- Cards are keyed by a hash of their question **text**: renaming media keeps
-  a card's history, editing the text re-keys it.
 
 ### Header directives
 

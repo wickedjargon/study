@@ -1,0 +1,25 @@
+# A small example deck: type-in cards, a multiple choice card,
+# an extra accepted answer, and a cloze card.
+
+What is the capital of France?
+---
+Paris
+
+2 + 2
+---
+4
+
+hello (in French)
+---
+bonjour
+= salut
+
+# answer-mode: choice
+Which planet is closest to the sun?
+---
+Mercury
+~ Venus
+~ Mars
+~ Earth
+
+The largest ocean is the {{Pacific}}.
