@@ -1,16 +1,16 @@
 # study
 
-A quiz tool inspired by suckless sent. Plain-text deck files, X11 GUI, spaced repetition.
+A quiz tool inspired by suckless sent. Plain-text deck files, X11 GUI,
+evidence-based spaced repetition.
 
 ## Install
 
-Requires Go.
+Requires Go. Installs to `~/.local/bin`; override with
+`PREFIX=/usr/local sudo make clean install`.
 
 ```bash
 make clean install
 ```
-
-Installs to `~/.local/bin` by default. Override with `PREFIX=/usr/local sudo make clean install`.
 
 ## Usage
 
@@ -18,350 +18,153 @@ Installs to `~/.local/bin` by default. Override with `PREFIX=/usr/local sudo mak
 study [flags] <deck-file | pack-directory>
 ```
 
-Passing a directory studies it as a **pack**: every `*.deck` file inside
-(sorted by name) is merged into one combined session. Deck-level settings come
-from the first file (a warning is printed if a later file disagrees), and a
-card that appears in several decks of the pack is included once. Pack progress
-is saved separately from the individual decks' progress.
+| Flag | Description |
+|------|-------------|
+| `--reverse` | Flip the deck: see the English, produce the target language |
+| `--order <mode>` | Override the deck's card order for this session — see [Card order](#card-order) |
+| `--time-limit <N\|none>` | Override the per-question time limit, uniformly for every card |
+| `--preview-new` | Reveal a never-studied card's answer once before quizzing it |
+| `--new-per-session <N\|all>` | How many never-studied cards enter an adaptive session (default 20) |
+| `--font-size <N>` | Override the base font size (8–48, or `small`/`medium`/`large`/`x-large`) |
+| `--audio-speed <X>` | Override audio playback speed (0.25–4.0) |
+| `--stats` | Print progress summary (incl. what's due) and exit |
+| `--forget` | Clear saved progress — the studied direction only (combine with `--reverse`) |
+| `--help` | Show help |
 
-| Flag             | Description                              |
-|------------------|------------------------------------------|
-| `--reverse`      | Flip the deck: see the English, produce the target language |
-| `--stats`        | Print saved progress summary for the deck and exit |
-| `--forget`       | Clear saved progress for this deck — the studied direction only (combine with `--reverse` to clear reverse progress) |
-| `--help`         | Show help                                |
+- A directory is a **pack**: every `*.deck` inside (sorted by name) merges into
+  one session. Settings come from the first file, duplicate cards are included
+  once, and pack progress is saved separately from the individual decks'.
+- A flag overrides the deck-header setting of the same name for that session.
+  `answer-mode`, `answer-case`, and `choice-count` are deliberately file-only:
+  overriding them per session could record misses for answers the deck
+  considers right.
 
-All per-deck settings (choices, time, order, …) live in the deck file header — see below.
+## Deck format
 
-## Deck Format
-
-A `.deck` file is plain text. Cards are separated by blank lines. Each card has a question and answer divided by `---` or `===`.
-
-### Minimal card
-
-```
-What is 2 + 2?
----
-4
-```
-
-### Deck header
-
-Comments at the top of the file configure deck-wide settings:
+Plain text. Blank lines separate cards; `---` or `===` (any length ≥ 3)
+separates question from answer.
 
 ```
-# Math Quiz
-# mode: choice
-# choices: 4
-# case: insensitive
-# time: 20
-# order: sequential
-```
+# Farsi phrases
+# answer-mode: type
+# time-limit: 20
 
-| Header           | Values                  | Default       |
-|------------------|-------------------------|---------------|
-| `# mode:`        | `choice`, `type`        | `type`        |
-| `# choices:`     | any integer ≥ 2         | `4`           |
-| `# case:`        | `sensitive`, `insensitive` | `insensitive` |
-| `# time:`        | seconds (e.g. `20`, `20s`), or `none` | `none` |
-| `# order:`       | `sequential`, `shuffled` | `shuffled`   |
-| `# speed:`       | audio speed `0.25`–`4.0` (e.g. `0.75`, `1.5x`) | `1.0` |
-
-## Features
-
-### Type-in mode
-
-The default. The user types the answer.
-
-```
-What is 10 - 3?
----
-7
-```
-
-Type-in is active recall — you produce the answer rather than recognizing it —
-so it's the default.
-
-By default (`# case: insensitive`) matching is lenient, so a right answer isn't
-marked wrong over trivia: case, surrounding/embedded punctuation, accents, and
-extra spaces are ignored — `Hello!`, `hello`, and `HELLO` all match `hello`, and
-`salam` matches `salâm`. Set `# case: sensitive` for exact, character-for-character
-matching instead.
-
-### Accepted alternatives
-
-When more than one answer should count as correct, list extras with `=` lines:
-
-```
-hello
-= hi
-= hey
-```
-
-All of `hello`, `hi`, and `hey` are accepted. The first line stays the canonical
-answer (it's what's shown on the result screen and used as the correct option in
-choice mode). `=` accepted answers and `~` distractors can be mixed on one card.
-
-### Fill-in-the-blank (cloze)
-
-A card with **no separator** but a `{{...}}` deletion is a fill-in-the-blank
-card. The braced text is blanked out in the question and becomes the answer:
-
-```
-The capital of France is {{Paris}}.
-```
-
-shows `The capital of France is ____.` and accepts `Paris`. Multiple deletions in
-one card are all blanked, and their contents join (in order) to form the answer:
-
-```
-{{Romeo}} and {{Juliet}}
-```
-
-Cloze cards honour the card's mode — type-in by default, or multiple choice under
-`# mode: choice` (distractors are drawn from other cards as usual) — and accept
-`=` alternatives and `~` distractors like any other card.
-
-### Reverse mode (production practice)
-
-By default a card shows the prompt side (for a language deck, the target language
-and its audio) and you type the answer side (the English) — recognition. Pass
-`--reverse` to flip it: the card prompts with the English and you produce the
-target language, with the native script and audio held back until you answer.
-
-```
-study --reverse level1-foundations.deck
-```
-
-The last text line of the original prompt (the romanization, or the word itself
-for a Latin-script deck) is the answer to type; the native script, if any, is
-accepted too. Matching stays lenient, so `salam` is accepted for `salâm` and
-`ni hao` for `nǐ hǎo`. Reverse recall is a different skill from recognition, so
-its progress is tracked separately from the forward direction of the same deck.
-Producing the answer is inherently active recall, so reverse is always type-in
-(multiple choice, which can't be reversed, falls back to typing).
-
-Cards that can't be meaningfully reversed are skipped: cloze cards (their
-"question" is the blanked-out sentence), media-only prompts (nothing to type),
-and cards whose answer-to-produce contains no Latin letters (e.g. single-line
-script drills like `あ → a` — native script can't be typed without an IME,
-which the X11 input path doesn't receive). A deck with no reversible cards is
-rejected with an error.
-
-### Multiple choice mode
-
-The user picks from numbered options. Opt in with `# mode: choice`.
-
-```
-# mode: choice
-# choices: 4
-
-What is 3 + 5?
----
-8
-```
-
-The quiz generates 4 options using answers from other cards in the deck as distractors.
-
-### Custom distractors
-
-Control exactly which wrong answers appear with `~` lines:
-
-```
-What is 6 × 7?
----
-42
-~ 36
-~ 48
-~ 54
-```
-
-The quiz shows these specific wrong answers instead of pulling from other cards.
-
-### Per-card mode override
-
-Mix choice and type-in cards in the same deck:
-
-```
-# mode: choice
-What is 1 + 1?
----
-2
-
-# mode: type
-What is 100 / 10?
----
-10
-```
-
-The first card is multiple choice (deck default). The second card overrides to type-in.
-
-### Per-card choice count
-
-Override how many options appear for a specific card:
-
-```
-# choices: 3
-What is 5 - 1?
----
-4
-
-# choices: 6
-What is 9 + 9?
----
-18
-```
-
-The first card shows 3 options (deck default). The second card shows 6.
-
-### Time limits
-
-Give every question a countdown with the deck-level `# time:` header (seconds).
-When the timer runs out, the card is counted as wrong and queued for retry — just
-like an incorrect answer. A live countdown is shown in the top-right corner.
-
-```
-# time: 15
-
-What is the capital of France?
----
-Paris
-```
-
-Any card can override the deck-wide limit with its own `# time:` line. Use a
-number to set a different limit, or `none` (or `0`) to remove the limit for that
-one card:
-
-```
-# time: 10
-
-Quick: 2 + 2?
----
-4
-
-# time: 30
-Take your time — explain photosynthesis in one word.
----
-light
-
-# time: none
-No rush on this one.
----
-ok
-```
-
-The first card uses the deck default (10s), the second allows 30s, and the third
-has no limit.
-
-### Card order
-
-By default cards are shuffled each session so the deck's authored order can't
-become a memorization crutch. Set `# order: sequential` in the header to present cards in deck order instead:
-
-```
-# order: sequential
-
-First card
----
-1
-
-Second card
----
-2
-```
-
-### Images
-
-Show an image as part of the question with `@img`:
-
-```
-@img flags/france.png
-What country is this?
----
-France
-```
-
-Paths are relative to the directory containing the `.deck` file. A media file
-that doesn't exist is skipped with a warning (the card still runs without it)
-rather than failing the whole deck — so a pack whose audio hasn't been
-generated yet still loads.
-
-### Right-to-left scripts (Arabic, Persian, …)
-
-Arabic-script text is rendered with full contextual shaping (letters join into
-their isolated/initial/medial/final forms) and right-to-left layout, including
-ZWNJ (zero-width non-joiner) handling — so Persian, Arabic, Urdu, etc. display
-correctly:
-
-```
+@img img/greeting.png
+@audio audio/salam.mp3
 سلام
 salâm
 ---
 hello
+= hi
 ```
 
-This needs an Arabic-capable font installed (e.g. Noto Naskh Arabic, Noto Sans
-Arabic, or Vazirmatn); one is detected automatically. If none is found, the text
-falls back to the plain renderer (unshaped). Latin and CJK text are unaffected.
+### Card syntax
 
-### Audio
+| Line | Meaning |
+|------|---------|
+| `= text` (answer side) | Extra accepted answer (type mode) |
+| `= text` (question side) | Alternative prompt wording — accepted in `--reverse`, never displayed, doesn't re-key the card |
+| `~ text` | Custom wrong answer (choice-mode distractor) |
+| `@img path` | Image, shown with the question (path relative to the deck file) |
+| `@audio path` | Audio clip, plays automatically (needs `mpv` or `aplay`) |
+| `{{...}}` and no separator | Cloze card: the braced text is blanked (`____`) and becomes the answer; multiple deletions join in order |
+| `# answer-mode:` / `# choice-count:` / `# time-limit:` inside a card block | Per-card override (`# time-limit: none` exempts one card) |
 
-Play a pronunciation clip with `@audio`:
+- Type-mode matching is lenient by default: case, punctuation, accents, and
+  extra spaces are ignored (`salam` matches `salâm`); `# answer-case:
+  sensitive` requires exact matches.
+- Choice mode fills missing distractors with other cards' answers.
+- A missing media file is skipped with a warning; the card still runs.
+- Arabic-script text (Persian, Arabic, Urdu, …) is shaped and laid out RTL,
+  ZWNJ included — needs any Arabic-capable font (Noto Naskh/Sans Arabic,
+  Vazirmatn); without one it falls back to unshaped rendering.
 
-```
-@audio audio/ni-hao.mp3
----
-hello
-```
+### Header directives
 
-Requires `mpv` or `aplay` on the system.
+| Header | Values | Default |
+|--------|--------|---------|
+| `# answer-mode:` | `choice`, `type` | `type` |
+| `# choice-count:` | any integer ≥ 2 | `4` |
+| `# answer-case:` | `sensitive`, `insensitive` | `insensitive` |
+| `# time-limit:` | seconds (e.g. `20`, `20s`), or `none` | `none` |
+| `# order:` | see [Card order](#card-order) | `adaptive` |
+| `# preview-new:` | `on`, `off` | `off` |
+| `# new-per-session:` | integer ≥ 0, or `all` | `20` |
+| `# font-size:` | 8–48, or `small`/`medium`/`large`/`x-large` | `14` |
+| `# audio-speed:` | `0.25`–`4.0` (e.g. `0.75`, `1.5x`) | `1.0` |
 
-#### Playback speed
+## Card order
 
-Audio plays at normal speed by default. While a question is showing, adjust the
-speed on the fly — handy for hearing a tricky phrase slowly:
+`# order:` selects what a session serves and how it schedules the cards:
 
-- `Ctrl`+`,` — slow down and replay
-- `Ctrl`+`.` — speed up and replay
-- `Ctrl`+`/` — reset to normal (1.00x)
+| Mode | Behavior |
+|------|----------|
+| `adaptive` | **Default — "what's due?"** Cards due for review (most overdue first) plus a batch of new cards; each leaves once it meets its recall criterion; the session completes when all have. See [Scheduling](#scheduling). |
+| `sequential` | **"In order."** Deck order, wrapping forever; misses get the immediate-repeat drill. For material where the sequence is the content — verse, digits, procedures. |
+| `flip-through` | **"Just show me."** Answers visible, enter advances, wraps at the end. No quizzing, nothing recorded. |
+| `weak-only` | **"What am I bad at?"** Cram mode: only weak or never-studied cards, ignoring review dates. Exits up front when there's nothing to cram. |
 
-Speed steps by `0.25`, clamped to `0.25x`–`4.00x`, and the current value is shown
-in the footer. The setting carries across cards for the rest of the session. Set
-a different starting speed per deck with the `# speed:` header (e.g. `# speed: 0.75`
-for a beginner deck). Speed changes require `mpv`; pitch is preserved so slowed
-speech stays clear. (`aplay` always plays at normal speed.)
+## Scheduling
 
-### Combined media
+The `adaptive` default implements what the learning research supports
+(successive relearning: Rawson & Dunlosky 2011; spaced retrieval: Karpicke &
+Bauernschmidt 2011):
 
-A single card can have text, image, and audio together:
+- **Sessions contain what's due**: reviews whose date has arrived plus up to
+  `# new-per-session:` new cards. Nothing due → `study` says so and exits.
+- **Session criterion**: a new card needs **3 correct recalls**, a review
+  card **1**; meeting it removes the card, and the session completes when
+  every card has.
+- **Spaced, never massed**: a missed card returns after a few other cards —
+  not immediately — and owes at least 2 more spaced recalls.
+- **Expanding intervals between sessions**: a clean session moves a card up
+  the review ladder — 1, 3, 7, 14, 30, 60, 120 days; any miss sends it back
+  to the bottom (due tomorrow).
 
-```
-@img flags/japan.png
-@audio audio/konnichiwa.mp3
-How do you say "hello"?
----
-こんにちは
-```
+`weak-only` reuses the in-session criterion scheduling with its own card pick;
+`sequential` is deliberate rote drill (endless laps, immediate repeats).
 
-The image is displayed, the audio plays automatically, and the text is shown below.
+## Reverse mode
+
+`study --reverse deck.deck` flips a language deck for production practice:
+
+- Prompts with the English; you type the target language. Native script and
+  audio are held back until the answer is revealed.
+- The expected answer is the last text line of the original prompt (the
+  romanization); the native script and question-side `=` lines are accepted
+  too.
+- Always type-in, and progress is tracked separately from the forward
+  direction — they're different skills.
+- Skipped as unreversible: cloze cards, media-only prompts, answers with no
+  Latin characters (no IME on this X stack). A deck with none errors out.
+
+## First-viewing preview
+
+With `# preview-new: on` (or `--preview-new`), a card you've never answered is
+first shown with its answer visible — study it, press enter, then the same
+card is quizzed for real. Happens exactly once per card per direction; any
+recorded history skips it. Off by default: quizzing before study is a
+worthwhile struggle (the pretesting effect), and review decks don't need it.
 
 ## Controls
 
-| Key              | Action                          |
-|------------------|---------------------------------|
-| `1`-`9`          | Select answer (choice mode)     |
-| Type + `Enter`   | Submit answer (type mode)       |
-| `Backspace`      | Delete character (type mode)    |
-| `Ctrl`+`R`       | Replay audio (on the result screen too — in reverse mode this replays the reveal) |
-| `Ctrl`+`,` / `Ctrl`+`.` | Slow down / speed up audio (and replay) |
-| `Ctrl`+`/`       | Reset audio speed to 1.00x      |
-| `Enter` / `Space`| Continue after result           |
-| `Escape`         | End the session (shows the summary; `Escape` again exits) |
+| Key | Action |
+|-----|--------|
+| `1`–`9` | Select answer (choice mode) |
+| Type + `Enter` | Submit answer (type mode) |
+| `Backspace` | Delete character (type mode) |
+| `Ctrl`+`V` / middle-click | Paste clipboard / primary selection (type mode) |
+| `Enter` / `Space` | Continue after result / preview |
+| `Ctrl`+`R` | Replay audio (in reverse mode, the reveal's clip on the result screen) |
+| `Ctrl`+`,` / `Ctrl`+`.` | Slow down / speed up audio and replay (0.25 steps, 0.25–4x; needs `mpv`, pitch preserved) |
+| `Ctrl`+`/` | Reset audio speed |
+| `Ctrl`+`=` / `Ctrl`+`-` / `Ctrl`+`0` | Grow / shrink / reset font size |
+| `Escape` | End session (summary screen; `Escape` again exits) |
 
-## How It Works
+## Notes
 
-- Sessions are endless: cards keep cycling (weak ones more often) until you press `Escape`, which shows the session summary.
-- Wrong answers (including questions that hit their time limit) are repeated immediately, then re-queued for 3 additional correct attempts before graduating.
-- Confidence scores are tracked per card. High-confidence cards appear less often.
-- Progress is saved to `~/.local/share/study/` and persists between sessions. Cards are keyed by a hash of their question **text**, so renaming a card's media files keeps its history (editing the text re-keys it).
-- Theme is detected automatically (dark/light) via gsettings or `~/.config/theme-mode`.
+- Timed-out questions count as wrong.
+- Progress lives in `~/.local/share/study/`, saved after every answer. Cards
+  are keyed by a hash of their question **text**: renaming media keeps a
+  card's history, editing the text re-keys it.
+- Dark/light theme is auto-detected via gsettings or `~/.config/theme-mode`.
