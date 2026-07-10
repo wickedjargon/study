@@ -1,7 +1,7 @@
 // Package quiz implements the quiz session logic.
 //
-// The default scheduler is evidence-based (see the README's "Scheduling"
-// section): each card must be correctly recalled a criterion number
+// The default scheduler is evidence-based (see the README's "Card order"
+// table): each card must be correctly recalled a criterion number
 // of times per session, repetitions are spaced by intervening cards rather
 // than massed back-to-back, and the session completes when every card meets
 // its criterion. Sequential mode instead keeps Byki-style repeat-on-wrong
