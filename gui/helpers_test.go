@@ -1,6 +1,9 @@
 package gui
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestClampSpeed(t *testing.T) {
 	cases := []struct{ in, want float64 }{
@@ -73,5 +76,18 @@ func TestHasArabic(t *testing.T) {
 		if got := hasArabic(c.s); got != c.want {
 			t.Errorf("hasArabic(%q) = %v, want %v", c.s, got, c.want)
 		}
+	}
+}
+
+func TestSecondsUntil(t *testing.T) {
+	if got := secondsUntil(time.Time{}); got != -1 {
+		t.Errorf("zero time = %d, want -1 (not armed)", got)
+	}
+	if got := secondsUntil(time.Now().Add(-time.Second)); got != 0 {
+		t.Errorf("past deadline = %d, want 0", got)
+	}
+	// Rounded up: 2.5s remaining displays as 3.
+	if got := secondsUntil(time.Now().Add(2500 * time.Millisecond)); got != 3 {
+		t.Errorf("2.5s remaining = %d, want 3", got)
 	}
 }

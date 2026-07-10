@@ -163,7 +163,7 @@ What is 1 + 1?
 | Type + `Enter` | Submit answer (type mode) |
 | `Backspace` | Delete character (type mode) |
 | `Ctrl`+`V` / middle-click | Paste clipboard / primary selection (type mode) |
-| `Enter` / `Space` | Continue after result / preview |
+| `Enter` / `Space` | Continue after result / preview (a wrong answer pauses this for 3s, counted down in the timer's corner) |
 | `Ctrl`+`R` | Replay audio (in reverse mode, the reveal's clip on the result screen) |
 | `Ctrl`+`,` / `Ctrl`+`.` | Slow down / speed up audio and replay (0.25 steps, 0.25–4x; needs `mpv`) |
 | `Ctrl`+`/` | Reset audio speed |

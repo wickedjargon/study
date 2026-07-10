@@ -152,6 +152,12 @@ type App struct {
 	// Zero means the current card has no time limit.
 	deadline time.Time
 
+	// resultLock is when the result screen of a wrong answer may be advanced.
+	// Until then enter/space are ignored, so a reflexive keypress can't skip
+	// past an unnoticed miss. Zero means no lock (correct answers don't set
+	// one).
+	resultLock time.Time
+
 	// Fonts. The faces are rebuilt whenever the window is resized so text scales
 	// with the window; dpi is the detected display resolution used to render
 	// points at a physically sane size. The parsed *opentype.Font values are
@@ -244,6 +250,10 @@ const (
 	fontMulRegular = 1.0  // prompts, answers, body
 	fontMulLarge   = 1.5  // card content, headers
 )
+
+// wrongPause is how long the result screen of a wrong answer refuses to
+// advance. The countdown is shown in the timer's corner.
+const wrongPause = 3 * time.Second
 
 // Audio playback speed. The multiplier starts at defaultSpeed (or the deck's
 // "# audio-speed:" directive) and the user nudges it at runtime with Ctrl+, / Ctrl+.
@@ -426,6 +436,16 @@ func (a *App) startTimer() {
 // time limit is showing, it re-renders the countdown and, once the deadline
 // passes, records the card as wrong.
 func (a *App) tick() {
+	// Wrong-answer pause: keep the result screen's countdown moving, and
+	// redraw once more when it expires so it disappears.
+	if a.engine.State() == quiz.ShowResult && !a.resultLock.IsZero() {
+		if !time.Now().Before(a.resultLock) {
+			a.resultLock = time.Time{}
+		}
+		a.render()
+		return
+	}
+
 	if a.deadline.IsZero() || a.engine.State() != quiz.ShowQuestion {
 		return
 	}
@@ -436,6 +456,7 @@ func (a *App) tick() {
 	// Time's up — count the card as wrong, just like an incorrect answer.
 	a.deadline = time.Time{}
 	a.result = a.engine.AnswerTimeout()
+	a.lockResult()
 	// Reveal (and, in reverse mode, speak) the answer just as a typed miss does.
 	if a.reverse {
 		a.showReveal()
@@ -449,15 +470,35 @@ func (a *App) tick() {
 // secondsLeft returns the whole seconds remaining on the current question's
 // timer, or -1 if there is no active time limit.
 func (a *App) secondsLeft() int {
-	if a.deadline.IsZero() {
+	return secondsUntil(a.deadline)
+}
+
+// lockSecondsLeft returns the whole seconds remaining on the wrong-answer
+// pause, or -1 if none is active.
+func (a *App) lockSecondsLeft() int {
+	return secondsUntil(a.resultLock)
+}
+
+// secondsUntil converts a deadline to whole seconds remaining (-1 for the
+// zero time, meaning "not armed"). Rounded up so the display counts N..1
+// rather than N-1..0.
+func secondsUntil(t time.Time) int {
+	if t.IsZero() {
 		return -1
 	}
-	d := time.Until(a.deadline)
+	d := time.Until(t)
 	if d < 0 {
 		return 0
 	}
-	// Round up so the display counts N..1 rather than N-1..0.
 	return int((d + time.Second - 1) / time.Second)
+}
+
+// lockResult arms the wrong-answer pause when the just-submitted result is a
+// miss (including a timeout). Called right after a.result is set.
+func (a *App) lockResult() {
+	if a.result != nil && !a.result.Correct {
+		a.resultLock = time.Now().Add(wrongPause)
+	}
 }
 
 // ── Event Handling ──────────────────────────────────────────────────
@@ -535,6 +576,12 @@ func (a *App) handleKey(ev xevent.KeyPressEvent) {
 		}
 		switch key {
 		case "Return", "space":
+			// Wrong-answer pause: ignore continue until the countdown ends,
+			// so the miss registers before the card disappears.
+			if time.Now().Before(a.resultLock) {
+				return
+			}
+			a.resultLock = time.Time{}
 			a.viewer.CloseAll()
 			a.engine.Next()
 			a.result = nil
@@ -599,6 +646,7 @@ func (a *App) handleKey(ev xevent.KeyPressEvent) {
 func (a *App) endSession() {
 	a.viewer.CloseAll()
 	a.deadline = time.Time{}
+	a.resultLock = time.Time{}
 	a.result = nil
 	a.revealImg = nil
 	a.engine.End()
@@ -614,6 +662,7 @@ func (a *App) handleChoiceKey(key string) {
 			return
 		}
 		a.result = a.engine.Answer(idx)
+		a.lockResult()
 		// The engine records the outcome; persist immediately so an ungraceful
 		// exit can't lose this answer.
 		a.saveProgress()
@@ -627,6 +676,7 @@ func (a *App) handleTypeKey(key string, ev xevent.KeyPressEvent) {
 	switch key {
 	case "Return":
 		a.result = a.engine.AnswerTyped(a.inputBuf)
+		a.lockResult()
 		// In reverse mode the prompt was silent; reveal the target language now
 		// that the answer is in — speak its clip and load its image.
 		if a.reverse {
@@ -993,6 +1043,11 @@ func (a *App) renderResult(canvas *image.RGBA) {
 	remaining := a.engine.Remaining()
 	prog := fmt.Sprintf("[%d/%d]", seen, seen+remaining)
 	a.drawText(canvas, prog, padding, y, a.fontSmall, dimColor)
+
+	// Wrong-answer pause countdown, in the same corner as the question timer.
+	if secs := a.lockSecondsLeft(); secs > 0 {
+		a.drawTextRight(canvas, fmt.Sprintf("%ds", secs), a.width-padding, y, a.fontSmall, redColor)
+	}
 	y += lineHeight(a.fontSmall)
 
 	// Question image.
