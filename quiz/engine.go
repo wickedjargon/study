@@ -1,4 +1,11 @@
-// Package quiz implements the core quiz logic with Byki-style repeat-on-wrong.
+// Package quiz implements the quiz session logic.
+//
+// The default scheduler is evidence-based (see the README's "Scheduling"
+// section): each card must be correctly recalled a criterion number
+// of times per session, repetitions are spaced by intervening cards rather
+// than massed back-to-back, and the session completes when every card meets
+// its criterion. Sequential mode instead keeps Byki-style repeat-on-wrong
+// drilling and cycles its laps forever.
 package quiz
 
 import (
@@ -19,6 +26,11 @@ const (
 	ShowQuestion State = iota
 	ShowResult
 	Done
+	// ShowPreview is the first-viewing reveal (deck "# preview-new: on" or
+	// --preview-new): a card that has never been answered is presented with its
+	// answer visible, to be studied once; ConfirmPreview then quizzes the very
+	// same card.
+	ShowPreview
 )
 
 // Result records the outcome of answering a single card.
@@ -63,6 +75,21 @@ type Engine struct {
 	repeatCurrent bool     // repeat this card immediately (wrong answer)
 	state         State
 
+	// preview enables the first-viewing reveal (ShowPreview). previewed marks
+	// cards already revealed this session, so a card is never revealed twice —
+	// which the store alone can't guarantee when it's nil or when the reveal was
+	// confirmed but the card not yet answered.
+	preview   bool
+	previewed map[string]bool
+
+	// Evidence-scheduler session state. need is each card's remaining correct
+	// recalls before it meets this session's criterion and leaves the queue;
+	// lapsed marks cards missed at least once this session, whose
+	// between-session schedule therefore resets when they complete. Unused by
+	// sequential mode's laps.
+	need   map[string]int
+	lapsed map[string]bool
+
 	// Session stats.
 	TotalSeen    int
 	TotalCorrect int
@@ -82,8 +109,30 @@ type retryCard struct {
 	remaining int // how many more times to show this card
 }
 
-// minRepeats is the minimum number of times a wrong card is repeated.
+// minRepeats is the minimum number of times a wrong card is repeated in
+// sequential mode's drill.
 const minRepeats = 3
+
+// Evidence-scheduler session criterion, in correct recalls per card. Rawson &
+// Dunlosky (2011): three recalls for new material in its first session, one
+// recall per later relearning session. A card missed mid-session owes at
+// least two, so a lapse is re-established rather than one-shot re-tested.
+const (
+	needNew       = 3
+	needReview    = 1
+	needAfterMiss = 2
+)
+
+// Evidence-scheduler within-session spacing, in serves. Karpicke &
+// Bauernschmidt (2011): any nonzero gap between repeated retrievals of an
+// item vastly outperforms back-to-back repetition (which only exercises
+// short-term memory), while the exact gap pattern matters little. A missed
+// card returns soon — but not immediately — and a correctly recalled one
+// waits longer.
+const (
+	gapAfterMiss    = 3
+	gapAfterCorrect = 8
+)
 
 // NewEngine creates a quiz engine from a parsed deck. Cards are presented in
 // the deck's existing order (the caller shuffles/prioritizes beforehand).
@@ -114,15 +163,56 @@ func NewEngine(d *deck.Deck, store *progress.Store) *Engine {
 		main:          main,
 		allCards:      allCards,
 		state:         ShowQuestion,
+		preview:       d.Preview,
+		previewed:     make(map[string]bool),
+	}
+
+	// Seed each card's session criterion for the evidence scheduler: new
+	// material owes three spaced recalls in its first session, previously
+	// learned material one relearning recall.
+	if e.evidenceScheduled() {
+		e.need = make(map[string]int, len(d.Cards))
+		e.lapsed = make(map[string]bool)
+		for i := range d.Cards {
+			n := needNew
+			if store != nil {
+				cp := store.Get(d.Cards[i].ID)
+				if cp.TimesCorrect+cp.TimesWrong > 0 {
+					n = needReview
+				}
+			}
+			e.need[d.Cards[i].ID] = n
+		}
 	}
 
 	e.advance()
 	return e
 }
 
+// evidenceScheduled reports whether this session runs the evidence-based
+// scheduler (criterion learning with spaced repetitions, session completes).
+// Sequential and flip-through keep their own lap scheduling.
+func (e *Engine) evidenceScheduled() bool {
+	switch e.deck.Order {
+	case deck.OrderAdaptive, deck.OrderWeakOnly:
+		return true
+	}
+	return false
+}
+
 // State returns the current quiz state.
 func (e *Engine) State() State {
 	return e.state
+}
+
+// Order returns the deck's session ordering mode.
+func (e *Engine) Order() deck.OrderMode {
+	return e.deck.Order
+}
+
+// DeckSize returns the number of cards in the session's deck.
+func (e *Engine) DeckSize() int {
+	return len(e.allCards)
 }
 
 // Mode returns the quiz mode for the current card.
@@ -160,9 +250,10 @@ func (e *Engine) CardIDs() []string {
 	return ids
 }
 
-// End finishes the session: the quiz transitions to Done so the GUI can show
-// the summary screen. Sessions are endless by design, so this — the user
-// deciding to stop — is the only way Done is reached.
+// End finishes the session early: the quiz transitions to Done so the GUI can
+// show the summary screen. Evidence-scheduled sessions also reach Done on
+// their own when every card meets its criterion; sequential and flip-through
+// cycle forever, so there this is the only way out.
 func (e *Engine) End() {
 	e.current = nil
 	e.state = Done
@@ -335,13 +426,13 @@ func (e *Engine) Next() {
 	e.advance()
 }
 
-// recordAnswer persists the outcome of the current card to the store. It must
-// run BEFORE handleCorrect/handleWrong, because requeueCard reads the freshly
-// updated streak to schedule the card's next appearance — recording afterwards
-// would schedule off a stale, one-answer-old streak.
+// recordAnswer persists the outcome of the current card to the store, before
+// handleCorrect/handleWrong schedule its next appearance.
 //
-// Retry-queue reps are drill repetitions, not cold recall, so they stay out of
-// persisted stats; only the original main-queue showing counts.
+// Under the evidence scheduler every attempt is a spaced retrieval and counts.
+// In sequential mode, retry-queue reps are massed drill repetitions, not
+// cold recall, so they stay out of persisted stats; only the original
+// main-queue showing counts there.
 func (e *Engine) recordAnswer(correct bool) {
 	if e.store == nil || e.fromRetry {
 		return
@@ -354,8 +445,23 @@ func (e *Engine) recordAnswer(correct bool) {
 }
 
 // handleCorrect processes a correct answer.
-// Re-queues the card at a delay proportional to confidence.
 func (e *Engine) handleCorrect() {
+	// Evidence scheduler: one recall down. A card that meets its session
+	// criterion is done — its next appearance is a matter of days, scheduled
+	// in the store — otherwise it returns later this session, spaced out.
+	if e.evidenceScheduled() {
+		id := e.current.ID
+		e.need[id]--
+		if e.need[id] <= 0 {
+			if e.store != nil {
+				e.store.Schedule(id, e.lapsed[id])
+			}
+			return // criterion met: leaves the session
+		}
+		e.requeueGap(e.current, gapAfterCorrect)
+		return
+	}
+
 	if e.fromRetry {
 		// Handle retry queue graduation.
 		for i, rc := range e.retry {
@@ -363,12 +469,8 @@ func (e *Engine) handleCorrect() {
 				rc.remaining--
 				if rc.remaining <= 0 {
 					e.retry = append(e.retry[:i], e.retry[i+1:]...)
-					// A card the user originally missed must not vanish for
-					// the rest of the session while cards they answered right
-					// keep recurring. Re-queue it: its low stored confidence
-					// yields a short delay, so it returns sooner than
-					// well-known cards — i.e. wrong cards are seen more often.
-					e.requeueCard(e.current)
+					// The drilled card rejoins the lap at the tail.
+					e.requeueTail(e.current)
 				} else {
 					e.repeatCurrent = true
 				}
@@ -378,12 +480,27 @@ func (e *Engine) handleCorrect() {
 		return
 	}
 
-	// Re-queue based on confidence.
-	e.requeueCard(e.current)
+	// Sequential mode: to the back of the lap.
+	e.requeueTail(e.current)
 }
 
-// handleWrong processes a wrong answer by adding/resetting in retry queue.
+// handleWrong processes a wrong answer.
 func (e *Engine) handleWrong() {
+	// Evidence scheduler: no massed drill. The card returns after a short —
+	// but nonzero — gap (an immediate repeat would be answered from short-term
+	// memory and teach nothing durable) and owes at least two more spaced
+	// recalls; the lapse also resets its between-session schedule when it
+	// completes.
+	if e.evidenceScheduled() {
+		id := e.current.ID
+		e.lapsed[id] = true
+		if e.need[id] < needAfterMiss {
+			e.need[id] = needAfterMiss
+		}
+		e.requeueGap(e.current, gapAfterMiss)
+		return
+	}
+
 	e.repeatCurrent = true
 
 	// Check if already in retry queue — reset to full repeats.
@@ -429,51 +546,73 @@ func (e *Engine) advance() {
 		e.current = e.retry[0].card
 		e.fromRetry = true
 	} else {
-		// No cards left — should not happen in continuous mode.
+		// Every card has met its session criterion — the session is complete.
+		// (Only the evidence scheduler gets here; the lap modes always requeue.)
 		e.current = nil
 		e.state = Done
+		return
+	}
+
+	// Flip-through never quizzes: every card is presented answer-visible, and
+	// ConfirmPreview moves to the next one.
+	if e.deck.Order == deck.OrderFlipThrough {
+		e.state = ShowPreview
 		return
 	}
 
 	if e.current.Mode == deck.ModeChoice {
 		e.currentOpts, e.correctIdx = e.generateChoices(e.current)
 	}
+
+	// A brand-new card is revealed before it's quizzed. Only fresh main-queue
+	// serves qualify: a retry/repeat card was necessarily answered already.
+	if !e.fromRetry && e.shouldPreview(e.current) {
+		e.previewed[e.current.ID] = true
+		e.state = ShowPreview
+		return
+	}
 	e.state = ShowQuestion
 }
 
-// maxStreak caps how far a correct streak can push a card's next appearance
-// out. Beyond this the card is effectively "known well enough"; spacing it any
-// further would just hide it.
-const maxStreak = 10
-
-// requeueCard re-inserts a card into the main queue, scheduling it to come due
-// after a delay driven by the card's current correct streak — NOT its lifetime
-// confidence. Streak is a recency signal: a wrong answer resets it to 0, so a
-// just-missed card returns soonest (appears most often) regardless of how good
-// its history is, and only spaces back out as the user rebuilds consecutive
-// correct answers. The due tick is absolute (step + delay), so the queue stays
-// ordered by due time and no card can be starved — every card's due tick is
-// eventually reached as the clock advances.
-func (e *Engine) requeueCard(card *deck.Card) {
-	streak := 0
+// shouldPreview reports whether the card gets the first-viewing reveal: the
+// feature is on and the card has never been answered — not earlier in this
+// session (previewed) and not in any prior one (no recorded history).
+func (e *Engine) shouldPreview(c *deck.Card) bool {
+	if !e.preview || e.previewed[c.ID] {
+		return false
+	}
 	if e.store != nil {
-		streak = e.store.Get(card.ID).Streak
+		cp := e.store.Get(c.ID)
+		if cp.TimesCorrect+cp.TimesWrong > 0 {
+			return false
+		}
 	}
-	if streak > maxStreak {
-		streak = maxStreak
-	}
+	return true
+}
 
-	deckSize := len(e.allCards)
-	if deckSize < 2 {
-		deckSize = 2
+// ConfirmPreview ends the answer-visible presentation. For a first-viewing
+// reveal it quizzes the same card (ShowPreview → ShowQuestion); in flip-through
+// mode there is no quiz, so it counts the card as viewed and serves the next
+// one (wrapping to the top via the tail requeue). A no-op in any other state.
+func (e *Engine) ConfirmPreview() {
+	if e.state != ShowPreview {
+		return
 	}
+	if e.deck.Order == deck.OrderFlipThrough {
+		e.TotalSeen++
+		e.requeueTail(e.current)
+		e.advance()
+		return
+	}
+	e.state = ShowQuestion
+}
 
-	// Streak 0 (just missed, or never answered correctly): due again after ~2
-	// steps. Full streak: due after ~deckSize*3 steps. Each correct answer in
-	// between nudges the next appearance a little further out — a gradual
-	// recovery, exactly inverse to a miss snapping it back to the front.
-	delay := 2 + int(float64(streak)/float64(maxStreak)*float64(deckSize*3))
-	due := e.step + delay
+// requeueGap re-inserts a card so it comes due after roughly gap more serves.
+// The due tick is absolute (step + gap), so the queue stays ordered by due
+// time and no card can be starved; with fewer than gap cards pending, the
+// card simply returns when the queue reaches it.
+func (e *Engine) requeueGap(card *deck.Card, gap int) {
+	due := e.step + gap
 
 	// Insert keeping main sorted by ascending due tick (stable: ties keep the
 	// existing card ahead of the newcomer).
@@ -488,6 +627,16 @@ func (e *Engine) requeueCard(card *deck.Card) {
 	e.main = append(e.main, queuedCard{})
 	copy(e.main[pos+1:], e.main[pos:])
 	e.main[pos] = qc
+}
+
+// requeueTail appends a card after everything already queued, preserving the
+// lap structure of sequential and flip-through mode.
+func (e *Engine) requeueTail(card *deck.Card) {
+	due := e.step
+	if n := len(e.main); n > 0 && e.main[n-1].due >= due {
+		due = e.main[n-1].due
+	}
+	e.main = append(e.main, queuedCard{card: card, due: due + 1})
 }
 
 // generateChoices builds the multiple choice options for a card.

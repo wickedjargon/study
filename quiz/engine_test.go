@@ -147,7 +147,10 @@ func TestEngineCorrectAnswer(t *testing.T) {
 }
 
 func TestEngineWrongAnswerCreatesRetry(t *testing.T) {
+	// The retry drill belongs to sequential mode; the evidence scheduler
+	// (default) spaces misses out instead (see requeue_test.go).
 	d := testDeck(4)
+	d.Order = deck.OrderSequential
 	e := NewEngine(d, nil)
 
 	// Find a wrong answer index.
@@ -194,14 +197,15 @@ func TestEngineCorrectAnswerCycle(t *testing.T) {
 	if e.TotalCorrect != 3 {
 		t.Errorf("expected 3 correct, got %d", e.TotalCorrect)
 	}
-	// Session should still be active (continuous mode).
+	// Session should still be active: each new card owes 3 recalls.
 	if e.State() == Done {
-		t.Error("session should not be Done in continuous mode")
+		t.Error("session should not be Done after one recall per new card")
 	}
 }
 
 func TestEngineRetryGraduation(t *testing.T) {
 	d := testDeck(5)
+	d.Order = deck.OrderSequential
 	e := NewEngine(d, nil)
 
 	// Answer first card wrong.
@@ -267,6 +271,7 @@ func TestEngineTimeLimit(t *testing.T) {
 
 func TestEngineAnswerTimeout(t *testing.T) {
 	d := testDeck(4)
+	d.Order = deck.OrderSequential // timeouts queue for retry in sequential mode
 	e := NewEngine(d, nil)
 
 	card := e.Current()
@@ -353,12 +358,14 @@ func TestEngineCustomDistractors(t *testing.T) {
 }
 
 // TestEngineIsRetryTimingInvariant locks in the contract the gui relies on to
-// keep drill repetitions invisible to persisted stats: right after an answer
-// is submitted, IsRetry() must report whether the card just answered came from
-// the retry queue. The first (cold) miss must read false so it is recorded;
-// every subsequent drill rep must read true so it is skipped.
+// keep drill repetitions invisible to persisted stats in sequential mode: right after an answer is submitted, IsRetry() must report whether
+// the card just answered came from the retry queue. The first (cold) miss
+// must read false so it is recorded; every subsequent drill rep must read
+// true so it is skipped. (The evidence scheduler records every attempt — its
+// repetitions are spaced retrievals, not drill — and never sets IsRetry.)
 func TestEngineIsRetryTimingInvariant(t *testing.T) {
 	d := testDeck(4)
+	d.Order = deck.OrderSequential
 	e := NewEngine(d, nil)
 
 	if e.IsRetry() {
