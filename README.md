@@ -2,6 +2,8 @@
 
 A flashcard quiz tool inspired by suckless sent. Decks are plain text files you write in any editor; sessions run in a minimal X11 window. The default schedule follows evidence-based spaced-repetition: new cards are learned to a three-recall criterion, reviews come due on expanding intervals, and a session ends when everything due is done.
 
+![study showing a mahjong tile card](screenshot.png)
+
 ## Getting started
 
 Requires Go. Installs to `~/.local/bin`; override with
