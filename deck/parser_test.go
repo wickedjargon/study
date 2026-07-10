@@ -310,6 +310,31 @@ func TestParsePreviewMetadata(t *testing.T) {
 	}
 }
 
+func TestDistractorsImplyChoiceMode(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+		want    QuizMode
+	}{
+		{"distractors alone imply choice", "q\n---\na\n~ b\n~ c\n", ModeChoice},
+		{"no distractors stays type", "q\n---\na\n", ModeType},
+		{"explicit per-card type wins", "# answer-mode: type\nq\n---\na\n~ b\n", ModeType},
+		{"inference beats deck-header type", "# answer-mode: type\n\nq\n---\na\n~ b\n", ModeChoice},
+		{"cloze with distractors", "the answer is {{a}}\n~ b\n~ c\n", ModeChoice},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d, err := Parse(writeTempDeck(t, tc.content))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got := d.Cards[0].Mode; got != tc.want {
+				t.Errorf("Mode = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestParseCustomDistractors(t *testing.T) {
 	content := `question
 ---

@@ -46,7 +46,8 @@ flags (each overrides the deck header's setting for this session):
 deck format:
   plain text, blank lines separate cards.
   --- or === separates question from answer.
-  cards default to type-in; use # answer-mode: choice for multiple choice.
+  cards default to type-in; a card with ~ distractors is multiple choice
+    automatically, or opt in with # answer-mode: choice.
   a card with no separator but a {{...}} deletion is a fill-in-the-blank
     (cloze) card: the braced text is blanked out and becomes the answer.
   @img <path>       image on question/answer side

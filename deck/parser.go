@@ -459,8 +459,11 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, warn func(s
 		return nil, nil
 	}
 
-	// Check for per-card metadata before filtering comments.
+	// Check for per-card metadata before filtering comments. modeSet tracks an
+	// explicit per-card answer-mode, which outranks the distractor inference
+	// below.
 	cardMode := defaultMode
+	modeSet := false
 	cardChoices := 0
 	cardTime := 0
 	for _, line := range block {
@@ -470,8 +473,10 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, warn func(s
 			switch strings.TrimSpace(after) {
 			case "type":
 				cardMode = ModeType
+				modeSet = true
 			case "choice":
 				cardMode = ModeChoice
+				modeSet = true
 			default:
 				warn("ignoring %q (# answer-mode: must be type or choice)", trimmed)
 			}
@@ -522,6 +527,9 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, warn func(s
 	// answer side. Anything else without a separator is malformed.
 	if sepIdx == -1 {
 		if card, ok, err := parseClozeCard(filtered, baseDir, cardMode, cardChoices, cardTime, warn); ok || err != nil {
+			if card != nil && !modeSet && len(card.Distractors) > 0 {
+				card.Mode = ModeChoice // distractors imply choice (see below)
+			}
 			return card, err
 		}
 		return nil, fmt.Errorf("card missing --- or === separator: %q", strings.Join(filtered, " / "))
@@ -583,6 +591,14 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, warn func(s
 
 	if len(answerLines) == 0 {
 		return nil, fmt.Errorf("card has no answer (only distractors after ---): %q", strings.Join(filtered, " / "))
+	}
+
+	// Custom distractors only mean anything in choice mode, so authoring them
+	// implies it — no "# answer-mode: choice" needed on the card. An explicit
+	// per-card directive still wins; the deck header is just the default it
+	// overrides.
+	if !modeSet && len(distractors) > 0 {
+		cardMode = ModeChoice
 	}
 
 	question := parseMediaLines(questionLines, baseDir, warn)
