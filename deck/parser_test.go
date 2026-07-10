@@ -278,6 +278,34 @@ func TestParseNewPerSessionMetadata(t *testing.T) {
 	}
 }
 
+func TestParseWrongPauseMetadata(t *testing.T) {
+	cases := []struct {
+		name string
+		line string // "" = no directive
+		want int
+	}{
+		{"default", "", 5},
+		{"explicit", "# wrong-pause: 10", 10},
+		{"none disables", "# wrong-pause: none", 0},
+		{"malformed", "# wrong-pause: forever", 5}, // rejected → default
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			content := "q1\n---\na1\n"
+			if tc.line != "" {
+				content = tc.line + "\n\n" + content
+			}
+			d, err := Parse(writeTempDeck(t, content))
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if d.WrongPause != tc.want {
+				t.Errorf("WrongPause = %d, want %d", d.WrongPause, tc.want)
+			}
+		})
+	}
+}
+
 func TestParsePreviewMetadata(t *testing.T) {
 	// Default (no header) is off.
 	d, err := Parse(writeTempDeck(t, "q1\n---\na1\n"))

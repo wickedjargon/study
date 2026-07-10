@@ -51,6 +51,7 @@ study [flags] <deck-file | pack-directory>
 | `--reverse` | Flip the deck: see the English, produce the target language |
 | `--order <mode>` | Override the deck's card order for this session — see [Card order](#card-order) |
 | `--time-limit <N\|none>` | Override the per-question time limit, uniformly for every card |
+| `--wrong-pause <N\|none>` | How long a wrong answer's result screen refuses to advance (default 5s) |
 | `--preview-new` | Reveal a never-studied card's answer once before quizzing it |
 | `--new-per-session <N\|all>` | How many never-studied cards enter an adaptive session (default 20) |
 | `--font-size <N>` | Override the base font size (8–48, or `small`/`medium`/`large`/`x-large`) |
@@ -152,6 +153,7 @@ What is 1 + 1?
 | `# order:` | see [Card order](#card-order) | `adaptive` |
 | `# preview-new:` | `on`, `off` | `off` |
 | `# new-per-session:` | integer ≥ 0, or `all` | `20` |
+| `# wrong-pause:` | seconds, or `none`; how long a wrong answer's result screen refuses to advance | `5` |
 | `# font-size:` | 8–48, or `small`/`medium`/`large`/`x-large` | `14` |
 | `# audio-speed:` | `0.25`–`4.0` (e.g. `0.75`, `1.5x`) | `1.0` |
 
@@ -163,7 +165,7 @@ What is 1 + 1?
 | Type + `Enter` | Submit answer (type mode) |
 | `Backspace` | Delete character (type mode) |
 | `Ctrl`+`V` / middle-click | Paste clipboard / primary selection (type mode) |
-| `Enter` / `Space` | Continue after result / preview (a wrong answer pauses this for 3s, counted down in the timer's corner) |
+| `Enter` / `Space` | Continue after result / preview (a wrong answer pauses this — 5s by default, `# wrong-pause:` — counted down in the timer's corner) |
 | `Ctrl`+`R` | Replay audio (in reverse mode, the reveal's clip on the result screen) |
 | `Ctrl`+`,` / `Ctrl`+`.` | Slow down / speed up audio and replay (0.25 steps, 0.25–4x; needs `mpv`) |
 | `Ctrl`+`/` | Reset audio speed |

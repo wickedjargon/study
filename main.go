@@ -32,6 +32,9 @@ flags (each overrides the deck header's setting for this session):
   --reverse             flip the deck: see English, produce the target language
   --order <mode>        card order (see # order: below)
   --time-limit <N|none> per-question time limit, uniform for every card
+  --wrong-pause <N|none>
+                        how long a wrong answer's result screen refuses to
+                        advance (default 5s)
   --preview-new         reveal a never-studied card's answer once before
                         quizzing it
   --new-per-session <N|all>
@@ -57,7 +60,7 @@ deck format:
   # comment         comment or metadata: # answer-mode: choice|type,
                     # choice-count: N, # answer-case: sensitive|insensitive,
                     # time-limit: N|none, # preview-new: on|off,
-                    # new-per-session: N|all,
+                    # new-per-session: N|all, # wrong-pause: N|none,
                     # font-size: N, # audio-speed: X,
                     # order: adaptive|sequential|flip-through|weak-only
 
@@ -71,6 +74,7 @@ func main() {
 	reverse := flag.Bool("reverse", false, "flip the deck: see English, produce the target language")
 	orderFlag := flag.String("order", "", "override the deck's card order for this session (see # order: values)")
 	timeLimitFlag := flag.String("time-limit", "", "override every per-question time limit (seconds, or none)")
+	wrongPauseFlag := flag.String("wrong-pause", "", "override the wrong-answer pause (seconds, or none)")
 	previewNew := flag.Bool("preview-new", false, "reveal a never-studied card's answer once before quizzing it")
 	newPerSessionFlag := flag.String("new-per-session", "", "override how many never-studied cards enter an adaptive session (N, or all)")
 	fontSizeFlag := flag.String("font-size", "", "override the base font size (8-48, or small/medium/large/x-large)")
@@ -143,6 +147,14 @@ func main() {
 		for i := range d.Cards {
 			d.Cards[i].TimeLimit = 0
 		}
+	}
+	if *wrongPauseFlag != "" {
+		n, ok := deck.ParseTimeLimit(*wrongPauseFlag)
+		if !ok {
+			fmt.Fprintf(os.Stderr, "✗ --wrong-pause: need 0-3600 seconds, or none (got %q)\n", *wrongPauseFlag)
+			os.Exit(1)
+		}
+		d.WrongPause = n
 	}
 	if *previewNew {
 		d.Preview = true

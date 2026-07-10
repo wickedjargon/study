@@ -101,10 +101,14 @@ type Deck struct {
 	// material in bounded batches keeps the 3-recall learning criterion
 	// tractable on large decks.
 	NewPerSession int
-	Preview       bool    // reveal a never-studied card's answer once before quizzing it
-	FontSize      int     // base font size in points (0 = use the app default)
-	Speed         float64 // audio playback speed multiplier (0 = use the app default of 1.0)
-	Cards         []Card
+	// WrongPause is how many seconds the result screen of a wrong answer
+	// refuses to advance, so a reflexive enter can't skip past the miss
+	// (default defaultWrongPause; 0 = no pause).
+	WrongPause int
+	Preview    bool    // reveal a never-studied card's answer once before quizzing it
+	FontSize   int     // base font size in points (0 = use the app default)
+	Speed      float64 // audio playback speed multiplier (0 = use the app default of 1.0)
+	Cards      []Card
 
 	// Warnings collects non-fatal parse issues — directives whose value was
 	// malformed or out of range and therefore ignored. The caller prints these
@@ -154,6 +158,9 @@ var orderModes = map[string]OrderMode{
 // defaultNewPerSession is the default cap on never-studied cards per adaptive
 // session.
 const defaultNewPerSession = 20
+
+// defaultWrongPause is the default wrong-answer pause in seconds.
+const defaultWrongPause = 5
 
 // ParseNewPerSession parses a "# new-per-session:" directive or
 // --new-per-session flag value: a non-negative integer, or "all" for no cap
@@ -210,6 +217,7 @@ func Parse(path string) (*Deck, error) {
 		Choices:       4,
 		Mode:          ModeType, // default to active recall; # answer-mode: choice opts in
 		NewPerSession: defaultNewPerSession,
+		WrongPause:    defaultWrongPause,
 	}
 
 	var lines []string
@@ -289,7 +297,8 @@ func parseDir(absDir string) (*Deck, error) {
 		}
 		if d.Mode != merged.Mode || d.CaseSensitive != merged.CaseSensitive ||
 			d.TimeLimit != merged.TimeLimit || d.Order != merged.Order ||
-			d.Preview != merged.Preview || d.NewPerSession != merged.NewPerSession {
+			d.Preview != merged.Preview || d.NewPerSession != merged.NewPerSession ||
+			d.WrongPause != merged.WrongPause {
 			merged.warn("%s: header settings differ from %s; using the first file's",
 				filepath.Base(path), filepath.Base(entries[0]))
 		}
@@ -389,6 +398,13 @@ func applyDeckMetadata(deck *Deck, block []string) {
 				deck.Order = m
 			} else {
 				deck.warn("ignoring %q (# order: must be adaptive, sequential, flip-through, or weak-only)", trimmed)
+			}
+		}
+		if after, ok := strings.CutPrefix(trimmed, "# wrong-pause:"); ok {
+			if n, ok := ParseTimeLimit(after); ok {
+				deck.WrongPause = n
+			} else {
+				deck.warn("ignoring %q (# wrong-pause: needs 0-%d seconds, or none)", trimmed, maxTimeLimit)
 			}
 		}
 		if after, ok := strings.CutPrefix(trimmed, "# new-per-session:"); ok {

@@ -223,6 +223,12 @@ func (e *Engine) Mode() deck.QuizMode {
 	return e.mode
 }
 
+// WrongPause returns how many seconds the result screen of a wrong answer
+// should refuse to advance (0 = no pause).
+func (e *Engine) WrongPause() int {
+	return e.deck.WrongPause
+}
+
 // FontSize returns the deck's configured base font size in points,
 // or 0 if the deck doesn't set one.
 func (e *Engine) FontSize() int {

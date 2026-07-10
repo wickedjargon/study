@@ -251,10 +251,6 @@ const (
 	fontMulLarge   = 1.5  // card content, headers
 )
 
-// wrongPause is how long the result screen of a wrong answer refuses to
-// advance. The countdown is shown in the timer's corner.
-const wrongPause = 3 * time.Second
-
 // Audio playback speed. The multiplier starts at defaultSpeed (or the deck's
 // "# audio-speed:" directive) and the user nudges it at runtime with Ctrl+, / Ctrl+.
 // in speedStep increments, clamped to [minSpeed,maxSpeed]; Ctrl+/ resets it.
@@ -494,11 +490,15 @@ func secondsUntil(t time.Time) int {
 }
 
 // lockResult arms the wrong-answer pause when the just-submitted result is a
-// miss (including a timeout). Called right after a.result is set.
+// miss (including a timeout). Called right after a.result is set. The length
+// comes from the deck's "# wrong-pause:" setting (or the --wrong-pause flag);
+// 0 disables the pause.
 func (a *App) lockResult() {
-	if a.result != nil && !a.result.Correct {
-		a.resultLock = time.Now().Add(wrongPause)
+	secs := a.engine.WrongPause()
+	if secs <= 0 || a.result == nil || a.result.Correct {
+		return
 	}
+	a.resultLock = time.Now().Add(time.Duration(secs) * time.Second)
 }
 
 // ── Event Handling ──────────────────────────────────────────────────
