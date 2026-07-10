@@ -52,7 +52,9 @@ study [flags] <deck-file | pack-directory>
 
 ### Card order
 
-| `--order` / `# order:` | Behavior |
+Set with the `--order` flag or the `# order:` deck header:
+
+| Mode | Behavior |
 |------|----------|
 | `adaptive` | **Default — "what's due?"** Reviews whose date arrived (most overdue first) plus a batch of new cards. A new card needs 3 correct recalls, a review 1; repetitions are spaced, never back-to-back. A clean session moves a card up the review ladder (1, 3, 7, 14, 30, 60, 120 days); a miss resets it. Completes when every card is done; nothing due → says so and exits. |
 | `sequential` | **"In order."** Deck order, wrapping forever; misses get the immediate-repeat drill. For material where the sequence is the content — verse, digits, procedures. |
