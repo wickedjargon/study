@@ -21,7 +21,8 @@ import (
 // The last text line of the original prompt (the romanization, or the word
 // itself for a Latin-script pack) becomes the canonical answer to type; any
 // earlier line — the native script — is accepted too, so a user who can type the
-// script isn't marked wrong. Matching stays lenient (accent/case/punctuation-
+// script isn't marked wrong, as are the card's question-side "=" alternatives
+// (variant wordings of the prompt, authored for exactly this direction). Matching stays lenient (accent/case/punctuation-
 // insensitive) in the engine, so "salam" is accepted for "salâm" and "ni hao"
 // for "nǐ hǎo".
 //
@@ -80,6 +81,9 @@ func reverseCard(c *Card) (Card, bool) {
 	if len(textLines) > 1 {
 		accept = append(accept, textLines[:len(textLines)-1]...)
 	}
+	// Question-side "=" lines are alternative wordings of the target-language
+	// prompt (e.g. a tú-form variant); they exist precisely for this direction.
+	accept = append(accept, c.QuestionAccept...)
 
 	// English prompt = the forward card's canonical answer. The forward "="
 	// alternatives were English synonyms — useful only when typing English — so

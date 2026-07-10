@@ -77,6 +77,20 @@ func TestReverseCardLatinPack(t *testing.T) {
 	}
 }
 
+func TestReverseCardQuestionAlternativesAccepted(t *testing.T) {
+	// Question-side "=" lines are variant wordings of the target-language
+	// prompt; reversed, they join the accept list after the script lines.
+	fwd := scriptCard()
+	fwd.QuestionAccept = []string{"salaam"}
+	c, ok := reverseCard(fwd)
+	if !ok {
+		t.Fatal("reverseCard returned ok=false")
+	}
+	if len(c.Accept) != 2 || c.Accept[0] != "سلام" || c.Accept[1] != "salaam" {
+		t.Errorf("accept = %v, want [سلام salaam]", c.Accept)
+	}
+}
+
 func TestReverseCardNoTextIsSkipped(t *testing.T) {
 	// A prompt with no text to produce (pure media) can't be reversed.
 	fwd := &Card{
