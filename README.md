@@ -1,6 +1,9 @@
 # study
 
-A flashcard quiz tool inspired by suckless sent. Decks are plain text files you write in any editor. Sessions run in a minimal X11 window. The default card-ordering follows evidence-based [spaced repetition](https://en.wikipedia.org/wiki/Spaced_repetition).
+A flashcard quiz tool inspired by suckless sent. Decks are plain text files. Sessions run in a minimal X11 window. The default card-ordering follows evidence-based [spaced repetition](https://en.wikipedia.org/wiki/Spaced_repetition).
+
+Papers used to inform ordering of cards in deck:
+- <simple page title only please, max 2 or 3 links please>
 
 # Screenshots
 
@@ -10,29 +13,34 @@ A flashcard quiz tool inspired by suckless sent. Decks are plain text files you 
 
 # Getting started
 
-Requires Go. Installs to `~/.local/bin`; override with
-`PREFIX=/usr/local sudo make clean install`.
+- Requires Go.
+- Installs to `~/.local/bin`.
+
+To install, run:
 
 ```bash
 make clean install
 ```
 
-Save this as `example.deck` — a type-in card and a multiple choice card
-(`~` lines are the wrong options, and their presence is what makes the card
-multiple choice):
+Save this as `example.deck`:
 
 ```
 2 + 2
 ---
 4
 
-1 + 1?
+What is the capital of Canada?
 ---
-~ 0
-~ 1
-2
-~ 3
+Ottawa
+~ Toronto
+~ Vancouver
+~ Montreal
 ```
+
+- Cards are separated by blank lines.
+- `---` or `===` separate question and answer.
+- In the first card above, the user is prompted with `2 + 2` and must enter 4 using his keyboard
+- In the second card above, the user is prompted with multiple choice options. `~` indicate an incorrect answer.
 
 Run it:
 
@@ -68,7 +76,6 @@ study [flags] <deck-file | pack-directory>
 - A directory is a **pack**: every `*.deck` inside merges into one session.
 - A flag overrides the deck-header setting of the same name for that session
   (`answer-mode`, `answer-case`, and `choice-count` are file-only).
-- Progress lives in `~/.local/share/study/`.
 
 ## Card order
 
@@ -81,24 +88,7 @@ Set with the `--order` flag or the `# order:` deck header:
 | `flip-through` | **"Just show me."** Answers visible, enter advances, wraps at the end. Nothing recorded. |
 | `weak-only` | **"What am I bad at?"** Cram mode: only weak or never-studied cards, ignoring review dates. |
 
-A wrong answer that is itself another card's answer — typing ۶ where the card
-wanted ۵ — is a mix-up between two cards, not ordinary forgetting. The result
-screen shows the card the answer belongs to, and if that card is still in the
-session it is pulled in nearby, so the confusable pair gets practiced side by
-side. Its review schedule is untouched — the miss counts only against the card
-that was asked.
-
-When nothing is due, `--ahead <N|all>` keeps an adaptive session going with
-reviews scheduled up to N days out (or all of them), soonest first. Studying
-early is fine — it's merely lower-yield than waiting — but its easy successes
-prove nothing, so a clean ahead review leaves the card's schedule untouched;
-a miss still counts (forgetting *before* the due date means the interval was
-too long) and drops the card down the ladder as usual.
-
 # Deck format
-
-Plain text. Blank lines separate cards; `---` or `===` (any length ≥ 3)
-separates question from answer.
 
 ## Accepted answers
 
@@ -163,18 +153,18 @@ What is 1 + 1?
 
 ## Header directives
 
-| Header | Values | Default |
-|--------|--------|---------|
-| `# answer-mode:` | `choice`, `type` (a card with `~` distractors is `choice` automatically) | `type` |
-| `# choice-count:` | any integer ≥ 2 | `4` |
-| `# answer-case:` | `sensitive`, `insensitive` | `insensitive` |
-| `# time-limit:` | seconds (e.g. `20`, `20s`), or `none`; expiry counts as wrong | `none` |
-| `# order:` | see [Card order](#card-order) | `adaptive` |
-| `# preview-new:` | `on`, `off` | `off` |
-| `# new-per-session:` | integer ≥ 0, or `all` | `20` |
-| `# wrong-pause:` | seconds, or `none`; how long a wrong answer's result screen refuses to advance | `5` |
-| `# font-size:` | 8–48, or `small`/`medium`/`large`/`x-large` | `10` |
-| `# audio-speed:` | `0.25`–`4.0` (e.g. `0.75`, `1.5x`) | `1.0` |
+| Header | Flag | Values | Default |
+|--------|------|--------|---------|
+| `# answer-mode:` | — | `choice`, `type` (a card with `~` distractors is `choice` automatically) | `type` |
+| `# choice-count:` | — | any integer ≥ 2 | `4` |
+| `# answer-case:` | — | `sensitive`, `insensitive` | `insensitive` |
+| `# time-limit:` | `--time-limit` | seconds (e.g. `20`, `20s`), or `none`; expiry counts as wrong | `none` |
+| `# order:` | `--order` | see [Card order](#card-order) | `adaptive` |
+| `# preview-new:` | `--preview-new` | `on`, `off` | `off` |
+| `# new-per-session:` | `--new-per-session` | integer ≥ 0, or `all` | `20` |
+| `# wrong-pause:` | `--wrong-pause` | seconds, or `none`; how long a wrong answer's result screen refuses to advance | `5` |
+| `# font-size:` | `--font-size` | 8–48, or `small`/`medium`/`large`/`x-large` | `10` |
+| `# audio-speed:` | `--audio-speed` | `0.25`–`4.0` (e.g. `0.75`, `1.5x`) | `1.0` |
 
 # Controls
 
