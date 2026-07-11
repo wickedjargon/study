@@ -86,7 +86,7 @@ Set with the `--order` flag or the `# order:` deck header:
 
 | Mode | Behavior |
 |------|----------|
-| `adaptive` | **Default: "what's due?"** Reviews whose date arrived (most overdue first) plus a batch of new cards. A new card needs 3 correct recalls, a review 1. Repetitions are spaced, never back-to-back. A clean session moves a card up the review ladder (1, 3, 7, 14, 30, 60, 120 days). A miss drops it to half its rung: relearning is faster than learning, so history isn't discarded. Completes when every card is done. When nothing is due, it says so and exits. |
+| `adaptive` | **Default: "what's due?"** Reviews that are due plus a batch of new cards, with spaced repetitions. Review intervals grow across days. When nothing is due, says so and exits (see `--ahead`). |
 | `sequential` | **"In order."** Deck order, wrapping forever. Misses get the immediate-repeat drill. For material where the sequence is the content: verse, digits, procedures. |
 | `flip-through` | **"Just show me."** Answers visible, enter advances, wraps at the end. Nothing recorded. |
 | `weak-only` | **"What am I bad at?"** Cram mode: only weak or never-studied cards, ignoring review dates. |
