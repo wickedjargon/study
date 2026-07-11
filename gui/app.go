@@ -32,6 +32,7 @@ import (
 	"golang.org/x/image/font/gofont/gobold"
 	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/font/opentype"
+	"golang.org/x/image/font/sfnt"
 	"golang.org/x/image/math/fixed"
 
 	imgdraw "golang.org/x/image/draw"
@@ -167,8 +168,20 @@ type App struct {
 	fontBold        font.Face
 	fontSmall       font.Face
 	fontLarge       font.Face
+	// Faces from fontSymbolsFont: regular size for the ✔/✘ verdict marks,
+	// small size for the 🔊 audio badge. Nil without a symbols font.
+	fontSymbols      font.Face
+	fontSymbolsSmall font.Face
 	fontRegularFont *opentype.Font
 	fontBoldFont    *opentype.Font
+	// fontSymbolsFont carries the ✔/✘ verdict marks and the 🔊 audio badge: no
+	// CJK font covers them, so a symbols-capable font (Noto Sans Symbols2 or
+	// DejaVu Sans) is loaded separately. Nil when the system has none — the
+	// marks then degrade to ✓/╳ and the badge to ♪, which the CJK face covers.
+	fontSymbolsFont *opentype.Font
+	// hasSpeaker reports 🔊 coverage in fontSymbolsFont (DejaVu carries the
+	// marks but not the speaker), decided once at load time.
+	hasSpeaker bool
 	dpi             float64
 	baseFontPt      float64 // current base point size; adjustable with Ctrl+=/-
 	initialFontPt   float64 // the starting base size; Ctrl+0 resets to this
@@ -193,6 +206,11 @@ type App struct {
 	// revealImg is the reversed card's answer-side image, loaded when the
 	// reveal is shown (reverse mode only) and cleared on the next card.
 	revealImg image.Image
+
+	// confusedImg is the confused-with card's question-side image, loaded with
+	// the result so the contrast note shows that card as it appears when
+	// prompted. Cleared on the next card.
+	confusedImg image.Image
 
 	// One-shot warning guards so a degraded-feature notice is printed to stderr
 	// once rather than on every use: pasteWarned when clipboard atoms are
@@ -241,7 +259,7 @@ const (
 // (or the deck's "# font-size:" directive) and the user nudges it at runtime
 // with Ctrl+= / Ctrl+-, in fontStepPt increments, clamped to [min,max]FontPt.
 const (
-	defaultFontPt = 14.0 // base size when the deck doesn't set one
+	defaultFontPt = 10.0 // base size when the deck doesn't set one
 	minFontPt     = 8.0
 	maxFontPt     = 40.0
 	fontStepPt    = 2.0
@@ -249,6 +267,10 @@ const (
 	fontMulSmall   = 0.75 // hints, progress, timer
 	fontMulRegular = 1.0  // prompts, answers, body
 	fontMulLarge   = 1.5  // card content, headers
+
+	// Image height caps, as fractions of the window height.
+	imageHFrac     = 0.4 // question and reveal images
+	noteImageHFrac = 0.2 // the confusion note's prompt reproduction
 )
 
 // Audio playback speed. The multiplier starts at defaultSpeed (or the deck's
@@ -451,8 +473,7 @@ func (a *App) tick() {
 	}
 	// Time's up — count the card as wrong, just like an incorrect answer.
 	a.deadline = time.Time{}
-	a.result = a.engine.AnswerTimeout()
-	a.lockResult()
+	a.setResult(a.engine.AnswerTimeout())
 	// Reveal (and, in reverse mode, speak) the answer just as a typed miss does.
 	if a.reverse {
 		a.showReveal()
@@ -487,6 +508,14 @@ func secondsUntil(t time.Time) int {
 		return 0
 	}
 	return int((d + time.Second - 1) / time.Second)
+}
+
+// setResult installs a just-submitted result: it arms the wrong-answer pause
+// and loads the confused-with card's question image for the contrast note.
+func (a *App) setResult(r *quiz.Result) {
+	a.result = r
+	a.loadConfusedImage()
+	a.lockResult()
 }
 
 // lockResult arms the wrong-answer pause when the just-submitted result is a
@@ -586,6 +615,7 @@ func (a *App) handleKey(ev xevent.KeyPressEvent) {
 			a.engine.Next()
 			a.result = nil
 			a.revealImg = nil
+			a.confusedImg = nil
 			a.inputBuf = ""
 
 			if s := a.engine.State(); s == quiz.ShowQuestion || s == quiz.ShowPreview {
@@ -649,6 +679,7 @@ func (a *App) endSession() {
 	a.resultLock = time.Time{}
 	a.result = nil
 	a.revealImg = nil
+	a.confusedImg = nil
 	a.engine.End()
 	a.render()
 }
@@ -661,8 +692,7 @@ func (a *App) handleChoiceKey(key string) {
 		if idx >= len(opts) {
 			return
 		}
-		a.result = a.engine.Answer(idx)
-		a.lockResult()
+		a.setResult(a.engine.Answer(idx))
 		// The engine records the outcome; persist immediately so an ungraceful
 		// exit can't lose this answer.
 		a.saveProgress()
@@ -675,8 +705,7 @@ func (a *App) handleChoiceKey(key string) {
 func (a *App) handleTypeKey(key string, ev xevent.KeyPressEvent) {
 	switch key {
 	case "Return":
-		a.result = a.engine.AnswerTyped(a.inputBuf)
-		a.lockResult()
+		a.setResult(a.engine.AnswerTyped(a.inputBuf))
 		// In reverse mode the prompt was silent; reveal the target language now
 		// that the answer is in — speak its clip and load its image.
 		if a.reverse {
@@ -907,26 +936,189 @@ func (a *App) playQuestionAudio() {
 	}
 }
 
-// audioHelp returns the footer hint for the audio controls — replay and the
-// current speed — or "" when the current question has no audio (so decks
-// without audio show no irrelevant hint).
-func (a *App) audioHelp() string {
-	card := a.engine.Current()
-	if card == nil {
-		return ""
-	}
-	return a.audioHelpFor(card.Question)
-}
-
-// audioHelpFor is audioHelp for an explicit card side — the result screen
-// passes the reveal (answer) side in reverse mode, where the audio lives.
-func (a *App) audioHelpFor(side []deck.Media) string {
+// hasAudio reports whether a card side carries an audio clip.
+func hasAudio(side []deck.Media) bool {
 	for _, m := range side {
 		if m.Type == deck.Audio {
-			return fmt.Sprintf("  |  replay: ctrl+r  |  playback-speed: ctrl+, / ctrl+.  |  speed %.2fx", a.audioSpeed)
+			return true
 		}
 	}
-	return ""
+	return false
+}
+
+// audioLines returns the controls-box key bindings for the audio controls, or
+// nil when the given card side has no audio (so decks without audio show no
+// irrelevant hint). The result screen passes the reveal (answer) side in
+// reverse mode, where the audio lives. The current speed is not repeated
+// here — the audio badge on the progress line carries it.
+func (a *App) audioLines(side []deck.Media) []string {
+	if !hasAudio(side) {
+		return nil
+	}
+	return []string{
+		"ctrl+r: replay audio",
+		"ctrl+,: slower",
+		"ctrl+.: faster",
+	}
+}
+
+// speakerFace returns the audio badge's speaker glyph and its face: 🔊 from
+// the symbols font when covered, else the CJK-covered ♪.
+func (a *App) speakerFace() (string, font.Face) {
+	if a.hasSpeaker && a.fontSymbolsSmall != nil {
+		return speakerGlyph, a.fontSymbolsSmall
+	}
+	return speakerFallback, a.fontSmall
+}
+
+// statusItem is one piece of the top status row's left cluster: a text run in
+// its own color, and optionally its own face (nil means the small face) —
+// which is how the tally's ✔/✘ come from the symbols font while everything
+// else stays in the UI font.
+type statusItem struct {
+	text  string
+	color color.RGBA
+	face  font.Face
+}
+
+// leftStatusItems builds the left-aligned session-context cluster: the
+// counter, the audio badge, and tags for non-default session shapes (a
+// non-adaptive order, reverse direction). Read once per session; the live
+// data lives in the centered tally instead.
+func (a *App) leftStatusItems(prog string, progColor color.RGBA, audioSide []deck.Media) [][]statusItem {
+	groups := [][]statusItem{{{text: prog, color: progColor}}}
+	if hasAudio(audioSide) {
+		glyph, face := a.speakerFace()
+		groups = append(groups, []statusItem{
+			{text: glyph, color: dimColor, face: face},
+			{text: fmt.Sprintf(": %.2fx", a.audioSpeed), color: dimColor},
+		})
+	}
+	if o := a.engine.Order(); o != deck.OrderAdaptive {
+		groups = append(groups, []statusItem{{text: o.String(), color: dimColor}})
+	}
+	if a.reverse {
+		groups = append(groups, []statusItem{{text: "reverse", color: dimColor}})
+	}
+	return groups
+}
+
+// tallyItems builds the running ✔/✘ tally, centered above the card by
+// drawTopStatus. Nil until there is something to tally.
+func (a *App) tallyItems() [][]statusItem {
+	if a.engine.TotalCorrect+a.engine.TotalWrong == 0 {
+		return nil
+	}
+	check, cross, face := markCorrect, markWrong, a.fontSymbolsSmall
+	if face == nil {
+		check, cross = markCorrectFallback, markWrongFallback
+	}
+	return [][]statusItem{
+		{
+			{text: check, color: dimColor, face: face},
+			{text: fmt.Sprintf(" %d", a.engine.TotalCorrect), color: dimColor},
+		},
+		{
+			{text: cross, color: dimColor, face: face},
+			{text: fmt.Sprintf(" %d", a.engine.TotalWrong), color: dimColor},
+		},
+	}
+}
+
+// tagItems wraps a per-card tag ("retry", "new") for drawTopStatus; nil for
+// no tag.
+func tagItems(tag string, c color.RGBA) []statusItem {
+	if tag == "" {
+		return nil
+	}
+	return []statusItem{{text: tag, color: c}}
+}
+
+// statusBarHeight is the vertical space the top status bar reserves: card
+// content starts below it. Unlike the bottom controls box (an overlay),
+// the bar owns its strip — the centered tally sits exactly where centered
+// card content would otherwise arrive, so sharing pixels is not an option.
+func (a *App) statusBarHeight() int {
+	return lineHeight(a.fontSmall)
+}
+
+// drawTopStatus draws the top status bar in three zones: the session-context
+// cluster left-aligned, the live tally centered on the window with the
+// per-card tag hanging off its right — the tally is the anchor, so the tag's
+// coming and going never moves it (a tag with no tally yet takes the center
+// itself) — and an optional right-aligned item (question timer or
+// wrong-answer countdown). The bar owns its strip (statusBarHeight): card
+// content starts below it, so nothing can ever underlap the centered zone.
+func (a *App) drawTopStatus(canvas *image.RGBA, left, tally [][]statusItem, tag []statusItem, right string, rightColor color.RGBA) {
+	gap := a.scaled(18) // between groups — a glyph-independent separator
+
+	itemFace := func(it statusItem) font.Face {
+		if it.face != nil {
+			return it.face
+		}
+		return a.fontSmall
+	}
+	groupsWidth := func(groups [][]statusItem) int {
+		w := 0
+		for gi, g := range groups {
+			if gi > 0 {
+				w += gap
+			}
+			for _, it := range g {
+				w += font.MeasureString(itemFace(it), it.text).Round()
+			}
+		}
+		return w
+	}
+	drawGroups := func(groups [][]statusItem, x int) int {
+		for gi, g := range groups {
+			if gi > 0 {
+				x += gap
+			}
+			for _, it := range g {
+				a.drawText(canvas, it.text, x, padding, itemFace(it), it.color)
+				x += font.MeasureString(itemFace(it), it.text).Round()
+			}
+		}
+		return x
+	}
+
+	// Left zone.
+	leftEnd := drawGroups(left, padding)
+
+	// Center zone: the tally anchors the centering; the tag follows it.
+	wTally := groupsWidth(tally)
+	wTag := 0
+	if len(tag) > 0 {
+		wTag = groupsWidth([][]statusItem{tag})
+	}
+	if wTally+wTag > 0 {
+		anchor := wTally
+		if anchor == 0 {
+			anchor = wTag
+		}
+		cx := (a.width - anchor) / 2
+		if min := leftEnd + gap; cx < min {
+			cx = min // never collide with the left cluster
+		}
+		x := cx
+		if wTally > 0 {
+			x = drawGroups(tally, x)
+			if wTag > 0 {
+				x += gap
+			}
+		}
+		if wTag > 0 {
+			drawGroups([][]statusItem{tag}, x)
+		}
+	}
+
+	// Right zone.
+	if right == "" {
+		return
+	}
+	wRight := font.MeasureString(a.fontSmall, right).Round()
+	a.drawText(canvas, right, a.width-padding-wRight, padding, a.fontSmall, rightColor)
 }
 
 func loadImage(path string) (image.Image, error) {
@@ -979,26 +1171,18 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 		return
 	}
 
-	y := padding
+	// Content starts below the status bar's reserved strip.
+	y := padding + a.statusBarHeight()
 
-	// Progress indicator.
 	seen := a.engine.TotalSeen
 	remaining := a.engine.Remaining()
 	prog := fmt.Sprintf("[%d/%d]", seen+1, seen+remaining)
+	cardTag, tagColor := "", dimColor
 	if a.engine.IsRetry() {
-		prog += "  retry"
+		cardTag = "retry"
+	} else if a.engine.CurrentIsNew() {
+		cardTag, tagColor = "new", accentColor
 	}
-	a.drawText(canvas, prog, padding, y, a.fontSmall, dimColor)
-
-	// Countdown timer (top-right), if the card has a time limit.
-	if secs := a.secondsLeft(); secs >= 0 {
-		timerColor := yellowColor
-		if secs <= 3 {
-			timerColor = redColor
-		}
-		a.drawTextRight(canvas, fmt.Sprintf("%ds", secs), a.width-padding, y, a.fontSmall, timerColor)
-	}
-	y += lineHeight(a.fontSmall)
 
 	// Question image.
 	y = a.renderQuestionImageBlock(canvas, y)
@@ -1008,14 +1192,12 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 
 	y += a.scaled(10)
 
+	var action string
 	if a.engine.Mode() == deck.ModeType {
 		// Text input field.
 		prompt := "> " + a.inputBuf + "_"
 		a.drawText(canvas, prompt, padding+20, y, a.fontRegular, accentColor)
-		y += lineHeight(a.fontRegular)
-
-		// Help.
-		a.drawTextCentered(canvas, "type answer + enter"+a.audioHelp()+"  |  esc: end", a.footerY(y), a.fontSmall, dimColor)
+		action = "enter: submit"
 	} else {
 		// Choices.
 		opts := a.engine.Options()
@@ -1024,11 +1206,23 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 			a.drawText(canvas, line, padding+20, y, a.fontRegular, textColor)
 			y += lineHeight(a.fontRegular)
 		}
-
-		// Help.
-		help := fmt.Sprintf("1-%d: answer%s  |  esc: end", len(opts), a.audioHelp())
-		a.drawTextCentered(canvas, help, a.footerY(y), a.fontSmall, dimColor)
+		action = fmt.Sprintf("1-%d: answer", len(opts))
 	}
+
+	lines := append([]string{action}, a.audioLines(card.Question)...)
+	a.drawControlsBox(canvas, append(lines, "esc: end"))
+
+	// Status overlay: progress, tags, tally and audio badge left; countdown
+	// timer right.
+	right, rightColor := "", dimColor
+	if secs := a.secondsLeft(); secs >= 0 {
+		right = fmt.Sprintf("%ds", secs)
+		rightColor = yellowColor
+		if secs <= 3 {
+			rightColor = redColor
+		}
+	}
+	a.drawTopStatus(canvas, a.leftStatusItems(prog, dimColor, card.Question), a.tallyItems(), tagItems(cardTag, tagColor), right, rightColor)
 }
 
 func (a *App) renderResult(canvas *image.RGBA) {
@@ -1036,19 +1230,20 @@ func (a *App) renderResult(canvas *image.RGBA) {
 		return
 	}
 	card := a.result.Card
-	y := padding
+	// Content starts below the status bar's reserved strip.
+	y := padding + a.statusBarHeight()
 
-	// Progress.
+	// The audio (and so the badge and the control hints) follows the side the
+	// clip lives on: the reveal (answer) side in reverse mode, the question
+	// side otherwise.
+	audioSide := card.Question
+	if a.reverse {
+		audioSide = card.Answer
+	}
+
 	seen := a.engine.TotalSeen
 	remaining := a.engine.Remaining()
 	prog := fmt.Sprintf("[%d/%d]", seen, seen+remaining)
-	a.drawText(canvas, prog, padding, y, a.fontSmall, dimColor)
-
-	// Wrong-answer pause countdown, in the same corner as the question timer.
-	if secs := a.lockSecondsLeft(); secs > 0 {
-		a.drawTextRight(canvas, fmt.Sprintf("%ds", secs), a.width-padding, y, a.fontSmall, redColor)
-	}
-	y += lineHeight(a.fontSmall)
 
 	// Question image.
 	y = a.renderQuestionImageBlock(canvas, y)
@@ -1059,12 +1254,14 @@ func (a *App) renderResult(canvas *image.RGBA) {
 	y += a.scaled(10)
 
 	if a.engine.Mode() == deck.ModeType {
-		// Show what was typed.
-		mark, markColor := "  ✓", greenColor
+		// Show what was typed; the ✔/✘ mark on this line is the verdict.
+		markColor := greenColor
 		if !a.result.Correct {
-			mark, markColor = "  X", redColor
+			markColor = redColor
 		}
-		a.drawText(canvas, "> "+a.result.Typed+mark, padding+20, y, a.fontRegular, markColor)
+		typed := "> " + a.result.Typed
+		a.drawText(canvas, typed, padding+20, y, a.fontRegular, markColor)
+		a.drawMarkAfter(canvas, typed, padding+20, y, a.result.Correct, markColor)
 		y += lineHeight(a.fontRegular)
 
 		if a.reverse {
@@ -1075,7 +1272,7 @@ func (a *App) renderResult(canvas *image.RGBA) {
 			// the reveal already includes it.
 			y += a.scaled(6)
 			if a.revealImg != nil {
-				y += a.renderImage(canvas, a.revealImg, y) + a.scaled(20)
+				y += a.renderImage(canvas, a.revealImg, y, imageHFrac) + a.scaled(20)
 			}
 			y = a.renderTextMedia(canvas, a.result.Card.Answer, y, greenColor)
 		} else if !a.result.Correct {
@@ -1083,44 +1280,65 @@ func (a *App) renderResult(canvas *image.RGBA) {
 			y += lineHeight(a.fontRegular)
 		}
 	} else {
-		// Choices with highlighting.
+		// Choices with highlighting: the correct option gets the ✔, a wrongly
+		// chosen one the ✘.
 		opts := a.engine.Options()
 		for i, opt := range opts {
 			line := fmt.Sprintf("%d)  %s", i+1, opt)
 			c := dimColor
+			marked, correct := false, false
 			if opt == a.result.Answer {
-				line += "  ✓"
+				marked, correct = true, true
 				c = greenColor
 			} else if i == a.result.Chosen && !a.result.Correct {
-				line += "  X"
+				marked = true
 				c = redColor
 			}
 			a.drawText(canvas, line, padding+20, y, a.fontRegular, c)
+			if marked {
+				a.drawMarkAfter(canvas, line, padding+20, y, correct, c)
+			}
 			y += lineHeight(a.fontRegular)
 		}
 	}
 
 	y += a.scaled(16)
 
-	// Result message.
-	if a.result.Correct {
-		a.drawTextCentered(canvas, "✓  Correct!", y, a.fontBold, greenColor)
-	} else if a.result.TimedOut {
-		msg := "Time's up! — answer: " + a.result.Answer
-		a.drawTextCentered(canvas, msg, y, a.fontBold, redColor)
-	} else {
-		msg := "X  Wrong — answer: " + a.result.Answer
-		a.drawTextCentered(canvas, msg, y, a.fontBold, redColor)
+	// The verdict lives on the answer lines themselves (the ✓/╳ marks and the
+	// green "=" reveal), so no separate Correct/Wrong banner — it only repeated
+	// them. A timeout is the exception: nothing was answered, so the reason is
+	// worth a line.
+	if a.result.TimedOut {
+		a.drawTextCentered(canvas, "Time's up!", y, a.fontBold, redColor)
+		y += lineHeight(a.fontBold)
 	}
-	y += lineHeight(a.fontBold)
 
-	// Help. The audio hint follows the side the clip lives on: the reveal
-	// (answer) side in reverse mode, the question side otherwise.
-	audioSide := card.Question
-	if a.reverse {
-		audioSide = card.Answer
+	// Confusion contrast: the wrong answer belongs to another card — reproduce
+	// that card as it appears when prompted (its image and question lines at
+	// card size, via the same script-shaped rendering), closed by the usual
+	// "=" reveal carrying its answer: exactly what the user provided, which is
+	// what says why this card is being shown. The yellow tint keeps the block
+	// a note rather than a second live question.
+	if cw := a.result.ConfusedWith; cw != nil && (a.confusedImg != nil || deck.JoinText(cw.Question) != "") {
+		if a.confusedImg != nil {
+			y += a.renderImage(canvas, a.confusedImg, y, noteImageHFrac) + a.scaled(20)
+		}
+		y = a.renderTextMedia(canvas, cw.Question, y, yellowColor)
+		y += a.scaled(4) + a.fontRegular.Metrics().Ascent.Ceil()
+		a.drawShapedCentered(canvas, "= "+cw.AnswerText, y, fontMulRegular, a.fontRegular, yellowColor)
 	}
-	a.drawTextCentered(canvas, "enter: continue"+a.audioHelpFor(audioSide)+"  •  esc: end", a.footerY(y), a.fontSmall, dimColor)
+
+	// Controls.
+	lines := append([]string{"enter: continue"}, a.audioLines(audioSide)...)
+	a.drawControlsBox(canvas, append(lines, "esc: end"))
+
+	// Status overlay: progress, tags, tally and audio badge left; wrong-answer
+	// pause countdown right (the same corner as the question timer).
+	right := ""
+	if secs := a.lockSecondsLeft(); secs > 0 {
+		right = fmt.Sprintf("%ds", secs)
+	}
+	a.drawTopStatus(canvas, a.leftStatusItems(prog, dimColor, audioSide), a.tallyItems(), nil, right, redColor)
 }
 
 // renderPreview draws an answer-visible card: the first-viewing reveal (study
@@ -1133,22 +1351,30 @@ func (a *App) renderPreview(canvas *image.RGBA) {
 	}
 	flip := a.engine.Order() == deck.OrderFlipThrough
 
-	y := padding
+	// Content starts below the status bar's reserved strip.
+	y := padding + a.statusBarHeight()
 
-	// Progress indicator, tagged so it's clear nothing is being scored.
-	// Flip-through shows the position within the wrapping lap; the reveal shows
-	// the usual session counter.
+	// Audio may live on either side of the card; badge and hints follow
+	// whichever has it.
+	audioSide := card.Question
+	if !hasAudio(audioSide) {
+		audioSide = card.Answer
+	}
+
+	// Progress indicator, drawn last as an overlay — content flows from the
+	// window top. Flip-through shows the position within the wrapping lap (its
+	// mode is named by the order tag); the first-viewing reveal shows the usual
+	// session counter with the "new" tag.
+	var prog, cardTag string
 	if flip {
 		size := a.engine.DeckSize()
-		prog := fmt.Sprintf("[%d/%d]  flip-through", a.engine.TotalSeen%size+1, size)
-		a.drawText(canvas, prog, padding, y, a.fontSmall, dimColor)
+		prog = fmt.Sprintf("[%d/%d]", a.engine.TotalSeen%size+1, size)
 	} else {
 		seen := a.engine.TotalSeen
 		remaining := a.engine.Remaining()
-		prog := fmt.Sprintf("[%d/%d]  new card", seen+1, seen+remaining)
-		a.drawText(canvas, prog, padding, y, a.fontSmall, accentColor)
+		prog = fmt.Sprintf("[%d/%d]", seen+1, seen+remaining)
+		cardTag = "new"
 	}
-	y += lineHeight(a.fontSmall)
 
 	// Question side.
 	y = a.renderQuestionImageBlock(canvas, y)
@@ -1159,22 +1385,21 @@ func (a *App) renderPreview(canvas *image.RGBA) {
 	// Answer side, revealed: its image (loaded by showReveal) and every text
 	// line in green — the same presentation as a reverse-mode result reveal.
 	if a.revealImg != nil {
-		y += a.renderImage(canvas, a.revealImg, y) + a.scaled(20)
+		y += a.renderImage(canvas, a.revealImg, y, imageHFrac) + a.scaled(20)
 	}
 	y = a.renderTextMedia(canvas, card.Answer, y, greenColor)
 
 	y += a.scaled(16)
 
-	// Help. Audio may live on either side of the card; hint whichever has it.
-	audio := a.audioHelpFor(card.Question)
-	if audio == "" {
-		audio = a.audioHelpFor(card.Answer)
-	}
+	// Controls.
 	action := "enter: quiz this card"
 	if flip {
 		action = "enter: next"
 	}
-	a.drawTextCentered(canvas, action+audio+"  |  esc: end", a.footerY(y), a.fontSmall, dimColor)
+	lines := append([]string{action}, a.audioLines(audioSide)...)
+	a.drawControlsBox(canvas, append(lines, "esc: end"))
+
+	a.drawTopStatus(canvas, a.leftStatusItems(prog, dimColor, audioSide), a.tallyItems(), tagItems(cardTag, accentColor), "", dimColor)
 }
 
 func (a *App) renderSummary(canvas *image.RGBA) {
@@ -1259,7 +1484,7 @@ func (a *App) renderSummary(canvas *image.RGBA) {
 		y += lineHeight(a.fontRegular)
 	}
 
-	a.drawTextCentered(canvas, "enter / esc: exit", a.footerY(y), a.fontSmall, dimColor)
+	a.drawControlsBox(canvas, []string{"enter / esc: exit"})
 }
 
 // ── Drawing Helpers ─────────────────────────────────────────────────
@@ -1272,6 +1497,24 @@ func (a *App) drawText(canvas *image.RGBA, text string, x, y int, face font.Face
 		Dot:  fixed.P(x, y),
 	}
 	d.DrawString(text)
+}
+
+// drawMarkAfter draws the verdict mark following text already drawn at x,y in
+// the regular face: the heavy ✔/✘ from the symbols face when one loaded, else
+// the light ✓/╳ the CJK face covers.
+func (a *App) drawMarkAfter(canvas *image.RGBA, text string, x, y int, correct bool, c color.RGBA) {
+	mark, face := markCorrect, a.fontSymbols
+	if !correct {
+		mark = markWrong
+	}
+	if face == nil {
+		mark, face = markCorrectFallback, a.fontRegular
+		if !correct {
+			mark = markWrongFallback
+		}
+	}
+	x += font.MeasureString(a.fontRegular, text+"  ").Round()
+	a.drawText(canvas, mark, x, y, face, c)
 }
 
 // drawTextRight draws text so that its right edge sits at xRight.
@@ -1314,7 +1557,7 @@ func (a *App) drawTextCentered(canvas *image.RGBA, text string, y int, face font
 func (a *App) renderQuestionImageBlock(canvas *image.RGBA, y int) int {
 	switch {
 	case a.questionImg != nil:
-		imgH := a.renderImage(canvas, a.questionImg, y)
+		imgH := a.renderImage(canvas, a.questionImg, y, imageHFrac)
 		return y + imgH + a.scaled(20)
 	case a.questionImgFailed:
 		y += lineHeight(a.fontRegular)
@@ -1383,6 +1626,28 @@ func (a *App) loadRevealImage() {
 	}
 }
 
+// loadConfusedImage caches the confused-with card's question-side image so the
+// contrast note can show that card exactly as it appears when prompted. Nil
+// when there is no confusion, the card has no image, or it fails to decode
+// (logged, the note then shows text only).
+func (a *App) loadConfusedImage() {
+	a.confusedImg = nil
+	if a.result == nil || a.result.ConfusedWith == nil {
+		return
+	}
+	for _, m := range a.result.ConfusedWith.Question {
+		if m.Type == deck.Image {
+			img, err := loadImage(m.Content)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "study: could not load image %s: %v\n", m.Content, err)
+				return
+			}
+			a.confusedImg = img
+			return
+		}
+	}
+}
+
 // replayAudio replays whichever clip belongs to what's on screen: the
 // question's audio while the question shows, and — in reverse mode — the
 // reveal's audio on the result screen (there the question side is silent).
@@ -1423,14 +1688,17 @@ func (a *App) playRevealAudio() {
 	}
 }
 
-func (a *App) renderImage(canvas *image.RGBA, img image.Image, y int) int {
+// renderImage draws img centered at y, scaled to fit the window width and at
+// most maxHFrac of the window height, and returns the drawn height. Full-role
+// images (question, reveal) use imageHFrac; the confusion note uses the
+// smaller noteImageHFrac so the note can't push the screen's own content off.
+func (a *App) renderImage(canvas *image.RGBA, img image.Image, y int, maxHFrac float64) int {
 	bounds := img.Bounds()
 	imgW := bounds.Dx()
 	imgH := bounds.Dy()
 
-	// Scale to fit within the available width and max 40% of window height.
 	maxW := a.width - padding*2
-	maxH := int(float64(a.height) * 0.4)
+	maxH := int(float64(a.height) * maxHFrac)
 
 	scale := 1.0
 	if imgW > maxW {
@@ -1471,6 +1739,69 @@ var systemFontPaths = []string{
 	"/usr/share/fonts/wenquanyi/wqy-zenhei/wqy-zenhei.ttc",
 	// Droid Fallback — CJK only, poor Latin. Last resort.
 	"/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+}
+
+// Verdict marks for the result screen and the audio-badge speaker. The heavy
+// marks and the speaker need a symbols font; the fallbacks are what every
+// supported CJK face covers.
+const (
+	markCorrect         = "✔" // U+2714 heavy check mark
+	markWrong           = "✘" // U+2718 heavy ballot X
+	markCorrectFallback = "✓" // U+2713
+	markWrongFallback   = "╳" // U+2573
+	speakerGlyph        = "🔊" // U+1F50A
+	speakerFallback     = "♪" // U+266A
+)
+
+// symbolsFontPaths lists symbols-capable fonts in preference order. Noto Sans
+// Symbols2 covers the speaker as well as the marks; DejaVu Sans (marks only,
+// but near-universal on Linux) is the wider net under it.
+var symbolsFontPaths = []string{
+	"/usr/share/fonts/truetype/noto/NotoSansSymbols2-Regular.ttf",
+	"/usr/share/fonts/noto/NotoSansSymbols2-Regular.ttf",
+	"/usr/share/fonts/google-noto/NotoSansSymbols2-Regular.ttf",
+	"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+	"/usr/share/fonts/TTF/DejaVuSans.ttf",
+	"/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
+	"/usr/local/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+}
+
+// hasGlyphs reports whether the font has a real glyph (not .notdef) for every
+// rune in s.
+func hasGlyphs(f *opentype.Font, s string) bool {
+	var buf sfnt.Buffer
+	for _, r := range s {
+		gi, err := f.GlyphIndex(&buf, r)
+		if err != nil || gi == 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// loadSymbolsFont finds and parses a font covering the ✔/✘ verdict marks,
+// trying the known paths and then a fontconfig charset query. Coverage is
+// verified on the parsed font — never assumed from the file name; 🔊 coverage
+// is noted but not required (DejaVu lacks it). Best-effort: fontSymbolsFont
+// stays nil when nothing qualifies.
+func (a *App) loadSymbolsFont() {
+	candidates := append([]string{}, symbolsFontPaths...)
+	if out, err := exec.Command("fc-match", "--format=%{file}", ":charset=2714 2718").Output(); err == nil {
+		if p := strings.TrimSpace(string(out)); p != "" {
+			candidates = append(candidates, p)
+		}
+	}
+	for _, path := range candidates {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		if f, err := parseFont(data); err == nil && hasGlyphs(f, markCorrect+markWrong) {
+			a.fontSymbolsFont = f
+			a.hasSpeaker = hasGlyphs(f, speakerGlyph)
+			return
+		}
+	}
 }
 
 func (a *App) loadFonts() error {
@@ -1518,6 +1849,7 @@ func (a *App) loadFonts() error {
 	}
 	a.fontRegularFont = regularFont
 	a.fontBoldFont = boldFont
+	a.loadSymbolsFont()
 	a.dpi = detectDPI(a.xu)
 
 	return a.buildFonts()
@@ -1552,16 +1884,37 @@ func (a *App) buildFonts() error {
 		small.Close()
 		return err
 	}
+	var symbols, symbolsSmall font.Face
+	if a.fontSymbolsFont != nil {
+		symbols, err = newFace(a.fontSymbolsFont, a.baseFontPt*fontMulRegular*scale, a.dpi)
+		if err != nil {
+			regular.Close()
+			bold.Close()
+			small.Close()
+			large.Close()
+			return err
+		}
+		symbolsSmall, err = newFace(a.fontSymbolsFont, a.baseFontPt*fontMulSmall*scale, a.dpi)
+		if err != nil {
+			regular.Close()
+			bold.Close()
+			small.Close()
+			large.Close()
+			symbols.Close()
+			return err
+		}
+	}
 
 	a.closeFonts()
 	a.fontRegular, a.fontBold, a.fontSmall, a.fontLarge = regular, bold, small, large
+	a.fontSymbols, a.fontSymbolsSmall = symbols, symbolsSmall
 	return nil
 }
 
 // closeFonts releases the current face set. Safe to call before the first build
 // (the faces are nil) and after each rebuild.
 func (a *App) closeFonts() {
-	for _, f := range []font.Face{a.fontRegular, a.fontBold, a.fontSmall, a.fontLarge} {
+	for _, f := range []font.Face{a.fontRegular, a.fontBold, a.fontSmall, a.fontLarge, a.fontSymbols, a.fontSymbolsSmall} {
 		if f != nil {
 			f.Close()
 		}
@@ -1645,17 +1998,45 @@ func (a *App) changeSpeed(delta float64) {
 	a.setSpeed(a.audioSpeed + delta)
 }
 
-// footerY returns the baseline for a bottom-anchored footer line. It pins the
-// footer near the window bottom, but pushes it down to clear contentY when the
-// content has grown tall enough to reach it — so the footer never overlaps the
-// body, at any font size. (At extreme zoom the footer simply scrolls off the
-// bottom edge, which is the expected consequence of zooming in.)
-func (a *App) footerY(contentY int) int {
-	pinned := a.height - padding
-	if contentY > pinned {
-		return contentY
+// drawControlsBox draws the control hints as a compact bordered box anchored
+// to the bottom-right corner, one hint per line, left-aligned. The box is an
+// overlay, not part of the content flow: the card keeps the window's full
+// height, and the opaque background keeps the hints readable if tall content
+// runs underneath.
+func (a *App) drawControlsBox(canvas *image.RGBA, lines []string) {
+	if len(lines) == 0 {
+		return
 	}
-	return pinned
+	pad := a.scaled(8)
+	lh := lineHeight(a.fontSmall)
+	maxW := 0
+	for _, l := range lines {
+		if w := font.MeasureString(a.fontSmall, l).Round(); w > maxW {
+			maxW = w
+		}
+	}
+	box := image.Rect(0, 0, maxW+pad*2, lh*len(lines)+pad*2).
+		Add(image.Pt(a.width-padding-maxW-pad*2, a.height-padding-lh*len(lines)-pad*2))
+	draw.Draw(canvas, box, image.NewUniform(bgColor), image.Point{}, draw.Src)
+	strokeRect(canvas, box, dimColor)
+
+	y := box.Min.Y + pad + a.fontSmall.Metrics().Ascent.Ceil()
+	for _, l := range lines {
+		a.drawText(canvas, l, box.Min.X+pad, y, a.fontSmall, dimColor)
+		y += lh
+	}
+}
+
+// strokeRect draws a 1px border just inside r.
+func strokeRect(canvas *image.RGBA, r image.Rectangle, c color.RGBA) {
+	for x := r.Min.X; x < r.Max.X; x++ {
+		canvas.SetRGBA(x, r.Min.Y, c)
+		canvas.SetRGBA(x, r.Max.Y-1, c)
+	}
+	for y := r.Min.Y; y < r.Max.Y; y++ {
+		canvas.SetRGBA(r.Min.X, y, c)
+		canvas.SetRGBA(r.Max.X-1, y, c)
+	}
 }
 
 // scaled converts a spacer gap from the original design (in pixels) to the

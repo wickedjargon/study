@@ -1,6 +1,8 @@
 package gui
 
 import (
+	"image"
+	"image/color"
 	"os"
 	"testing"
 )
@@ -39,17 +41,37 @@ func TestLineHeightClearsGlyphExtent(t *testing.T) {
 	}
 }
 
-// TestFooterY confirms the footer pins to the bottom with room, but flows below
-// content (never overlaps) once the content grows past the pin line.
-func TestFooterY(t *testing.T) {
-	a := &App{height: 600}
-	pinned := a.height - padding
-
-	if got := a.footerY(100); got != pinned {
-		t.Errorf("short content: footerY=%d, want pinned %d", got, pinned)
+// TestControlsBoxAnchorsBottomRight confirms the controls box hugs the
+// bottom-right corner — its border lands exactly at the padding inset — and
+// stays within the canvas.
+func TestControlsBoxAnchorsBottomRight(t *testing.T) {
+	data := loadTestFont(t)
+	f, err := parseFont(data)
+	if err != nil {
+		t.Fatalf("parseFont: %v", err)
 	}
-	if got := a.footerY(pinned + 50); got != pinned+50 {
-		t.Errorf("tall content: footerY=%d, want flowed %d", got, pinned+50)
+	face, err := newFace(f, 10, 96)
+	if err != nil {
+		t.Fatalf("newFace: %v", err)
+	}
+
+	a := &App{width: 800, height: 600, baseFontPt: 10, dpi: 96, fontSmall: face}
+	oldDim := dimColor
+	dimColor = color.RGBA{9, 9, 9, 255}
+	defer func() { dimColor = oldDim }()
+
+	canvas := image.NewRGBA(image.Rect(0, 0, a.width, a.height))
+	a.drawControlsBox(canvas, []string{"enter: continue", "esc: end"})
+
+	corner := image.Pt(a.width-padding-1, a.height-padding-1)
+	if got := canvas.RGBAAt(corner.X, corner.Y); got != dimColor {
+		t.Errorf("border pixel at %v = %v, want %v", corner, got, dimColor)
+	}
+	// Nothing may spill past the inset into the window edge.
+	for x := a.width - padding; x < a.width; x++ {
+		if got := canvas.RGBAAt(x, corner.Y); got != (color.RGBA{}) {
+			t.Fatalf("pixel right of the inset at x=%d is drawn: %v", x, got)
+		}
 	}
 }
 

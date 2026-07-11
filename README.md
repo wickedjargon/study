@@ -161,7 +161,7 @@ What is 1 + 1?
 | `# preview-new:` | `on`, `off` | `off` |
 | `# new-per-session:` | integer ≥ 0, or `all` | `20` |
 | `# wrong-pause:` | seconds, or `none`; how long a wrong answer's result screen refuses to advance | `5` |
-| `# font-size:` | 8–48, or `small`/`medium`/`large`/`x-large` | `14` |
+| `# font-size:` | 8–48, or `small`/`medium`/`large`/`x-large` | `10` |
 | `# audio-speed:` | `0.25`–`4.0` (e.g. `0.75`, `1.5x`) | `1.0` |
 
 ## Controls
