@@ -76,10 +76,6 @@ study [flags] <deck-file | pack-directory>
 | `--forget` | Clear saved progress for the studied direction only (combine with `--reverse`) |
 | `--help` | Show help |
 
-- A directory is a **pack**: every `*.deck` inside merges into one session.
-- A flag overrides the deck-header setting of the same name for that session
-  (`answer-mode`, `answer-case`, and `choice-count` are file-only).
-
 ## Card order
 
 Set with the `--order` flag or the `# order:` deck header:
@@ -168,6 +164,8 @@ What is 1 + 1?
 | `# wrong-pause:` | `--wrong-pause` | seconds, or `none` | `5` |
 | `# font-size:` | `--font-size` | `8`–`48`, or `small`/`medium`/`large`/`x-large` | `10` |
 | `# audio-speed:` | `--audio-speed` | `0.25`–`4.0` | `1.0` |
+
+- A flag overrides the deck-header setting of the same name for that session.
 
 # Controls
 
