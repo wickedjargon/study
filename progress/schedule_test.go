@@ -38,21 +38,32 @@ func TestScheduleClimbsLadder(t *testing.T) {
 	}
 }
 
-func TestScheduleLapseResets(t *testing.T) {
-	s := newTestStore(t)
-
-	s.Schedule("c", false)
-	s.Schedule("c", false)
-	s.Schedule("c", false) // level 3 (7 days)
-
-	s.Schedule("c", true) // lapsed session: back to the bottom
-	cp := s.Get("c")
-	if cp.Level != 1 {
-		t.Errorf("Level after lapse = %d, want 1", cp.Level)
+func TestScheduleLapseHalvesLevel(t *testing.T) {
+	cases := []struct {
+		level, want int
+	}{
+		{0, 1}, // first-ever session with a miss: bottom rung
+		{1, 1},
+		{2, 1},
+		{3, 1},
+		{4, 2},
+		{7, 3},
 	}
-	want := time.Now().Add(24 * time.Hour)
-	if d := cp.Due.Sub(want); d < -time.Minute || d > time.Minute {
-		t.Errorf("Due after lapse = %v, want ~1 day out", cp.Due)
+	for _, tc := range cases {
+		s := newTestStore(t)
+		for i := 0; i < tc.level; i++ {
+			s.Schedule("c", false)
+		}
+
+		s.Schedule("c", true) // lapsed session: halfway down, not the bottom
+		cp := s.Get("c")
+		if cp.Level != tc.want {
+			t.Errorf("Level after lapse at %d = %d, want %d", tc.level, cp.Level, tc.want)
+		}
+		want := time.Now().Add(time.Duration(reviewLadder[tc.want-1]) * 24 * time.Hour)
+		if d := cp.Due.Sub(want); d < -time.Minute || d > time.Minute {
+			t.Errorf("Due after lapse at %d = %v, want ~%v", tc.level, cp.Due, want)
+		}
 	}
 }
 

@@ -37,12 +37,19 @@ var reviewLadder = []int{1, 3, 7, 14, 30, 60, 120}
 
 // Schedule records that a card met its session criterion and sets its next
 // review. A clean session moves the card one rung up the ladder; a session
-// with a lapse (any miss) sends it back to the bottom — the card was
-// forgotten, so its spacing must be rebuilt.
+// with a lapse (any miss) drops it to half its level — not the bottom.
+// Relearning a once-known card is far faster than initial learning (savings,
+// Ebbinghaus 1885), so a miss means the interval outran this card's memory,
+// not that the memory is gone; halving backs off geometrically without
+// discarding the history, the way stability-based schedulers (e.g. FSRS)
+// treat a lapse.
 func (s *Store) Schedule(cardID string, lapsed bool) {
 	cp := s.ensure(cardID)
 	if lapsed {
-		cp.Level = 1
+		cp.Level = cp.Level / 2
+		if cp.Level < 1 {
+			cp.Level = 1
+		}
 	} else if cp.Level < len(reviewLadder) {
 		cp.Level++
 	}
