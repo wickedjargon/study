@@ -66,7 +66,7 @@ func TestAnswerTypedMatching(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			e := NewEngine(typedDeck(tc.answer, tc.accept, false), nil)
+			e := NewEngine(typedDeck(tc.answer, tc.accept, false), nil, nil)
 			r := e.AnswerTyped(tc.input)
 			if r == nil {
 				t.Fatal("nil result")
@@ -81,17 +81,17 @@ func TestAnswerTypedMatching(t *testing.T) {
 func TestAnswerTypedCaseSensitive(t *testing.T) {
 	// A case-sensitive deck still accepts alternatives but compares exactly:
 	// no case folding, no punctuation/diacritic leniency.
-	e := NewEngine(typedDeck("Hello", []string{"Hi"}, true), nil)
+	e := NewEngine(typedDeck("Hello", []string{"Hi"}, true), nil, nil)
 	if !e.AnswerTyped("Hello").Correct {
 		t.Error("exact match should be correct")
 	}
 
-	e = NewEngine(typedDeck("Hello", []string{"Hi"}, true), nil)
+	e = NewEngine(typedDeck("Hello", []string{"Hi"}, true), nil, nil)
 	if e.AnswerTyped("hello").Correct {
 		t.Error("case-sensitive deck should reject differing case")
 	}
 
-	e = NewEngine(typedDeck("Hello", []string{"Hi"}, true), nil)
+	e = NewEngine(typedDeck("Hello", []string{"Hi"}, true), nil, nil)
 	if !e.AnswerTyped("Hi").Correct {
 		t.Error("accepted alternative should be correct even when case-sensitive")
 	}
@@ -99,7 +99,7 @@ func TestAnswerTypedCaseSensitive(t *testing.T) {
 
 func TestEngineBasicFlow(t *testing.T) {
 	d := testDeck(4)
-	e := NewEngine(d, nil)
+	e := NewEngine(d, nil, nil)
 
 	if e.State() != ShowQuestion {
 		t.Fatal("expected ShowQuestion state")
@@ -116,7 +116,7 @@ func TestEngineBasicFlow(t *testing.T) {
 
 func TestEngineCorrectAnswer(t *testing.T) {
 	d := testDeck(2)
-	e := NewEngine(d, nil)
+	e := NewEngine(d, nil, nil)
 
 	// Find the correct answer index.
 	opts := e.Options()
@@ -151,7 +151,7 @@ func TestEngineWrongAnswerCreatesRetry(t *testing.T) {
 	// (default) spaces misses out instead (see requeue_test.go).
 	d := testDeck(4)
 	d.Order = deck.OrderSequential
-	e := NewEngine(d, nil)
+	e := NewEngine(d, nil, nil)
 
 	// Find a wrong answer index.
 	opts := e.Options()
@@ -174,7 +174,7 @@ func TestEngineWrongAnswerCreatesRetry(t *testing.T) {
 
 func TestEngineCorrectAnswerCycle(t *testing.T) {
 	d := testDeck(3)
-	e := NewEngine(d, nil)
+	e := NewEngine(d, nil, nil)
 
 	// Answer each card correctly once (3 cards).
 	for i := 0; i < 3; i++ {
@@ -206,7 +206,7 @@ func TestEngineCorrectAnswerCycle(t *testing.T) {
 func TestEngineRetryGraduation(t *testing.T) {
 	d := testDeck(5)
 	d.Order = deck.OrderSequential
-	e := NewEngine(d, nil)
+	e := NewEngine(d, nil, nil)
 
 	// Answer first card wrong.
 	firstCard := e.Current()
@@ -237,7 +237,7 @@ func TestEngineTimeLimit(t *testing.T) {
 	d.Cards[1].TimeLimit = 5  // per-card override
 	d.Cards[2].TimeLimit = -1 // explicitly unlimited
 
-	e := NewEngine(d, nil) // sequential order preserved
+	e := NewEngine(d, nil, nil) // sequential order preserved
 
 	answerCorrectly := func() {
 		opts := e.Options()
@@ -272,7 +272,7 @@ func TestEngineTimeLimit(t *testing.T) {
 func TestEngineAnswerTimeout(t *testing.T) {
 	d := testDeck(4)
 	d.Order = deck.OrderSequential // timeouts queue for retry in sequential mode
-	e := NewEngine(d, nil)
+	e := NewEngine(d, nil, nil)
 
 	card := e.Current()
 	result := e.AnswerTimeout()
@@ -300,7 +300,7 @@ func TestEngineAnswerTimeout(t *testing.T) {
 func TestEngineChoiceCountClamped(t *testing.T) {
 	d := testDeck(2)
 	d.Choices = 10 // deck requests 10 choices but has only 2 cards
-	e := NewEngine(d, nil)
+	e := NewEngine(d, nil, nil)
 
 	opts := e.Options()
 	if len(opts) != 2 {
@@ -323,7 +323,7 @@ func TestEngineCustomDistractors(t *testing.T) {
 		},
 	}
 
-	e := NewEngine(d, nil)
+	e := NewEngine(d, nil, nil)
 	opts := e.Options()
 
 	if len(opts) != 4 {
@@ -366,7 +366,7 @@ func TestEngineCustomDistractors(t *testing.T) {
 func TestEngineIsRetryTimingInvariant(t *testing.T) {
 	d := testDeck(4)
 	d.Order = deck.OrderSequential
-	e := NewEngine(d, nil)
+	e := NewEngine(d, nil, nil)
 
 	if e.IsRetry() {
 		t.Fatal("first card comes from the main queue; IsRetry must be false")
@@ -406,7 +406,7 @@ func TestEngineIsRetryTimingInvariant(t *testing.T) {
 func TestEngineEnd(t *testing.T) {
 	// Sessions are endless (correct cards re-queue forever), so Done is only
 	// reachable through End() — the user deciding to stop.
-	e := NewEngine(testDeck(3), nil)
+	e := NewEngine(testDeck(3), nil, nil)
 	if e.State() != ShowQuestion {
 		t.Fatalf("state = %v, want ShowQuestion", e.State())
 	}
@@ -420,7 +420,7 @@ func TestEngineEnd(t *testing.T) {
 }
 
 func TestEngineCardIDs(t *testing.T) {
-	e := NewEngine(testDeck(3), nil)
+	e := NewEngine(testDeck(3), nil, nil)
 	ids := e.CardIDs()
 	if len(ids) != 3 {
 		t.Fatalf("CardIDs returned %d ids, want 3", len(ids))

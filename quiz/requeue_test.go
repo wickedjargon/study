@@ -31,7 +31,7 @@ func answerCurrent(e *Engine, correct bool) {
 // the answer just shown (Karpicke & Bauernschmidt 2011).
 func TestMissIsSpacedNotMassed(t *testing.T) {
 	d := testDeck(5)
-	e := NewEngine(d, nil)
+	e := NewEngine(d, nil, nil)
 
 	missedID := e.Current().ID
 	answerCurrent(e, false)
@@ -51,7 +51,7 @@ func TestMissIsSpacedNotMassed(t *testing.T) {
 // session completes — it can neither vanish nor recur forever.
 func TestMissedCardReappearsUntilCriterion(t *testing.T) {
 	d := testDeck(5)
-	e := NewEngine(d, nil)
+	e := NewEngine(d, nil, nil)
 
 	missedID := e.Current().ID
 	answerCurrent(e, false)
@@ -80,7 +80,7 @@ func TestMissedCardReappearsUntilCriterion(t *testing.T) {
 // once when the user answers everything correctly.
 func TestNoCardStarvation(t *testing.T) {
 	d := testDeck(5)
-	e := NewEngine(d, nil)
+	e := NewEngine(d, nil, nil)
 
 	seen := make(map[string]bool)
 	for i := 0; i < 40 && e.State() != Done; i++ {
@@ -99,7 +99,7 @@ func TestNoCardStarvation(t *testing.T) {
 // is exactly 15 serves.
 func TestSessionCompletesAtCriterion(t *testing.T) {
 	d := testDeck(5)
-	e := NewEngine(d, nil)
+	e := NewEngine(d, nil, nil)
 
 	serves := 0
 	for e.State() != Done && serves < 100 {

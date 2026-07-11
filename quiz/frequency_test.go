@@ -31,7 +31,7 @@ func TestMissedCardsGetMorePractice(t *testing.T) {
 		}
 	}
 
-	e := NewEngine(d, store)
+	e := NewEngine(d, nil, store)
 
 	// Miss the first two distinct cards on first sight, then answer everything
 	// correctly.

@@ -8,7 +8,7 @@ import "testing"
 func TestPreviewFirstViewing(t *testing.T) {
 	d := testDeck(2)
 	d.Preview = true
-	e := NewEngine(d, nil)
+	e := NewEngine(d, nil, nil)
 
 	if e.State() != ShowPreview {
 		t.Fatalf("state = %v, want ShowPreview", e.State())
@@ -49,7 +49,7 @@ func TestPreviewFirstViewing(t *testing.T) {
 func TestPreviewOnlyOnce(t *testing.T) {
 	d := testDeck(1)
 	d.Preview = true
-	e := NewEngine(d, nil)
+	e := NewEngine(d, nil, nil)
 
 	if e.State() != ShowPreview {
 		t.Fatalf("state = %v, want ShowPreview", e.State())
@@ -76,7 +76,7 @@ func TestPreviewSkipsStudiedCards(t *testing.T) {
 	store := newTestStore(t)
 	store.RecordCorrect(d.Cards[0].ID) // card 0 studied before, card 1 never
 
-	e := NewEngine(d, store)
+	e := NewEngine(d, nil, store)
 	if e.State() != ShowQuestion {
 		t.Fatalf("studied card: state = %v, want ShowQuestion", e.State())
 	}
@@ -95,7 +95,7 @@ func TestPreviewSkipsStudiedCards(t *testing.T) {
 
 // TestPreviewOffByDefault: without the directive/flag nothing is revealed.
 func TestPreviewOffByDefault(t *testing.T) {
-	e := NewEngine(testDeck(2), nil)
+	e := NewEngine(testDeck(2), nil, nil)
 	if e.State() != ShowQuestion {
 		t.Fatalf("state = %v, want ShowQuestion with preview off", e.State())
 	}

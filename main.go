@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 
 	"study/deck"
@@ -231,6 +230,11 @@ func main() {
 		os.Exit(0)
 	}
 
+	// The session below may be a filtered subset of the deck (due cards, weak
+	// cards), but a confused answer can belong to any card in the file — the
+	// engine keeps the full list for confusion detection.
+	full := d.Cards
+
 	// Compose and order the session according to the deck's "# order:" mode.
 	// This sets up what's served and in what starting order — how cards recur
 	// afterwards (spaced criterion scheduling vs. laps) is the engine's side
@@ -268,7 +272,7 @@ func main() {
 		// Authored order, untouched.
 	}
 
-	engine := quiz.NewEngine(d, store)
+	engine := quiz.NewEngine(d, full, store)
 
 	// Run GUI.
 	if err := gui.Run(engine, viewer, store, *reverse); err != nil {
@@ -395,28 +399,16 @@ func printStats(d *deck.Deck, store *progress.Store) {
 // element; and finally "(media card)" only when a card carries no text or
 // media name at all.
 func cardLabel(c *deck.Card) string {
-	if s := joinText(c.Question); s != "" {
+	if s := deck.JoinText(c.Question); s != "" {
 		return clipLabel(s)
 	}
-	if s := joinText(c.Answer); s != "" {
+	if s := deck.JoinText(c.Answer); s != "" {
 		return clipLabel("→ " + s)
 	}
 	if s := firstMediaName(c.Question); s != "" {
 		return clipLabel("[" + s + "]")
 	}
 	return "(media card)"
-}
-
-// joinText collapses the text segments of a card side into a single
-// whitespace-normalized line, ignoring image and audio elements.
-func joinText(media []deck.Media) string {
-	var parts []string
-	for _, m := range media {
-		if m.Type == deck.Text && m.Content != "" {
-			parts = append(parts, m.Content)
-		}
-	}
-	return strings.Join(strings.Fields(strings.Join(parts, " ")), " ")
 }
 
 // firstMediaName returns the base file name of the first image or audio

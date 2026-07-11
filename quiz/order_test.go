@@ -22,7 +22,7 @@ func drillToGraduation(t *testing.T, e *Engine) {
 func TestSequentialLoops(t *testing.T) {
 	d := testDeck(3)
 	d.Order = deck.OrderSequential
-	e := NewEngine(d, nil)
+	e := NewEngine(d, nil, nil)
 
 	want := []string{"alpha", "beta", "gamma", "alpha", "beta", "gamma", "alpha"}
 	for i, id := range want {
@@ -39,7 +39,7 @@ func TestSequentialLoops(t *testing.T) {
 func TestSequentialMissKeepsOrder(t *testing.T) {
 	d := testDeck(3)
 	d.Order = deck.OrderSequential
-	e := NewEngine(d, nil)
+	e := NewEngine(d, nil, nil)
 
 	// Miss alpha, drill it to graduation.
 	e.AnswerTyped("definitely-wrong")
@@ -62,7 +62,7 @@ func TestFlipThrough(t *testing.T) {
 	d := testDeck(3)
 	d.Order = deck.OrderFlipThrough
 	store := newTestStore(t)
-	e := NewEngine(d, store)
+	e := NewEngine(d, nil, store)
 
 	if e.State() != ShowPreview {
 		t.Fatalf("state = %v, want ShowPreview", e.State())

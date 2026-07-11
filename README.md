@@ -76,6 +76,13 @@ Set with the `--order` flag or the `# order:` deck header:
 | `flip-through` | **"Just show me."** Answers visible, enter advances, wraps at the end. Nothing recorded. |
 | `weak-only` | **"What am I bad at?"** Cram mode: only weak or never-studied cards, ignoring review dates. |
 
+A wrong answer that is itself another card's answer — typing ۶ where the card
+wanted ۵ — is a mix-up between two cards, not ordinary forgetting. The result
+screen names the card the answer belongs to, and if that card is still in the
+session it is pulled in nearby, so the confusable pair gets practiced side by
+side. Its review schedule is untouched — the miss counts only against the card
+that was asked.
+
 ## Deck format
 
 Plain text. Blank lines separate cards; `---` or `===` (any length ≥ 3)

@@ -41,6 +41,10 @@ type Result struct {
 	Answer   string // the correct answer text
 	Typed    string // what the user typed (type mode only)
 	TimedOut bool   // true if the card's time limit expired before answering
+	// ConfusedWith is set on a wrong answer that is itself the answer to
+	// another card in the deck — the user confused the two cards, not merely
+	// forgot this one. The GUI names that card so the pair can be told apart.
+	ConfusedWith *deck.Card
 }
 
 // Engine drives the quiz session.
@@ -64,8 +68,13 @@ type Engine struct {
 	// none can be starved.
 	step int
 
-	// All cards for generating distractors.
+	// All session cards for generating distractors.
 	allCards []*deck.Card
+
+	// pool is the complete deck, for confusion detection: the session may be a
+	// filtered subset (due cards, weak cards), but a wrong answer can belong to
+	// any card in the file.
+	pool []*deck.Card
 
 	// Current state.
 	current       *deck.Card
@@ -85,10 +94,15 @@ type Engine struct {
 	// Evidence-scheduler session state. need is each card's remaining correct
 	// recalls before it meets this session's criterion and leaves the queue;
 	// lapsed marks cards missed at least once this session, whose
-	// between-session schedule therefore resets when they complete. Unused by
-	// sequential mode's laps.
+	// between-session schedule therefore drops down the ladder when they
+	// complete. Unused by sequential mode's laps.
 	need   map[string]int
 	lapsed map[string]bool
+
+	// newCards marks cards that entered this session never studied, decided
+	// once at session start (a card answered mid-session stays "new" for the
+	// session even though the store now has history for it).
+	newCards map[string]bool
 
 	// Session stats.
 	TotalSeen    int
@@ -134,9 +148,18 @@ const (
 	gapAfterCorrect = 8
 )
 
+// gapConfused is where a confused-with card is pulled forward to: just after
+// the missed card's own return (gapAfterMiss), so the confusable pair is
+// retrieved near — but not next to — each other while the confusion is fresh.
+// Juxtaposing confusable items is what teaches the distinction (interleaving:
+// Kornell & Bjork 2008).
+const gapConfused = 5
+
 // NewEngine creates a quiz engine from a parsed deck. Cards are presented in
 // the deck's existing order (the caller shuffles/prioritizes beforehand).
-func NewEngine(d *deck.Deck, store *progress.Store) *Engine {
+// pool is the deck's complete card list for confusion detection, of which
+// d.Cards may be a filtered subset; nil means the session is the whole deck.
+func NewEngine(d *deck.Deck, pool []deck.Card, store *progress.Store) *Engine {
 	choices := d.Choices
 	if choices < 2 {
 		choices = 2
@@ -162,9 +185,27 @@ func NewEngine(d *deck.Deck, store *progress.Store) *Engine {
 		store:         store,
 		main:          main,
 		allCards:      allCards,
+		pool:          allCards,
 		state:         ShowQuestion,
 		preview:       d.Preview,
 		previewed:     make(map[string]bool),
+		newCards:      make(map[string]bool),
+	}
+	for i := range d.Cards {
+		id := d.Cards[i].ID
+		if store == nil {
+			e.newCards[id] = true
+			continue
+		}
+		if cp := store.Get(id); cp.TimesCorrect+cp.TimesWrong == 0 {
+			e.newCards[id] = true
+		}
+	}
+	if pool != nil {
+		e.pool = make([]*deck.Card, len(pool))
+		for i := range pool {
+			e.pool[i] = &pool[i]
+		}
 	}
 
 	// Seed each card's session criterion for the evidence scheduler: new
@@ -275,6 +316,13 @@ func (e *Engine) IsRetry() bool {
 	return e.fromRetry
 }
 
+// CurrentIsNew reports whether the current card entered this session never
+// studied. Decided at session start: a new card keeps the label for the whole
+// session, even after its first answers are recorded.
+func (e *Engine) CurrentIsNew() bool {
+	return e.current != nil && e.newCards[e.current.ID]
+}
+
 // Remaining returns the number of cards left (main + retry).
 func (e *Engine) Remaining() int {
 	n := len(e.main) + len(e.retry)
@@ -306,6 +354,11 @@ func (e *Engine) Answer(choice int) *Result {
 		e.handleCorrect()
 	} else {
 		e.TotalWrong++
+		// Picking a distractor that is another card's answer is the same
+		// confusion signal as typing it — distractors are drawn from the deck.
+		if choice >= 0 && choice < len(e.currentOpts) {
+			result.ConfusedWith = e.noteConfusion(e.currentOpts[choice])
+		}
 		e.handleWrong()
 	}
 
@@ -338,6 +391,7 @@ func (e *Engine) AnswerTyped(input string) *Result {
 		e.handleCorrect()
 	} else {
 		e.TotalWrong++
+		result.ConfusedWith = e.noteConfusion(got)
 		e.handleWrong()
 	}
 
@@ -346,27 +400,86 @@ func (e *Engine) AnswerTyped(input string) *Result {
 }
 
 // matchesAnswer reports whether a typed answer counts as correct for the
-// current card. It is checked against the primary answer and every accepted
-// alternative ("= " lines). A case-sensitive deck requires an exact match
-// (after trimming); otherwise answers are compared leniently via
-// normalizeAnswer, so case, surrounding/embedded punctuation, and accents don't
-// cause a right answer to be marked wrong.
+// current card.
 func (e *Engine) matchesAnswer(got string) bool {
-	candidates := make([]string, 0, 1+len(e.current.Accept))
-	candidates = append(candidates, e.current.AnswerText)
-	candidates = append(candidates, e.current.Accept...)
+	return e.accepts(e.current, got)
+}
+
+// accepts reports whether an answer counts as correct for the given card. It
+// is checked against the primary answer and every accepted alternative ("= "
+// lines). A case-sensitive deck requires an exact match (after trimming);
+// otherwise answers are compared leniently via normalizeAnswer, so case,
+// surrounding/embedded punctuation, and accents don't cause a right answer to
+// be marked wrong.
+func (e *Engine) accepts(c *deck.Card, got string) bool {
+	candidates := make([]string, 0, 1+len(c.Accept))
+	candidates = append(candidates, c.AnswerText)
+	candidates = append(candidates, c.Accept...)
 
 	got = strings.TrimSpace(got)
-	for _, c := range candidates {
+	for _, cand := range candidates {
 		if e.caseSensitive {
-			if got == strings.TrimSpace(c) {
+			if got == strings.TrimSpace(cand) {
 				return true
 			}
-		} else if normalizeAnswer(got) == normalizeAnswer(c) {
+		} else if normalizeAnswer(got) == normalizeAnswer(cand) {
 			return true
 		}
 	}
 	return false
+}
+
+// noteConfusion handles a wrong answer that is itself the answer to another
+// card: a discrimination failure between two cards, not ordinary forgetting
+// of one. The confused-with card is returned for the result screen's contrast
+// line, and — when it still owes recalls this session — pulled forward so the
+// pair is retrieved near each other while the confusion is fresh. Its
+// between-session schedule is untouched: the user producing its answer to the
+// wrong cue is no evidence against that card itself, and a card past its
+// criterion is not dragged back in (that would collapse its spacing).
+func (e *Engine) noteConfusion(got string) *deck.Card {
+	if strings.TrimSpace(got) == "" {
+		return nil
+	}
+	var confused *deck.Card
+	for _, c := range e.pool {
+		if c.ID == e.current.ID || !e.accepts(c, got) {
+			continue
+		}
+		if confused == nil {
+			confused = c
+		}
+		// Among several cards sharing this answer, prefer one still active in
+		// the session — that one can actually be juxtaposed.
+		if e.evidenceScheduled() && e.need[c.ID] > 0 {
+			confused = c
+			break
+		}
+	}
+	if confused == nil {
+		return nil
+	}
+	if e.evidenceScheduled() && e.need[confused.ID] > 0 {
+		e.pullForward(confused, gapConfused)
+	}
+	return confused
+}
+
+// pullForward moves a queued card's due tick up to step+gap so it is served
+// soon. A card already due sooner keeps its earlier tick, and one not in the
+// main queue is left alone rather than re-added.
+func (e *Engine) pullForward(card *deck.Card, gap int) {
+	due := e.step + gap
+	for i := range e.main {
+		if e.main[i].card.ID == card.ID {
+			if e.main[i].due <= due {
+				return
+			}
+			e.main = append(e.main[:i], e.main[i+1:]...)
+			e.requeueGap(card, gap)
+			return
+		}
+	}
 }
 
 // normalizeAnswer canonicalizes a typed answer for lenient comparison: it
@@ -495,8 +608,8 @@ func (e *Engine) handleWrong() {
 	// Evidence scheduler: no massed drill. The card returns after a short —
 	// but nonzero — gap (an immediate repeat would be answered from short-term
 	// memory and teach nothing durable) and owes at least two more spaced
-	// recalls; the lapse also resets its between-session schedule when it
-	// completes.
+	// recalls; the lapse also drops its between-session schedule down the
+	// ladder when it completes.
 	if e.evidenceScheduled() {
 		id := e.current.ID
 		e.lapsed[id] = true

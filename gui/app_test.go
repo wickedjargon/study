@@ -203,5 +203,5 @@ func appForDeck(t *testing.T, dir, body string) *App {
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
-	return &App{engine: quiz.NewEngine(d, store)}
+	return &App{engine: quiz.NewEngine(d, nil, store)}
 }
