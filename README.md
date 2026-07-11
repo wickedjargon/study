@@ -4,6 +4,8 @@ A flashcard quiz tool inspired by suckless sent. Decks are plain text files you 
 
 ![study showing a mahjong tile card](screenshot.png)
 
+![answering "8 Characters" to the four-of-characters tile: the wrong answer is marked, the right answer revealed, and the eight-of-characters card the answer belongs to is shown below](screenshot-confusion.png)
+
 ## Getting started
 
 Requires Go. Installs to `~/.local/bin`; override with
@@ -83,8 +85,6 @@ screen shows the card the answer belongs to, and if that card is still in the
 session it is pulled in nearby, so the confusable pair gets practiced side by
 side. Its review schedule is untouched — the miss counts only against the card
 that was asked.
-
-![answering "8 Characters" to the four-of-characters tile: the wrong answer is marked, the right answer revealed, and the eight-of-characters card the answer belongs to is shown below](screenshot-confusion.png)
 
 When nothing is due, `--ahead <N|all>` keeps an adaptive session going with
 reviews scheduled up to N days out (or all of them), soonest first. Studying
