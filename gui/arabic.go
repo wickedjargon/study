@@ -28,16 +28,19 @@ import (
 
 // arabicFontPaths lists Arabic-capable fonts in preference order. The GUI's
 // usual font (Noto Sans CJK) contains no Arabic glyphs, so a separate face is
-// needed for these scripts.
+// needed for these scripts. Vazirmatn leads: it's Persian-first (its letter
+// forms and digits are Persian, not Arabic) and, being a modern sans, it
+// harmonizes with the Sans UI font where Naskh reads ornate next to it.
 var arabicFontPaths = []string{
+	"/usr/share/fonts/truetype/vazirmatn/Vazirmatn-Regular.ttf",
+	"/usr/share/fonts/vazirmatn/Vazirmatn-Regular.ttf",
+	"/usr/local/share/fonts/truetype/vazirmatn/Vazirmatn-Regular.ttf",
 	"/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
 	"/usr/local/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
 	"/usr/share/fonts/noto/NotoNaskhArabic-Regular.ttf",
 	"/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
 	"/usr/local/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
 	"/usr/share/fonts/noto/NotoSansArabic-Regular.ttf",
-	"/usr/share/fonts/vazirmatn/Vazirmatn-Regular.ttf",
-	"/usr/share/fonts/truetype/vazirmatn/Vazirmatn-Regular.ttf",
 	"/usr/share/fonts/TTF/Amiri-Regular.ttf",
 }
 
@@ -72,7 +75,7 @@ func (a *App) loadArabicFont() {
 // when its path looks like an Arabic font — otherwise we'd load a Latin
 // fallback with no Arabic glyphs.
 func fcMatchArabic() string {
-	for _, fam := range []string{"Noto Naskh Arabic", "Noto Sans Arabic", "Vazirmatn", "Amiri", "Scheherazade"} {
+	for _, fam := range []string{"Vazirmatn", "Noto Naskh Arabic", "Noto Sans Arabic", "Amiri", "Scheherazade"} {
 		out, err := exec.Command("fc-match", "--format=%{file}", fam).Output()
 		if err != nil {
 			continue
