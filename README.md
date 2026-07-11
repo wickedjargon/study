@@ -1,8 +1,8 @@
 # study
 
-A flashcard quiz tool inspired by suckless sent. Decks are plain text files. Sessions run in a minimal X11 window. The default card order follows evidence-based [spaced repetition](https://en.wikipedia.org/wiki/Spaced_repetition).
+A flashcard quiz tool inspired by suckless sent. Decks are plain text files. Sessions run in a minimal X11 window. The default card-order / card-scheduling follows evidence-based [spaced repetition](https://en.wikipedia.org/wiki/Spaced_repetition).
 
-The papers behind the default ordering:
+The `adaptive` card-ordering (the default) is based on:
 
 - [Optimizing Schedules of Retrieval Practice for Durable and Efficient Learning](https://pubmed.ncbi.nlm.nih.gov/21707204/)
 - [Spaced Retrieval: Absolute Spacing Enhances Learning Regardless of Relative Spacing](https://learninglab.psych.purdue.edu/downloads/2011/2011_Karpicke_Bauernschmidt_JEPLMC.pdf)
@@ -43,7 +43,7 @@ Ottawa
 - `---` or `===` separate question and answer.
 - In the first card above, the user is prompted with `2 + 2` and must type `4`.
 - In the second card above, the user is prompted with multiple choice options.
-- `~` marks a wrong answer. Its presence is what makes a card multiple choice.
+- The `~` mark indicates a wrong answer.
 
 Run it:
 
