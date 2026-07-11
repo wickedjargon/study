@@ -155,6 +155,17 @@ var orderModes = map[string]OrderMode{
 	"weak-only":    OrderWeakOnly,
 }
 
+// String returns the mode's user-facing name — the same word the "# order:"
+// header and --order flag accept.
+func (m OrderMode) String() string {
+	for name, mode := range orderModes {
+		if mode == m {
+			return name
+		}
+	}
+	return "unknown"
+}
+
 // defaultNewPerSession is the default cap on never-studied cards per adaptive
 // session.
 const defaultNewPerSession = 20
@@ -861,6 +872,20 @@ func isSeparator(line string) bool {
 		return strings.Trim(s, string(s[0])) == ""
 	}
 	return false
+}
+
+// JoinText collapses the text elements of a card side into a single
+// whitespace-normalized line, ignoring image and audio elements. Empty for a
+// media-only side. Used wherever a card must be named in one line (stats
+// listings, the confusion contrast note).
+func JoinText(media []Media) string {
+	var parts []string
+	for _, m := range media {
+		if m.Type == Text && m.Content != "" {
+			parts = append(parts, m.Content)
+		}
+	}
+	return strings.Join(strings.Fields(strings.Join(parts, " ")), " ")
 }
 
 // extractText joins all text-type Media elements into a single string.
