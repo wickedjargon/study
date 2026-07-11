@@ -1,6 +1,6 @@
 # study
 
-A flashcard quiz tool inspired by suckless sent. Decks are plain text files you write in any editor. Sessions run in a minimal X11 window. The default schedule follows evidence-based spaced repetition: new cards are learned to a three-recall criterion, reviews come due on expanding intervals, and a session ends when everything due is done.
+A flashcard quiz tool inspired by suckless sent. Decks are plain text files you write in any editor. Sessions run in a minimal X11 window. The default card-ordering follows evidence-based [spaced repetition](https://en.wikipedia.org/wiki/Spaced_repetition) — specifically *successive relearning* (Rawson & Dunlosky): each card is recalled to criterion within a session, then relearned on expanding intervals across days. Dunlosky's [Strengthening the Student Toolbox](https://www.aft.org/ae/fall2013/dunlosky) is a readable tour of the research behind it.
 
 ![study showing a mahjong tile card](screenshot.png)
 
