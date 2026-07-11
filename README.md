@@ -2,8 +2,10 @@
 
 A flashcard quiz tool inspired by suckless sent. Decks are plain text files. Sessions run in a minimal X11 window. The default card-ordering follows evidence-based [spaced repetition](https://en.wikipedia.org/wiki/Spaced_repetition).
 
-Papers used to inform ordering of cards in deck:
-- <simple page title only please, max 2 or 3 links please>
+The papers behind the default ordering:
+
+- [Optimizing Schedules of Retrieval Practice for Durable and Efficient Learning](https://pubmed.ncbi.nlm.nih.gov/21707204/)
+- [Spaced Retrieval: Absolute Spacing Enhances Learning Regardless of Relative Spacing](https://learninglab.psych.purdue.edu/downloads/2011/2011_Karpicke_Bauernschmidt_JEPLMC.pdf)
 
 # Screenshots
 
@@ -61,8 +63,8 @@ study [flags] <deck-file | pack-directory>
 | Flag | Description |
 |------|-------------|
 | `--reverse` | Flip the deck: see the English, produce the target language |
-| `--order <mode>` | Override the deck's card order for this session — see [Card order](#card-order) |
-| `--ahead <N\|all>` | Adaptive order: also review cards due within N days (or all scheduled) — see [Card order](#card-order) |
+| `--order <mode>` | Override the deck's card order for this session. See [Card order](#card-order) |
+| `--ahead <N\|all>` | Adaptive order: also review cards due within N days, or all scheduled. See [Card order](#card-order) |
 | `--time-limit <N\|none>` | Override the per-question time limit, uniformly for every card |
 | `--wrong-pause <N\|none>` | How long a wrong answer's result screen refuses to advance (default 5s) |
 | `--preview-new` | Reveal a never-studied card's answer once before quizzing it |
@@ -70,7 +72,7 @@ study [flags] <deck-file | pack-directory>
 | `--font-size <N>` | Override the base font size (8–48, or `small`/`medium`/`large`/`x-large`) |
 | `--audio-speed <X>` | Override audio playback speed (0.25–4.0) |
 | `--stats` | Print progress summary (incl. what's due) and exit |
-| `--forget` | Clear saved progress — the studied direction only (combine with `--reverse`) |
+| `--forget` | Clear saved progress for the studied direction only (combine with `--reverse`) |
 | `--help` | Show help |
 
 - A directory is a **pack**: every `*.deck` inside merges into one session.
@@ -83,8 +85,8 @@ Set with the `--order` flag or the `# order:` deck header:
 
 | Mode | Behavior |
 |------|----------|
-| `adaptive` | **Default — "what's due?"** Reviews whose date arrived (most overdue first) plus a batch of new cards. A new card needs 3 correct recalls, a review 1; repetitions are spaced, never back-to-back. A clean session moves a card up the review ladder (1, 3, 7, 14, 30, 60, 120 days); a miss drops it to half its rung — relearning is faster than learning, so history isn't discarded. Completes when every card is done; nothing due → says so and exits. |
-| `sequential` | **"In order."** Deck order, wrapping forever; misses get the immediate-repeat drill. For material where the sequence is the content — verse, digits, procedures. |
+| `adaptive` | **Default: "what's due?"** Reviews whose date arrived (most overdue first) plus a batch of new cards. A new card needs 3 correct recalls, a review 1. Repetitions are spaced, never back-to-back. A clean session moves a card up the review ladder (1, 3, 7, 14, 30, 60, 120 days). A miss drops it to half its rung: relearning is faster than learning, so history isn't discarded. Completes when every card is done. When nothing is due, it says so and exits. |
+| `sequential` | **"In order."** Deck order, wrapping forever. Misses get the immediate-repeat drill. For material where the sequence is the content: verse, digits, procedures. |
 | `flip-through` | **"Just show me."** Answers visible, enter advances, wraps at the end. Nothing recorded. |
 | `weak-only` | **"What am I bad at?"** Cram mode: only weak or never-studied cards, ignoring review dates. |
 
@@ -93,7 +95,7 @@ Set with the `--order` flag or the `# order:` deck header:
 ## Accepted answers
 
 `=` after the answer adds an extra accepted answer (type mode). Matching is
-lenient by default — case, accents, punctuation, and extra spaces are
+lenient by default. Case, accents, punctuation, and extra spaces are
 forgiven (`salam` matches `salâm`):
 
 ```
@@ -106,7 +108,7 @@ hello
 ## Alternative prompt wordings
 
 `=` on the question side is an alternative wording of the prompt, accepted
-when the prompt is what you type (`--reverse`); it's never displayed, and
+when the prompt is what you type (`--reverse`). It's never displayed, and
 adding one doesn't re-key the card:
 
 ```
@@ -118,8 +120,8 @@ do you prefer window or aisle
 
 ## Media
 
-`@img` and `@audio` ride on the side they're written on; paths are relative
-to the deck file, audio plays automatically (needs `mpv` or `aplay`):
+`@img` and `@audio` ride on the side they're written on. Paths are relative
+to the deck file, and audio plays automatically (needs `mpv` or `aplay`):
 
 ```
 @img flags/japan.png
@@ -132,7 +134,7 @@ How do you say "hello"?
 ## Cloze
 
 A card with no separator and a `{{...}}` deletion blanks the braced text
-(`____`) and makes it the answer; multiple deletions join in order:
+(`____`) and makes it the answer. Multiple deletions join in order:
 
 ```
 The capital of France is {{Paris}}.
@@ -155,9 +157,9 @@ What is 1 + 1?
 
 | Header | Flag | Values | Default |
 |--------|------|--------|---------|
-| `# answer-mode:` | — | `choice`, `type` | `type` |
-| `# choice-count:` | — | integer ≥ 2 | `4` |
-| `# answer-case:` | — | `sensitive`, `insensitive` | `insensitive` |
+| `# answer-mode:` | file-only | `choice`, `type` | `type` |
+| `# choice-count:` | file-only | integer ≥ 2 | `4` |
+| `# answer-case:` | file-only | `sensitive`, `insensitive` | `insensitive` |
 | `# time-limit:` | `--time-limit` | seconds, or `none` | `none` |
 | `# order:` | `--order` | see [Card order](#card-order) | `adaptive` |
 | `# preview-new:` | `--preview-new` | `on`, `off` | `off` |
@@ -174,9 +176,9 @@ What is 1 + 1?
 | Type + `Enter` | Submit answer (type mode) |
 | `Backspace` | Delete character (type mode) |
 | `Ctrl`+`V` / middle-click | Paste clipboard / primary selection (type mode) |
-| `Enter` / `Space` | Continue after result / preview (a wrong answer pauses this — 5s by default, `# wrong-pause:` — counted down in the timer's corner) |
+| `Enter` / `Space` | Continue after result / preview (a wrong answer pauses this for `# wrong-pause:` seconds, counted down in the timer's corner) |
 | `Ctrl`+`R` | Replay audio (in reverse mode, the reveal's clip on the result screen) |
-| `Ctrl`+`,` / `Ctrl`+`.` | Slow down / speed up audio and replay (0.25 steps, 0.25–4x; needs `mpv`) |
+| `Ctrl`+`,` / `Ctrl`+`.` | Slow down / speed up audio and replay (0.25 steps, 0.25–4x, needs `mpv`) |
 | `Ctrl`+`/` | Reset audio speed |
 | `Ctrl`+`=` / `Ctrl`+`-` / `Ctrl`+`0` | Grow / shrink / reset font size |
-| `Escape` | End session (summary screen; `Escape` again exits) |
+| `Escape` | End session (summary screen, `Escape` again exits) |
