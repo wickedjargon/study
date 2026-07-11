@@ -1,6 +1,6 @@
 # study
 
-A flashcard quiz tool inspired by suckless sent. Decks are plain text files. Sessions run in a minimal X11 window. The default card-ordering follows evidence-based [spaced repetition](https://en.wikipedia.org/wiki/Spaced_repetition).
+A flashcard quiz tool inspired by suckless sent. Decks are plain text files. Sessions run in a minimal X11 window. The default card order follows evidence-based [spaced repetition](https://en.wikipedia.org/wiki/Spaced_repetition).
 
 The papers behind the default ordering:
 
@@ -41,9 +41,9 @@ Ottawa
 
 - The two cards above are separated by a blank line.
 - `---` or `===` separate question and answer.
-- In the first card above, the user is prompted with `2 + 2` and must type in 4 using his keyboard.
+- In the first card above, the user is prompted with `2 + 2` and must type `4`.
 - In the second card above, the user is prompted with multiple choice options.
-- `~` indicate an incorrect answer.
+- `~` marks a wrong answer. Its presence is what makes a card multiple choice.
 
 Run it:
 
