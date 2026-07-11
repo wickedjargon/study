@@ -11,6 +11,7 @@ package quiz
 import (
 	"math/rand"
 	"strings"
+	"time"
 	"unicode"
 
 	"golang.org/x/text/unicode/norm"
@@ -103,6 +104,15 @@ type Engine struct {
 	// once at session start (a card answered mid-session stays "new" for the
 	// session even though the store now has history for it).
 	newCards map[string]bool
+
+	// ahead marks studied cards that entered this session before their review
+	// date (--ahead, or a weak-only cram of a not-yet-due card). Early
+	// retrieval practice is fine — it's merely lower-yield — but its easy
+	// successes are weak evidence: a clean ahead completion must not advance
+	// the review ladder, or intervals inflate on recalls that never proved
+	// anything. A miss is the opposite — forgetting before the due date is
+	// strong evidence the interval was too long — so lapses count normally.
+	ahead map[string]bool
 
 	// Session stats.
 	TotalSeen    int
@@ -214,12 +224,17 @@ func NewEngine(d *deck.Deck, pool []deck.Card, store *progress.Store) *Engine {
 	if e.evidenceScheduled() {
 		e.need = make(map[string]int, len(d.Cards))
 		e.lapsed = make(map[string]bool)
+		e.ahead = make(map[string]bool)
+		now := time.Now()
 		for i := range d.Cards {
 			n := needNew
 			if store != nil {
 				cp := store.Get(d.Cards[i].ID)
 				if cp.TimesCorrect+cp.TimesWrong > 0 {
 					n = needReview
+					if !cp.DueNow(now) {
+						e.ahead[d.Cards[i].ID] = true
+					}
 				}
 			}
 			e.need[d.Cards[i].ID] = n
@@ -321,6 +336,12 @@ func (e *Engine) IsRetry() bool {
 // session, even after its first answers are recorded.
 func (e *Engine) CurrentIsNew() bool {
 	return e.current != nil && e.newCards[e.current.ID]
+}
+
+// CurrentIsAhead reports whether the current card is being reviewed ahead of
+// its schedule — its clean completion won't advance the review ladder.
+func (e *Engine) CurrentIsAhead() bool {
+	return e.current != nil && e.ahead[e.current.ID]
 }
 
 // Remaining returns the number of cards left (main + retry).
@@ -572,7 +593,10 @@ func (e *Engine) handleCorrect() {
 		id := e.current.ID
 		e.need[id]--
 		if e.need[id] <= 0 {
-			if e.store != nil {
+			// A clean ahead-of-schedule completion leaves the ladder alone:
+			// the card's next review stays where the evidence put it. A lapsed
+			// one reschedules normally — the early miss is real evidence.
+			if e.store != nil && (!e.ahead[id] || e.lapsed[id]) {
 				e.store.Schedule(id, e.lapsed[id])
 			}
 			return // criterion met: leaves the session

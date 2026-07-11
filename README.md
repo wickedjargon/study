@@ -50,6 +50,7 @@ study [flags] <deck-file | pack-directory>
 |------|-------------|
 | `--reverse` | Flip the deck: see the English, produce the target language |
 | `--order <mode>` | Override the deck's card order for this session — see [Card order](#card-order) |
+| `--ahead <N\|all>` | Adaptive order: also review cards due within N days (or all scheduled) — see [Card order](#card-order) |
 | `--time-limit <N\|none>` | Override the per-question time limit, uniformly for every card |
 | `--wrong-pause <N\|none>` | How long a wrong answer's result screen refuses to advance (default 5s) |
 | `--preview-new` | Reveal a never-studied card's answer once before quizzing it |
@@ -82,6 +83,13 @@ screen names the card the answer belongs to, and if that card is still in the
 session it is pulled in nearby, so the confusable pair gets practiced side by
 side. Its review schedule is untouched — the miss counts only against the card
 that was asked.
+
+When nothing is due, `--ahead <N|all>` keeps an adaptive session going with
+reviews scheduled up to N days out (or all of them), soonest first. Studying
+early is fine — it's merely lower-yield than waiting — but its easy successes
+prove nothing, so a clean ahead review leaves the card's schedule untouched;
+a miss still counts (forgetting *before* the due date means the interval was
+too long) and drops the card down the ladder as usual.
 
 ## Deck format
 
