@@ -2,16 +2,16 @@
 
 A flashcard quiz tool inspired by suckless sent. Decks are plain text files. Sessions run in a minimal X11 window. The default card-order / card-scheduling follows evidence-based [spaced repetition](https://en.wikipedia.org/wiki/Spaced_repetition).
 
-The `adaptive` card-ordering (the default) is based on:
+The default `adaptive` card-ordering this package uses is based on these papers:
 
 - [Optimizing Schedules of Retrieval Practice for Durable and Efficient Learning](https://pubmed.ncbi.nlm.nih.gov/21707204/)
 - [Spaced Retrieval: Absolute Spacing Enhances Learning Regardless of Relative Spacing](https://learninglab.psych.purdue.edu/downloads/2011/2011_Karpicke_Bauernschmidt_JEPLMC.pdf)
 
 # Screenshots
 
-![study showing a mahjong tile card](screenshot.png)
+![correct answer provided](screenshot.png)
 
-![answering "8 Characters" to the four-of-characters tile: the wrong answer is marked, the right answer revealed, and the eight-of-characters card the answer belongs to is shown below](screenshot-wrong-answer.png)
+![wrong answer provided](screenshot-wrong-answer.png)
 
 # Getting started
 
