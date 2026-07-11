@@ -79,10 +79,12 @@ Set with the `--order` flag or the `# order:` deck header:
 
 A wrong answer that is itself another card's answer — typing ۶ where the card
 wanted ۵ — is a mix-up between two cards, not ordinary forgetting. The result
-screen names the card the answer belongs to, and if that card is still in the
+screen shows the card the answer belongs to, and if that card is still in the
 session it is pulled in nearby, so the confusable pair gets practiced side by
 side. Its review schedule is untouched — the miss counts only against the card
 that was asked.
+
+![answering "8 Characters" to the four-of-characters tile: the wrong answer is marked, the right answer revealed, and the eight-of-characters card the answer belongs to is shown below](screenshot-confusion.png)
 
 When nothing is due, `--ahead <N|all>` keeps an adaptive session going with
 reviews scheduled up to N days out (or all of them), soonest first. Studying
