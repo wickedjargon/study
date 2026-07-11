@@ -1,12 +1,14 @@
 # study
 
-A flashcard quiz tool inspired by suckless sent. Decks are plain text files you write in any editor. Sessions run in a minimal X11 window. The default card-ordering follows evidence-based [spaced repetition](https://en.wikipedia.org/wiki/Spaced_repetition) — specifically *successive relearning* (Rawson & Dunlosky): each card is recalled to criterion within a session, then relearned on expanding intervals across days. Dunlosky's [Strengthening the Student Toolbox](https://www.aft.org/ae/fall2013/dunlosky) is a readable tour of the research behind it.
+A flashcard quiz tool inspired by suckless sent. Decks are plain text files you write in any editor. Sessions run in a minimal X11 window. The default card-ordering follows evidence-based [spaced repetition](https://en.wikipedia.org/wiki/Spaced_repetition).
+
+# Screenshots
 
 ![study showing a mahjong tile card](screenshot.png)
 
-![answering "8 Characters" to the four-of-characters tile: the wrong answer is marked, the right answer revealed, and the eight-of-characters card the answer belongs to is shown below](screenshot-confusion.png)
+![answering "8 Characters" to the four-of-characters tile: the wrong answer is marked, the right answer revealed, and the eight-of-characters card the answer belongs to is shown below](screenshot-wrong-answer.png)
 
-## Getting started
+# Getting started
 
 Requires Go. Installs to `~/.local/bin`; override with
 `PREFIX=/usr/local sudo make clean install`.
@@ -42,7 +44,7 @@ For more, [examples/basic.deck](examples/basic.deck) is a small beginner deck,
 and the [language packs](https://github.com/wickedjargon/study-language-packages)
 are full-size decks with audio, native script, and pack directories.
 
-## Usage
+# Usage
 
 ```
 study [flags] <deck-file | pack-directory>
@@ -68,7 +70,7 @@ study [flags] <deck-file | pack-directory>
   (`answer-mode`, `answer-case`, and `choice-count` are file-only).
 - Progress lives in `~/.local/share/study/`.
 
-### Card order
+## Card order
 
 Set with the `--order` flag or the `# order:` deck header:
 
@@ -93,12 +95,12 @@ prove nothing, so a clean ahead review leaves the card's schedule untouched;
 a miss still counts (forgetting *before* the due date means the interval was
 too long) and drops the card down the ladder as usual.
 
-## Deck format
+# Deck format
 
 Plain text. Blank lines separate cards; `---` or `===` (any length ≥ 3)
 separates question from answer.
 
-### Accepted answers
+## Accepted answers
 
 `=` after the answer adds an extra accepted answer (type mode). Matching is
 lenient by default — case, accents, punctuation, and extra spaces are
@@ -111,7 +113,7 @@ hello
 = hi
 ```
 
-### Alternative prompt wordings
+## Alternative prompt wordings
 
 `=` on the question side is an alternative wording of the prompt, accepted
 when the prompt is what you type (`--reverse`); it's never displayed, and
@@ -124,7 +126,7 @@ adding one doesn't re-key the card:
 do you prefer window or aisle
 ```
 
-### Media
+## Media
 
 `@img` and `@audio` ride on the side they're written on; paths are relative
 to the deck file, audio plays automatically (needs `mpv` or `aplay`):
@@ -137,7 +139,7 @@ How do you say "hello"?
 こんにちは
 ```
 
-### Cloze
+## Cloze
 
 A card with no separator and a `{{...}}` deletion blanks the braced text
 (`____`) and makes it the answer; multiple deletions join in order:
@@ -146,7 +148,7 @@ A card with no separator and a `{{...}}` deletion blanks the braced text
 The capital of France is {{Paris}}.
 ```
 
-### Per-card overrides
+## Per-card overrides
 
 `# answer-mode:`, `# choice-count:`, and `# time-limit:` inside a card block
 apply to that card only (`# time-limit: none` exempts it):
@@ -159,7 +161,7 @@ What is 1 + 1?
 2
 ```
 
-### Header directives
+## Header directives
 
 | Header | Values | Default |
 |--------|--------|---------|
@@ -174,7 +176,7 @@ What is 1 + 1?
 | `# font-size:` | 8–48, or `small`/`medium`/`large`/`x-large` | `10` |
 | `# audio-speed:` | `0.25`–`4.0` (e.g. `0.75`, `1.5x`) | `1.0` |
 
-## Controls
+# Controls
 
 | Key | Action |
 |-----|--------|
