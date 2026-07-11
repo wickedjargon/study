@@ -155,16 +155,16 @@ What is 1 + 1?
 
 | Header | Flag | Values | Default |
 |--------|------|--------|---------|
-| `# answer-mode:` | — | `choice`, `type` (a card with `~` distractors is `choice` automatically) | `type` |
-| `# choice-count:` | — | any integer ≥ 2 | `4` |
+| `# answer-mode:` | — | `choice`, `type` | `type` |
+| `# choice-count:` | — | integer ≥ 2 | `4` |
 | `# answer-case:` | — | `sensitive`, `insensitive` | `insensitive` |
-| `# time-limit:` | `--time-limit` | seconds (e.g. `20`, `20s`), or `none`; expiry counts as wrong | `none` |
+| `# time-limit:` | `--time-limit` | seconds, or `none` | `none` |
 | `# order:` | `--order` | see [Card order](#card-order) | `adaptive` |
 | `# preview-new:` | `--preview-new` | `on`, `off` | `off` |
 | `# new-per-session:` | `--new-per-session` | integer ≥ 0, or `all` | `20` |
-| `# wrong-pause:` | `--wrong-pause` | seconds, or `none`; how long a wrong answer's result screen refuses to advance | `5` |
-| `# font-size:` | `--font-size` | 8–48, or `small`/`medium`/`large`/`x-large` | `10` |
-| `# audio-speed:` | `--audio-speed` | `0.25`–`4.0` (e.g. `0.75`, `1.5x`) | `1.0` |
+| `# wrong-pause:` | `--wrong-pause` | seconds, or `none` | `5` |
+| `# font-size:` | `--font-size` | `8`–`48`, or `small`/`medium`/`large`/`x-large` | `10` |
+| `# audio-speed:` | `--audio-speed` | `0.25`–`4.0` | `1.0` |
 
 # Controls
 
