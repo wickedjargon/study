@@ -39,10 +39,11 @@ Ottawa
 ~ Montreal
 ```
 
-- Cards are separated by blank lines.
+- The two cards above are separated by a blank line.
 - `---` or `===` separate question and answer.
-- In the first card above, the user is prompted with `2 + 2` and must enter 4 using his keyboard
-- In the second card above, the user is prompted with multiple choice options. `~` indicate an incorrect answer.
+- In the first card above, the user is prompted with `2 + 2` and must type in 4 using his keyboard.
+- In the second card above, the user is prompted with multiple choice options.
+- `~` indicate an incorrect answer.
 
 Run it:
 
