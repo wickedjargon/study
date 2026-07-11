@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-text/render"
 	gtfont "github.com/go-text/typesetting/font"
+	"golang.org/x/image/font"
 )
 
 // Arabic-script support.
@@ -108,13 +109,20 @@ func hasArabic(s string) bool {
 }
 
 // drawCardText draws a centered card-content line (the large question/answer
-// role). Arabic-script lines are shaped and laid out RTL via go-text; all other
-// text uses the original drawer. Falls back to the plain drawer if no Arabic
-// font loaded, so the text still appears (unshaped) rather than vanishing.
+// role).
 func (a *App) drawCardText(canvas *image.RGBA, text string, y int, c color.RGBA) {
+	a.drawShapedCentered(canvas, text, y, fontMulLarge, a.fontLarge, c)
+}
+
+// drawShapedCentered draws a centered line at the given size (multiplier plus
+// the matching plain face). Arabic-script lines are shaped and laid out RTL via
+// go-text; all other text uses the original drawer. Falls back to the plain
+// drawer if no Arabic font loaded, so the text still appears (unshaped) rather
+// than vanishing.
+func (a *App) drawShapedCentered(canvas *image.RGBA, text string, y int, mul float64, plain font.Face, c color.RGBA) {
 	if hasArabic(text) {
 		if a.arabicFace != nil {
-			a.drawArabicCentered(canvas, text, y, c)
+			a.drawArabicCentered(canvas, text, y, mul, c)
 			return
 		}
 		// No Arabic font: the plain drawer below still shows the text, but
@@ -125,18 +133,21 @@ func (a *App) drawCardText(canvas *image.RGBA, text string, y int, c color.RGBA)
 			a.arabicWarned = true
 		}
 	}
-	a.drawTextCentered(canvas, text, y, a.fontLarge, c)
+	a.drawTextCentered(canvas, text, y, plain, c)
 }
 
 // drawArabicCentered shapes text and draws it centered on the canvas with its
-// baseline at y, matching the size of the large card font. The line is measured
-// first (by drawing onto a 1×1 scratch target, whose return value is the line's
-// advance width) so it can be horizontally centered like the other content.
-func (a *App) drawArabicCentered(canvas *image.RGBA, text string, y int, c color.RGBA) {
+// baseline at y, at the given size multiplier. Everything is drawn with the
+// Arabic face; the per-script Noto fonts carry no Latin glyphs, so Latin text
+// mixed into the line comes out as tofu — callers keep scripts on separate
+// lines instead. The line is measured first (by drawing onto a 1×1 scratch
+// target, whose return value is the line's advance width) so it can be
+// horizontally centered like the other content.
+func (a *App) drawArabicCentered(canvas *image.RGBA, text string, y int, mul float64, c color.RGBA) {
 	r := a.arabicRenderer
-	// Match the opentype "large" face: point size × multiplier × window scale,
-	// with DPI applied via PixScale (px = FontSize × PixScale = pt × dpi/72).
-	r.FontSize = float32(a.baseFontPt * fontMulLarge * a.windowScale())
+	// Match the corresponding opentype face: point size × multiplier × window
+	// scale, with DPI applied via PixScale (px = FontSize × PixScale = pt × dpi/72).
+	r.FontSize = float32(a.baseFontPt * mul * a.windowScale())
 	r.PixScale = float32(a.dpi / 72.0)
 	r.Color = c
 
