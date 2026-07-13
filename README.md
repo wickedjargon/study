@@ -4,8 +4,11 @@ A flashcard quiz tool inspired by suckless sent. Decks are plain text files. Ses
 
 The default `adaptive` card-ordering this package uses is based on these papers:
 
-- [Optimizing Schedules of Retrieval Practice for Durable and Efficient Learning](https://pubmed.ncbi.nlm.nih.gov/21707204/)
-- [Spaced Retrieval: Absolute Spacing Enhances Learning Regardless of Relative Spacing](https://learninglab.psych.purdue.edu/downloads/2011/2011_Karpicke_Bauernschmidt_JEPLMC.pdf)
+- Rawson, K. A., & Dunlosky, J. (2011). [Optimizing schedules of retrieval practice for durable and efficient learning: How much is enough?](https://pubmed.ncbi.nlm.nih.gov/21707204/) *Journal of Experimental Psychology: General, 140*(3), 283–302. — the session criterion: three correct recalls for new material, one per relearning session.
+- Karpicke, J. D., & Bauernschmidt, A. (2011). [Spaced retrieval: Absolute spacing enhances learning regardless of relative spacing.](https://learninglab.psych.purdue.edu/downloads/2011/2011_Karpicke_Bauernschmidt_JEPLMC.pdf) *Journal of Experimental Psychology: Learning, Memory, and Cognition, 37*(5), 1250–1257. — within-session spacing: any nonzero gap between repetitions beats none, and the gap pattern doesn't matter.
+- Kornell, N., & Bjork, R. A. (2008). [Learning concepts and categories: Is spacing the "enemy of induction"?](https://doi.org/10.1111/j.1467-9280.2008.02127.x) *Psychological Science, 19*(6), 585–592. — interleaving: a card confused with another is pulled near it, so the pair is told apart.
+
+The specific review intervals (1, 3, 7, … days) and the lapse handling (halving a card's level) are conventional heuristics in the spirit of this literature, not prescribed by it.
 
 # Screenshots
 
