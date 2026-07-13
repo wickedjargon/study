@@ -664,10 +664,42 @@ func (a *App) handleKey(ev xevent.KeyPressEvent) {
 
 	case quiz.Done:
 		switch key {
-		case "Escape", "Return", "q":
+		case "Return":
+			// The adaptive summary is never a dead end: enter starts another
+			// full pass over the deck, ahead of schedule.
+			if a.engine.Order() == deck.OrderAdaptive {
+				a.continueStudying()
+				return
+			}
+			a.quit()
+		case "Escape", "q":
+			a.quit()
+		}
+
+	case quiz.CaughtUp:
+		switch key {
+		case "Return", "space":
+			a.continueStudying()
+		case "Escape", "q":
 			a.quit()
 		}
 	}
+}
+
+// continueStudying starts a full ahead-of-schedule pass over the deck at the
+// user's request — from the caught-up screen or the adaptive summary — so
+// running out of due cards never blocks studying. The schedule stays honest:
+// that's the engine's ahead semantics, not the GUI's concern.
+func (a *App) continueStudying() {
+	a.engine.ContinueAll()
+	a.result = nil
+	a.revealImg = nil
+	a.confusedImg = nil
+	a.inputBuf = ""
+	if s := a.engine.State(); s == quiz.ShowQuestion || s == quiz.ShowPreview {
+		a.presentCard()
+	}
+	a.render()
 }
 
 // endSession stops the quiz early at the user's request and shows the summary
@@ -1149,6 +1181,8 @@ func (a *App) render() {
 		a.renderPreview(canvas)
 	case quiz.Done:
 		a.renderSummary(canvas)
+	case quiz.CaughtUp:
+		a.renderCaughtUp(canvas)
 	}
 
 	// Persistent warning when progress isn't being saved. Pinned to the very
@@ -1404,6 +1438,26 @@ func (a *App) renderPreview(canvas *image.RGBA) {
 	a.drawTopStatus(canvas, a.leftStatusItems(prog, dimColor, audioSide), a.tallyItems(), tagItems(cardTag, accentColor), "", dimColor)
 }
 
+// renderCaughtUp draws the launch screen for an adaptive session with nothing
+// due. Distributing practice across days is the schedule's point, so the
+// caught-up state is announced — but never enforced: enter starts a full pass
+// over the deck (early reviews don't advance the schedule), escape accepts
+// the rest day.
+func (a *App) renderCaughtUp(canvas *image.RGBA) {
+	y := a.height / 3
+	a.drawTextCentered(canvas, "All caught up", y, a.fontLarge, greenColor)
+	y += lineHeight(a.fontLarge) + a.scaled(20)
+	a.drawTextCentered(canvas, "nothing due in "+a.engine.Name(), y, a.fontRegular, textColor)
+	y += lineHeight(a.fontRegular)
+	if due, _ := a.engine.NextDue(); !due.IsZero() {
+		a.drawTextCentered(canvas, "next review "+due.Local().Format("Mon Jan 2 15:04"), y, a.fontRegular, dimColor)
+		y += lineHeight(a.fontRegular)
+	}
+	y += a.scaled(16)
+	a.drawTextCentered(canvas, "you can keep studying anyway — early reviews don't advance the schedule", y, a.fontSmall, dimColor)
+	a.drawControlsBox(canvas, []string{"enter: study anyway", "esc: quit"})
+}
+
 func (a *App) renderSummary(canvas *image.RGBA) {
 	elapsed := time.Since(a.start).Round(time.Second)
 	y := a.height / 4
@@ -1484,6 +1538,22 @@ func (a *App) renderSummary(canvas *image.RGBA) {
 		}
 		a.drawTextCentered(canvas, fmt.Sprintf("Cards seen: %d  •  Accuracy: %.0f%%", cardsStudied, totalAcc), y, a.fontRegular, dimColor)
 		y += lineHeight(a.fontRegular)
+	}
+
+	// The adaptive summary is never a dead end: enter starts another full pass
+	// over the deck, ahead of schedule. When the schedule is clear, say so —
+	// the same message the caught-up launch screen carries.
+	if a.engine.Order() == deck.OrderAdaptive {
+		if due, caughtUp := a.engine.NextDue(); caughtUp {
+			y += a.scaled(20)
+			msg := "all caught up"
+			if !due.IsZero() {
+				msg += " — next review " + due.Local().Format("Mon Jan 2 15:04")
+			}
+			a.drawTextCentered(canvas, msg, y, a.fontSmall, dimColor)
+		}
+		a.drawControlsBox(canvas, []string{"enter: keep studying", "esc: exit"})
+		return
 	}
 
 	a.drawControlsBox(canvas, []string{"enter / esc: exit"})

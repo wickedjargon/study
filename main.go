@@ -262,7 +262,7 @@ func main() {
 		// engine then keeps their schedules honest — a clean early review
 		// doesn't advance the ladder, only a miss moves it.
 		now := time.Now()
-		reviews, fresh, future, nextDue := splitDue(d.Cards, store, now)
+		reviews, fresh, future, _ := splitDue(d.Cards, store, now)
 		if d.NewPerSession >= 0 && len(fresh) > d.NewPerSession {
 			fresh = fresh[:d.NewPerSession]
 		}
@@ -280,15 +280,10 @@ func main() {
 				}
 			}
 		}
-		if len(d.Cards) == 0 {
-			msg := "✓ all caught up — nothing due in " + d.Name
-			if !nextDue.IsZero() {
-				msg += "; next review " + nextDue.Local().Format("Mon Jan 2 15:04")
-			}
-			fmt.Println(msg)
-			fmt.Println("  (to study anyway: --ahead <days|all>, or --order weak-only, sequential, flip-through)")
-			os.Exit(0)
-		}
+		// An empty session (nothing due, no new cards to serve) is not a dead
+		// end: the engine opens in the CaughtUp state and the GUI says so —
+		// and offers a full ahead-of-schedule pass, so the user is never
+		// prevented from studying.
 	case deck.OrderWeakOnly:
 		d.Cards = store.FilterWeak(d.Cards)
 		if len(d.Cards) == 0 {
