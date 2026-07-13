@@ -10,6 +10,7 @@ package quiz
 
 import (
 	"math/rand"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -32,6 +33,12 @@ const (
 	// answer visible, to be studied once; ConfirmPreview then quizzes the very
 	// same card.
 	ShowPreview
+	// CaughtUp is where an adaptive session starts when it has nothing to
+	// serve — no reviews due, no new cards to introduce. The schedule's job is
+	// done for the day, but that's announced, never enforced: ContinueAll
+	// starts a full ahead-of-schedule pass, so the user is never prevented
+	// from studying.
+	CaughtUp
 )
 
 // Result records the outcome of answering a single card.
@@ -242,7 +249,117 @@ func NewEngine(d *deck.Deck, pool []deck.Card, store *progress.Store) *Engine {
 	}
 
 	e.advance()
+	// An adaptive session that opens with nothing to serve isn't over — it
+	// never began: the user is caught up. Land on the caught-up screen (which
+	// offers a full pass via ContinueAll) rather than an empty summary.
+	if e.state == Done && d.Order == deck.OrderAdaptive {
+		e.state = CaughtUp
+	}
 	return e
+}
+
+// ContinueAll re-seeds the adaptive session so running out of due cards never
+// blocks studying: reviews due now first (most overdue first), then one batch
+// of never-studied cards (shuffled, capped at the deck's new-per-session
+// setting — the same pacing as the launch composition), then the rest ahead
+// of schedule, soonest-due first (closest to forgetting, so highest-yield).
+// Ahead cards keep their honest semantics: a clean early completion leaves
+// the review ladder alone, only a miss moves it. Each call is one more pass —
+// the next call brings the next batch of new cards — so studying can continue
+// indefinitely without ever flooding new material.
+func (e *Engine) ContinueAll() {
+	if e.deck.Order != deck.OrderAdaptive {
+		return
+	}
+
+	now := time.Now()
+	var reviews, fresh, future []*deck.Card
+	for _, c := range e.pool {
+		var cp *progress.CardProgress
+		if e.store != nil {
+			cp = e.store.Get(c.ID)
+		}
+		switch {
+		case cp == nil || cp.TimesCorrect+cp.TimesWrong == 0:
+			fresh = append(fresh, c)
+		case cp.DueNow(now):
+			reviews = append(reviews, c)
+		default:
+			future = append(future, c)
+		}
+	}
+	sort.SliceStable(reviews, func(i, j int) bool {
+		return e.store.Get(reviews[i].ID).Due.Before(e.store.Get(reviews[j].ID).Due)
+	})
+	sort.SliceStable(future, func(i, j int) bool {
+		return e.store.Get(future[i].ID).Due.Before(e.store.Get(future[j].ID).Due)
+	})
+	rand.Shuffle(len(fresh), func(i, j int) {
+		fresh[i], fresh[j] = fresh[j], fresh[i]
+	})
+	if e.deck.NewPerSession >= 0 && len(fresh) > e.deck.NewPerSession {
+		fresh = fresh[:e.deck.NewPerSession]
+	}
+	ordered := append(append(reviews, fresh...), future...)
+
+	// A fresh pass: rebuild the queue (End() can leave cards behind) and
+	// re-seed each card's criterion and flags against the current schedule.
+	// The session is now the whole deck, so the distractor pool and stats
+	// scope (allCards) follow.
+	e.main = e.main[:0]
+	e.retry = nil
+	e.repeatCurrent = false
+	e.fromRetry = false
+	e.current = nil
+	e.lapsed = make(map[string]bool)
+	e.ahead = make(map[string]bool)
+	for i, c := range ordered {
+		e.main = append(e.main, queuedCard{card: c, due: e.step + i})
+	}
+	for _, c := range fresh {
+		e.need[c.ID] = needNew
+		e.newCards[c.ID] = true
+	}
+	for _, c := range reviews {
+		e.need[c.ID] = needReview
+	}
+	for _, c := range future {
+		e.need[c.ID] = needReview
+		e.ahead[c.ID] = true
+	}
+	e.allCards = ordered
+	e.advance()
+}
+
+// Name returns the deck's display name.
+func (e *Engine) Name() string {
+	return e.deck.Name
+}
+
+// NextDue reports the review schedule across the full deck: due is the
+// earliest upcoming review time (zero when none is scheduled) and caughtUp is
+// true when no studied card is currently due — the state the caught-up screen
+// and the adaptive summary announce.
+func (e *Engine) NextDue() (due time.Time, caughtUp bool) {
+	if e.store == nil {
+		return time.Time{}, true
+	}
+	now := time.Now()
+	caughtUp = true
+	for _, c := range e.pool {
+		cp := e.store.Get(c.ID)
+		if cp.TimesCorrect+cp.TimesWrong == 0 {
+			continue
+		}
+		if cp.DueNow(now) {
+			caughtUp = false
+			continue
+		}
+		if due.IsZero() || cp.Due.Before(due) {
+			due = cp.Due
+		}
+	}
+	return due, caughtUp
 }
 
 // evidenceScheduled reports whether this session runs the evidence-based
