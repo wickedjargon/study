@@ -1,6 +1,11 @@
 # study
 
-A flashcard quiz tool inspired by suckless sent. Decks are plain text files. The default card order, `adaptive`, is an evidence-based [spaced-repetition](https://en.wikipedia.org/wiki/Spaced_repetition) scheduler: it picks what's due, spaces repetitions within the session, and grows review intervals across days.
+A flashcard quiz tool. Decks are plain text files. Available for Linux and web. Test out the web version here:
+
+[study.fftp.io](https://study.fftp.io/)
+
+
+The default card order, `adaptive`, is an evidence-based [spaced-repetition](https://en.wikipedia.org/wiki/Spaced_repetition) scheduler: it picks what's due, spaces repetitions within the session, and grows review intervals across days.
 
 There are two frontends over the same engine, deck format, and progress files:
 
