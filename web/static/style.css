@@ -121,6 +121,7 @@ main.list { justify-content: flex-start; padding-top: 2.5rem; }
   box-shadow: var(--shadow);
   padding: 1.75rem 2rem 1.9rem;
   margin: 0 0 1.1rem;
+  text-align: center;
   animation: rise 0.22s ease-out;
 }
 @keyframes rise {
@@ -148,35 +149,37 @@ main.list { justify-content: flex-start; padding-top: 2.5rem; }
 }
 .divider { border: 0; border-top: 1px solid var(--line); margin: 1.1rem 0 0.9rem; }
 
-/* ---- custom audio player ---- */
-.player { margin: 0.9rem 0 0.4rem; }
+/* ---- custom audio player: a quiet outline button, not a billboard ---- */
+.player { margin: 0.7rem 0 0.3rem; }
 .play {
-  width: 3.4rem;
-  height: 3.4rem;
+  width: 2.6rem;
+  height: 2.6rem;
   padding: 0;
   border-radius: 50%;
-  border: 0;
-  background: var(--accent);
-  color: var(--accent-fg);
+  border: 1.5px solid var(--line);
+  background: transparent;
+  color: var(--dim);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: transform 0.12s ease, box-shadow 0.2s ease;
+  transition: color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
 }
-.play:hover { transform: scale(1.06); }
-.play:active { transform: scale(0.96); }
-.play .bars { display: none; align-items: flex-end; gap: 3px; height: 22px; }
+.play:hover { color: var(--accent); border-color: var(--accent); }
+.play:active { transform: scale(0.94); }
+.play .icon { width: 18px; height: 18px; }
+.play .bars { display: none; align-items: flex-end; gap: 2.5px; height: 15px; }
 .play .bars i {
-  width: 5px;
-  border-radius: 2.5px;
-  background: var(--accent-fg);
+  width: 3.5px;
+  border-radius: 2px;
+  background: currentColor;
   animation: bounce 0.9s ease-in-out infinite;
 }
-.play .bars i:nth-child(1) { height: 11px; }
-.play .bars i:nth-child(2) { height: 21px; animation-delay: 0.15s; }
-.play .bars i:nth-child(3) { height: 15px; animation-delay: 0.3s; }
+.play .bars i:nth-child(1) { height: 8px; }
+.play .bars i:nth-child(2) { height: 14px; animation-delay: 0.15s; }
+.play .bars i:nth-child(3) { height: 10px; animation-delay: 0.3s; }
 @keyframes bounce { 50% { transform: scaleY(0.45); } }
+.player.playing .play { color: var(--accent); border-color: var(--accent); }
 .player.playing .icon { display: none; }
 .player.playing .bars { display: inline-flex; }
 .player audio { display: none; }
@@ -286,8 +289,6 @@ button.quiet:hover { color: var(--fg); }
 .confused {
   color: var(--dim);
   font-size: 0.95rem;
-  border-left: 3px solid var(--line);
-  padding-left: 0.75rem;
   margin-top: 0.9rem;
 }
 
