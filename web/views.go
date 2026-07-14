@@ -109,28 +109,37 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	view := homeView{}
 	now := time.Now()
 	for _, g := range s.groups {
-		all := g.All
-		if all == nil {
-			all = g.Decks[0]
-		}
 		row := homeGroup{
 			URL:     "/g/" + g.Slug,
 			Name:    g.Name,
 			Initial: string([]rune(g.Name)[:1]),
 			Hue:     g.Hue,
 			Topics:  len(g.Decks),
-			Cards:   len(all.Cards),
 		}
 		if g.single() {
 			row.URL = quizURL(g, g.Decks[0])
 		}
-		// The picker shows the guest's own schedule; a store is cheap to
-		// open (one JSON read) and this stays read-only.
-		if store, err := s.guestStore(guest, g); err == nil {
-			reviews, fresh, _, _ := quiz.SplitDue(all.Cards, store, now)
+		// The picker shows the guest's own schedule, totalled over the
+		// group's topics. A card can appear in more than one topic (the
+		// levels revisit vocab), so the union is taken by card ID; a store
+		// is cheap to open (one JSON read) and this stays read-only.
+		store, err := s.guestStore(guest, g)
+		seen := make(map[string]bool)
+		var union []deck.Card
+		for _, info := range g.Decks {
+			for _, c := range info.Cards {
+				if !seen[c.ID] {
+					seen[c.ID] = true
+					union = append(union, c)
+				}
+			}
+		}
+		row.Cards = len(union)
+		if err == nil {
+			reviews, fresh, _, _ := quiz.SplitDue(union, store, now)
 			row.Due = len(reviews)
 			row.Fresh = len(fresh)
-			row.Studied = len(fresh) < len(all.Cards)
+			row.Studied = row.Fresh < row.Cards
 		}
 		view.Groups = append(view.Groups, row)
 	}

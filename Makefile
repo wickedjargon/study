@@ -12,10 +12,10 @@ study-web:
 # the archbox container; running the binary doesn't).
 WEB_DECKS = \
 	$(HOME)/d/projects/language-packs \
-	$(HOME)/d/projects/study-chinese-numbers.deck \
-	$(HOME)/d/projects/study-japanese-numbers.deck \
-	$(HOME)/d/projects/study-farsi-numbers.deck \
-	$(HOME)/d/projects/study-mahjong.deck \
+	japanese=$(HOME)/d/projects/study-japanese-numbers.deck \
+	japanese=$(HOME)/d/projects/study-mahjong.deck \
+	farsi=$(HOME)/d/projects/study-farsi-numbers.deck \
+	mandarin-chinese=$(HOME)/d/projects/study-chinese-numbers.deck \
 	$(HOME)/d/projects/study-dog-breeds.deck
 
 run:

@@ -125,7 +125,9 @@ const sessionIdleLimit = 6 * time.Hour
 // New builds a server serving the given deck paths, keeping per-guest
 // progress under dataDir/users/<id>/. Each path is either a pack directory
 // or single *.deck file (one group), or a directory whose deck entries each
-// become a group.
+// become a group. A "group=path" argument instead nests the pack as one
+// topic inside an existing group, whatever the argument order — so Mahjong
+// can live under Japanese rather than clutter the top level.
 func New(deckPaths []string, dataDir string) (*Server, error) {
 	s := &Server{
 		bySlug:   make(map[string]*group),
@@ -133,8 +135,18 @@ func New(deckPaths []string, dataDir string) (*Server, error) {
 		sessions: make(map[string]*session),
 	}
 
+	var nested [][2]string
 	for _, p := range deckPaths {
+		if name, path, ok := strings.Cut(p, "="); ok && !strings.Contains(name, "/") {
+			nested = append(nested, [2]string{name, filepath.Clean(path)})
+			continue
+		}
 		if err := s.scanPath(filepath.Clean(p)); err != nil {
+			return nil, err
+		}
+	}
+	for _, n := range nested {
+		if err := s.nestPack(n[0], n[1]); err != nil {
 			return nil, err
 		}
 	}
@@ -242,6 +254,35 @@ func (s *Server) addGroup(path string) {
 
 	s.groups = append(s.groups, g)
 	s.bySlug[g.Slug] = g
+}
+
+// nestPack adds a pack (or single deck file) as one topic of an existing
+// group, named without the group's own name ("Japanese Numbers" under
+// Japanese is just "Numbers"). Its cards share the group's progress store;
+// they are not part of the group's merged Everything session.
+func (s *Server) nestPack(groupSlug, path string) error {
+	g := s.bySlug[groupSlug]
+	if g == nil {
+		known := make([]string, 0, len(s.groups))
+		for _, gg := range s.groups {
+			known = append(known, gg.Slug)
+		}
+		return fmt.Errorf("cannot nest %s: no group %q (groups: %s)", path, groupSlug, strings.Join(known, ", "))
+	}
+	d := parseDeck(path)
+	if d == nil {
+		return fmt.Errorf("nesting %s into %s: deck failed to parse", path, groupSlug)
+	}
+
+	taken := map[string]bool{"all": true}
+	for _, di := range g.Decks {
+		taken[di.Slug] = true
+	}
+	base := filepath.Base(path)
+	name := strings.TrimPrefix(prettyName(base), g.Name+" ")
+	g.Decks = append(g.Decks, newDeckInfo(d, name, slugify(strings.TrimPrefix(base, "study-")), taken))
+	sort.Slice(g.Decks, func(i, j int) bool { return g.Decks[i].Name < g.Decks[j].Name })
+	return nil
 }
 
 // parseDeck parses one deck path, logging and returning nil on failure.
