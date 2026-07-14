@@ -618,6 +618,10 @@ func (e *Engine) accepts(c *deck.Card, got string) bool {
 			}
 		} else if normalizeAnswer(got) == normalizeAnswer(cand) {
 			return true
+		} else if matchesContracted(got, cand) {
+			// "I don't understand" and "I do not understand" agree under
+			// contraction expansion; no "=" variant needed.
+			return true
 		}
 	}
 	return false
