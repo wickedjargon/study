@@ -23,12 +23,11 @@ import (
 const mailCooldown = time.Minute
 
 // loginView drives the login template through its stages: the form ("form"),
-// the check-your-inbox page ("sent"), the confirm-click page ("confirm"),
-// and the expired-link page ("gone").
+// the check-your-inbox page ("sent"), and the expired-link page ("gone").
+// The emailed link itself renders the bare "redeem" template instead.
 type loginView struct {
 	Stage string
 	Email string // logged-in email on "form", destination on "sent"
-	Token string // the redeem form's target on "confirm"
 	Error string // validation complaint on "form"
 }
 
@@ -101,7 +100,7 @@ func (s *Server) handleAuthPage(w http.ResponseWriter, r *http.Request) {
 	// The token is not checked here: a prefetching scanner learns nothing and
 	// spends nothing. The page submits itself (a click, without JS) and the
 	// POST decides.
-	s.render(w, "login", loginView{Stage: "confirm", Token: r.PathValue("token")})
+	s.render(w, "redeem", r.PathValue("token"))
 }
 
 func (s *Server) handleAuthRedeem(w http.ResponseWriter, r *http.Request) {

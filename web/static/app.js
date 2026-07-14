@@ -4,11 +4,6 @@
 (function () {
   "use strict";
 
-  // The login-link confirm page submits itself: a human is logged in on
-  // arrival, while non-JS inbox prefetchers can't spend the token.
-  var redeem = document.getElementById("redeemform");
-  if (redeem) redeem.submit();
-
   // The session menu closes when clicking anywhere outside it.
   var menu = document.querySelector("details.menu");
   if (menu) {

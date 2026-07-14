@@ -25,11 +25,6 @@
     <h1>Check your email</h1>
     <p>A login link is on its way to <b>{{.Email}}</b>.
     It works once and expires in 15 minutes.</p>
-  {{else if eq .Stage "confirm"}}
-    <h1>Logging you in…</h1>
-    <form method="post" action="/auth/{{.Token}}" id="redeemform">
-      <button type="submit" class="primary">Log in</button>
-    </form>
   {{else if eq .Stage "gone"}}
     <h1>That link has expired</h1>
     <p>Login links work once, for 15 minutes.</p>
@@ -37,4 +32,18 @@
   {{end}}
 </main>
 {{template "bottom"}}
+{{end}}
+
+{{/* The emailed link lands here: a blank page that logs in by submitting
+     itself. The POST (not this GET) spends the token, so an inbox scanner's
+     prefetch is harmless. */}}
+{{define "redeem"}}<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>logging in</title></head>
+<body>
+Logging in...
+<form method="post" action="/auth/{{.}}" id="redeemform"></form>
+<script>document.getElementById("redeemform").submit()</script>
+</body>
+</html>
 {{end}}
