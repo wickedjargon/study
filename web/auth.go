@@ -99,7 +99,8 @@ func (s *Server) mayMail(email string) bool {
 
 func (s *Server) handleAuthPage(w http.ResponseWriter, r *http.Request) {
 	// The token is not checked here: a prefetching scanner learns nothing and
-	// spends nothing. The human clicks through and the POST decides.
+	// spends nothing. The page submits itself (a click, without JS) and the
+	// POST decides.
 	s.render(w, "login", loginView{Stage: "confirm", Token: r.PathValue("token")})
 }
 
