@@ -4,6 +4,14 @@
 (function () {
   "use strict";
 
+  // The session menu closes when clicking anywhere outside it.
+  var menu = document.querySelector("details.menu");
+  if (menu) {
+    document.addEventListener("click", function (ev) {
+      if (menu.open && !menu.contains(ev.target)) menu.open = false;
+    });
+  }
+
   // Custom audio player: the round button (re)plays its clip from the top
   // and shows animated bars while sound is out. Deck playback speed is
   // honored; the first clip tries to autoplay, which browsers may veto

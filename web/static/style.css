@@ -101,6 +101,47 @@ body {
 }
 .bar form { margin: 0; }
 
+/* session menu: a kebab in the corner so long deck names keep the line */
+.menu { position: relative; }
+.menu > summary {
+  list-style: none;
+  cursor: pointer;
+  color: var(--dim);
+  font-size: 1.15rem;
+  line-height: 1;
+  padding: 0.1rem 0.5rem;
+  border-radius: 6px;
+  user-select: none;
+}
+.menu > summary::-webkit-details-marker { display: none; }
+.menu > summary:hover, .menu[open] > summary { color: var(--fg); }
+.menuitems {
+  position: absolute;
+  right: 0;
+  top: 1.7rem;
+  z-index: 10;
+  min-width: 10rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 0.35rem;
+  display: grid;
+  gap: 0.1rem;
+}
+.menuitems button {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  box-shadow: none;
+  background: none;
+  color: var(--fg);
+  font-size: 0.9rem;
+  padding: 0.45rem 0.8rem;
+  border-radius: 6px;
+}
+.menuitems button:hover { background: color-mix(in srgb, var(--fg) 6%, transparent); }
+
 /* The status strip above the card, as on the desktop: counter left, live
    tally dead center. The side zones flex equally to anchor the centering. */
 .cardstatus {

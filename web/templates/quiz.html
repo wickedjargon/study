@@ -10,16 +10,21 @@
   </span>
   <span class="barright">
     {{if ne .Screen "summary"}}
-    {{if .Reviewing}}
-    <form method="post" action="{{.Base}}/start"><button class="quiet" title="back to being quizzed">quiz me</button></form>
-    {{else}}
-    {{if not .Intros}}
-    <form method="post" action="{{.Base}}/intros"><button class="quiet" title="introduce new cards, answer visible, before quizzing them">intros</button></form>
-    {{end}}
-    <form method="post" action="{{.Base}}/mode"><button class="quiet" title="switch between typed and multiple choice answering (restarts the session)">mode: {{.ModeLabel}}</button></form>
-    <form method="post" action="{{.Base}}/review"><button class="quiet" title="flip through the cards, answers visible, nothing recorded">review</button></form>
-    {{end}}
-    <form method="post" action="{{.Base}}/end"><button class="quiet" title="finish session">end</button></form>
+    <details class="menu">
+      <summary aria-label="session menu" title="session menu">⋮</summary>
+      <div class="menuitems">
+        {{if .Reviewing}}
+        <form method="post" action="{{.Base}}/start"><button title="back to being quizzed">quiz me</button></form>
+        {{else}}
+        {{if not .Intros}}
+        <form method="post" action="{{.Base}}/intros"><button title="introduce new cards, answer visible, before quizzing them">intros</button></form>
+        {{end}}
+        <form method="post" action="{{.Base}}/mode"><button title="switch between typed and multiple choice answering (restarts the session)">mode: {{.ModeLabel}}</button></form>
+        <form method="post" action="{{.Base}}/review"><button title="flip through the cards, answers visible, nothing recorded">review</button></form>
+        {{end}}
+        <form method="post" action="{{.Base}}/end"><button title="finish session">end</button></form>
+      </div>
+    </details>
     {{end}}
   </span>
 </header>
