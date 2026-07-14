@@ -167,8 +167,11 @@ func (m OrderMode) String() string {
 }
 
 // defaultNewPerSession is the default cap on never-studied cards per adaptive
-// session.
-const defaultNewPerSession = 20
+// session. Ten new cards is ~30 spaced recalls — a realistic daily bite that
+// spreads a large deck across days, which is where the retention gains of
+// distributed practice actually come from (successive relearning was studied
+// as short sessions across days, not one long grind).
+const defaultNewPerSession = 10
 
 // defaultWrongPause is the default wrong-answer pause in seconds.
 const defaultWrongPause = 5

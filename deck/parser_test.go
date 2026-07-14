@@ -255,11 +255,11 @@ func TestParseNewPerSessionMetadata(t *testing.T) {
 		line string // "" = no directive
 		want int
 	}{
-		{"default", "", 20},
+		{"default", "", 10},
 		{"explicit", "# new-per-session: 5", 5},
 		{"zero (reviews only)", "# new-per-session: 0", 0},
 		{"all", "# new-per-session: all", -1},
-		{"malformed", "# new-per-session: lots", 20}, // rejected → default
+		{"malformed", "# new-per-session: lots", 10}, // rejected → default
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

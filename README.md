@@ -72,7 +72,7 @@ study [flags] <deck-file | pack-directory>
 | `--time-limit <N\|none>` | Override the per-question time limit, uniformly for every card |
 | `--wrong-pause <N\|none>` | How long a wrong answer's result screen refuses to advance (default 5s) |
 | `--preview-new` | Reveal a never-studied card's answer once before quizzing it |
-| `--new-per-session <N\|all>` | How many never-studied cards enter an adaptive session (default 20) |
+| `--new-per-session <N\|all>` | How many never-studied cards enter an adaptive session (default 10) |
 | `--font-size <N>` | Override the base font size (8–48, or `small`/`medium`/`large`/`x-large`) |
 | `--audio-speed <X>` | Override audio playback speed (0.25–4.0) |
 | `--stats` | Print progress summary (incl. what's due) and exit |
