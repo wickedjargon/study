@@ -39,7 +39,7 @@
               {{end}}
             </span>
           </div>
-          <span class="mi-desc">the method the user provides their answer</span>
+          <span class="mi-desc">how you give each answer</span>
         </div>
         <div class="mset">
           <div class="mset-head">
@@ -182,7 +182,7 @@
     <p class="dim">all-time: {{.AllCorrect}}✓ {{.AllWrong}}✗ across {{.CardsStudied}} cards</p>
     {{end}}
     {{if .NextDue}}<p class="dim">next review {{.NextDue}}</p>{{end}}
-    {{if .CanContinue}}<p class="dim recommend">We recommend you return to this deck only when your next review is due.</p>{{end}}
+    {{if .CanContinue}}<p class="dim recommend">Best to return only when your next review is due.</p>{{end}}
   </section>
   <div class="actions" id="primaryform">
     <form method="get" action="{{.GroupURL}}"><button class="primary">← back</button></form>

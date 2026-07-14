@@ -58,7 +58,7 @@ func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleLoginSend(w http.ResponseWriter, r *http.Request) {
 	addr, err := mail.ParseAddress(strings.TrimSpace(r.FormValue("email")))
 	if err != nil || len(addr.Address) > 254 {
-		s.render(w, "login", loginView{Stage: "form", Error: "that doesn't look like an email address"})
+		s.render(w, "login", loginView{Stage: "form", Error: "That doesn't look like an email address"})
 		return
 	}
 	email := strings.ToLower(addr.Address)
