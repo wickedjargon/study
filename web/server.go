@@ -11,6 +11,7 @@ import (
 	"embed"
 	"encoding/hex"
 	"fmt"
+	"hash/fnv"
 	"html/template"
 	"log"
 	"net/http"
@@ -52,7 +53,8 @@ type Server struct {
 // its own mutable card list.
 type deckInfo struct {
 	Slug  string
-	Name  string
+	Name  string // display title, prettified from the file name
+	Hue   int    // deterministic identity color (0-359), from the slug
 	Path  string
 	Cards []deck.Card
 	// media maps a file's base name to its absolute path. Media URLs carry
@@ -143,9 +145,11 @@ func (s *Server) scanDecks(dir string) error {
 			log.Printf("%s: %s", e.Name(), w)
 		}
 
+		slug := s.uniqueSlug(e.Name())
 		info := &deckInfo{
-			Slug:  s.uniqueSlug(e.Name()),
-			Name:  d.Name,
+			Slug:  slug,
+			Name:  prettyName(e.Name()),
+			Hue:   deckHue(slug),
 			Path:  d.Path,
 			Cards: d.Cards,
 			media: make(map[string]string),
@@ -164,6 +168,27 @@ func (s *Server) scanDecks(dir string) error {
 	}
 	sort.Slice(s.decks, func(i, j int) bool { return s.decks[i].Name < s.decks[j].Name })
 	return nil
+}
+
+// prettyName turns a deck's file name into a display title:
+// "study-brazilian-portuguese.deck" → "Brazilian Portuguese".
+func prettyName(name string) string {
+	base := strings.TrimSuffix(name, ".deck")
+	base = strings.TrimPrefix(base, "study-")
+	words := strings.FieldsFunc(base, func(r rune) bool { return r == '-' || r == '_' })
+	for i, w := range words {
+		r := []rune(w)
+		words[i] = strings.ToUpper(string(r[:1])) + string(r[1:])
+	}
+	return strings.Join(words, " ")
+}
+
+// deckHue derives a deck's identity hue from its slug, so every deck gets a
+// stable accent color without anyone choosing one.
+func deckHue(slug string) int {
+	h := fnv.New32a()
+	h.Write([]byte(slug))
+	return int(h.Sum32() % 360)
 }
 
 // uniqueSlug turns a deck's file name into a URL path segment, deduplicating

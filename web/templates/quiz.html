@@ -1,16 +1,21 @@
 {{define "quiz"}}
 {{template "top" .DeckName}}
+<div class="page" style="--h: {{.Hue}}">
 <header class="bar">
-  <a class="brand" href="/">study</a>
+  <a class="brand" href="/" title="all decks">study</a>
   <span class="bartitle">{{.DeckName}}</span>
   <span class="counts">
-    {{if .Seen}}<span class="ok">{{.Correct}}✓</span> <span class="bad">{{.Wrong}}✗</span> ·{{end}}
-    {{.Remaining}} left
+    {{if .Seen}}<span class="ok">{{.Correct}}✓</span> <span class="bad">{{.Wrong}}✗</span>{{end}}
   </span>
   {{if ne .Screen "summary"}}
   <form method="post" action="/q/{{.Slug}}/end"><button class="quiet" title="finish session">end</button></form>
   {{end}}
 </header>
+{{if or (eq .Screen "question") (eq .Screen "preview") (eq .Screen "result")}}
+<div class="progress" title="session progress"><i style="width: {{.Progress}}%"></i></div>
+{{else}}
+<div class="progress ghost"></div>
+{{end}}
 <main data-speed="{{.AudioSpeed}}">
 
 {{if eq .Screen "question"}}
@@ -26,13 +31,13 @@
   {{if .Choice}}
   <form method="post" action="/q/{{.Slug}}/answer" class="choices" id="answerform">
     {{range $i, $opt := .Options}}
-    <button name="choice" value="{{$i}}" class="choice" dir="auto"><kbd>{{keynum $i}}</kbd> {{$opt}}</button>
+    <button name="choice" value="{{$i}}" class="choice" dir="auto"><kbd>{{keynum $i}}</kbd><span dir="auto">{{$opt}}</span></button>
     {{end}}
   </form>
   {{else}}
   <form method="post" action="/q/{{.Slug}}/answer" class="typed" id="answerform">
-    <input type="text" name="answer" dir="auto" autofocus autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="type your answer">
-    <button>answer</button>
+    <input type="text" name="answer" dir="auto" autofocus autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="type your answer…">
+    <button class="primary">check</button>
   </form>
   {{end}}
   {{if .TimeLimit}}
@@ -43,50 +48,50 @@
 
 {{else if eq .Screen "preview"}}
   <section class="card">
-    <div class="badges">{{if .IsNew}}<span class="badge new">new card — study it first</span>{{end}}</div>
+    <div class="badges">{{if .IsNew}}<span class="badge new">new card — take it in first</span>{{end}}</div>
     {{template "media" .Question}}
     <hr class="divider">
-    {{template "media" .AnswerSide}}
+    <div class="answerside">{{template "media" .AnswerSide}}</div>
   </section>
   <form method="post" action="/q/{{.Slug}}/preview" class="actions" id="primaryform">
-    <button class="primary">{{if .FlipMode}}next{{else}}got it — quiz me{{end}}</button>
+    <button class="primary">{{if .FlipMode}}next →{{else}}got it — quiz me{{end}}</button>
   </form>
 
 {{else if eq .Screen "result"}}
-  <section class="card">
+  <section class="card {{if .ResultCorrect}}won{{else}}lost{{end}}">
     {{if .ResultCorrect}}
     <p class="verdict ok">✓ correct</p>
     {{else if .ResultTimedOut}}
     <p class="verdict bad">✗ time's up</p>
     {{else}}
-    <p class="verdict bad">✗ wrong</p>
+    <p class="verdict bad">✗ not quite</p>
     {{end}}
     {{template "media" .Question}}
     <hr class="divider">
-    {{if and (not .ResultCorrect) .ResultTyped}}<p class="typedanswer">you answered: <s dir="auto">{{.ResultTyped}}</s></p>{{end}}
-    {{template "media" .AnswerSide}}
+    {{if and (not .ResultCorrect) .ResultTyped}}<p class="typedanswer">you answered <s dir="auto">{{.ResultTyped}}</s></p>{{end}}
+    <div class="answerside">{{template "media" .AnswerSide}}</div>
     {{if .ConfusedWith}}<p class="confused">that's the answer to a different card: <span dir="auto">{{.ConfusedWith}}</span></p>{{end}}
   </section>
   <form method="post" action="/q/{{.Slug}}/next" class="actions" id="primaryform">
-    <button class="primary" {{if .WrongPause}}data-pause="{{.WrongPause}}"{{end}}>next</button>
+    <button class="primary" {{if .WrongPause}}data-pause="{{.WrongPause}}"{{end}}>next →</button>
   </form>
 
 {{else if eq .Screen "caughtup"}}
-  <section class="card center">
+  <section class="card center standalone">
     <p class="bigmark">✓</p>
-    <p>You're all caught up — nothing is due for review.</p>
-    {{if .NextDue}}<p class="dim">next review {{.NextDue}}</p>{{end}}
+    <p class="lede">You're all caught up</p>
+    <p class="dim">Nothing is due for review{{if .NextDue}} — next review {{.NextDue}}{{end}}.</p>
   </section>
   <form method="post" action="/q/{{.Slug}}/continue" class="actions" id="primaryform">
     <button class="primary">keep studying anyway</button>
   </form>
-  <p class="center"><a class="dim" href="/">back to decks</a></p>
+  <p class="center backlink"><a class="dim" href="/">← all decks</a></p>
 
 {{else if eq .Screen "summary"}}
-  <section class="card center">
-    <p class="bigmark">Session complete</p>
+  <section class="card center standalone">
+    <p class="lede">Session complete</p>
     {{if .Seen}}
-    <p>{{.Correct}} correct · {{.Wrong}} wrong this session</p>
+    <p class="score"><span class="ok">{{.Correct}} correct</span>{{if .Wrong}} · <span class="bad">{{.Wrong}} wrong</span>{{end}}</p>
     {{end}}
     {{if .CardsStudied}}
     <p class="dim">all-time: {{.AllCorrect}}✓ {{.AllWrong}}✗ across {{.CardsStudied}} cards</p>
@@ -99,9 +104,10 @@
     {{end}}
     <form method="post" action="/q/{{.Slug}}/start"><button>start over</button></form>
   </div>
-  <p class="center"><a class="dim" href="/">back to decks</a></p>
+  <p class="center backlink"><a class="dim" href="/">← all decks</a></p>
 {{end}}
 
 </main>
+</div>
 {{template "bottom"}}
 {{end}}

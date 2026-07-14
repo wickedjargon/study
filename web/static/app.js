@@ -4,16 +4,29 @@
 (function () {
   "use strict";
 
-  // Audio: honor the deck's playback speed and start the first clip —
-  // browsers may veto autoplay before any interaction, which is fine.
+  // Custom audio player: the round button (re)plays its clip from the top
+  // and shows animated bars while sound is out. Deck playback speed is
+  // honored; the first clip tries to autoplay, which browsers may veto
+  // before any interaction — fine.
   var main = document.querySelector("main");
   var speed = main ? parseFloat(main.dataset.speed) || 1 : 1;
-  var audios = document.querySelectorAll("audio");
-  audios.forEach(function (a) {
-    a.playbackRate = speed;
-    a.addEventListener("play", function () { a.playbackRate = speed; });
+  document.querySelectorAll(".player").forEach(function (p) {
+    var audio = p.querySelector("audio");
+    var stop = function () { p.classList.remove("playing"); };
+    audio.playbackRate = speed;
+    audio.addEventListener("play", function () {
+      audio.playbackRate = speed;
+      p.classList.add("playing");
+    });
+    audio.addEventListener("ended", stop);
+    audio.addEventListener("pause", stop);
+    p.querySelector(".play").addEventListener("click", function () {
+      audio.currentTime = 0;
+      audio.play().catch(function () {});
+    });
   });
-  if (audios.length) audios[0].play().catch(function () {});
+  var firstAudio = document.querySelector(".player audio");
+  if (firstAudio) firstAudio.play().catch(function () {});
 
   // Question time limit: count down in the badge, then submit the hidden
   // timeout form. The server records it like any wrong answer.
@@ -64,6 +77,14 @@
     if (choices.length && n >= 1 && n <= choices.length) {
       ev.preventDefault();
       choices[n - 1].click();
+      return;
+    }
+
+    // r replays the card's audio.
+    if (ev.key === "r" && firstAudio) {
+      ev.preventDefault();
+      firstAudio.currentTime = 0;
+      firstAudio.play().catch(function () {});
       return;
     }
 

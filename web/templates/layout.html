@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.}} — study</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%233b7a57'/><circle cx='8' cy='8' r='2.6' fill='%23faf7f2'/></svg>">
 <link rel="stylesheet" href="/static/style.css">
 <script src="/static/app.js" defer></script>
 </head>
@@ -17,8 +18,16 @@
 
 {{define "media"}}
 {{range .}}
-{{if .Text}}<p class="cardtext" dir="auto">{{.Text}}</p>{{end}}
+{{if .Text}}<p class="cardtext{{if .Primary}} primary{{end}}" dir="auto">{{.Text}}</p>{{end}}
 {{if .ImageURL}}<img class="cardimg" src="{{.ImageURL}}" alt="">{{end}}
-{{if .AudioURL}}<audio class="cardaudio" controls preload="auto" src="{{.AudioURL}}"></audio>{{end}}
+{{if .AudioURL}}
+<div class="player">
+  <button type="button" class="play" aria-label="play audio">
+    <svg class="icon" viewBox="0 0 24 24" width="28" height="28" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
+    <span class="bars" aria-hidden="true"><i></i><i></i><i></i></span>
+  </button>
+  <audio src="{{.AudioURL}}" preload="auto"></audio>
+</div>
+{{end}}
 {{end}}
 {{end}}

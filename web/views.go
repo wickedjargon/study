@@ -11,9 +11,11 @@ import (
 )
 
 // mediaView is one element of a card side, ready for the template: exactly
-// one of Text, ImageURL, or AudioURL is set.
+// one of Text, ImageURL, or AudioURL is set. The first text line of a side is
+// Primary — the hero line; later lines (romanization, glosses) render smaller.
 type mediaView struct {
 	Text     string
+	Primary  bool
 	ImageURL string
 	AudioURL string
 }
@@ -23,6 +25,8 @@ type mediaView struct {
 type homeDeck struct {
 	Slug    string
 	Name    string
+	Initial string
+	Hue     int
 	Cards   int
 	Due     int
 	Fresh   int
@@ -39,9 +43,12 @@ type quizView struct {
 	Screen   string
 	Slug     string
 	DeckName string
+	Hue      int
 
-	// Header counters.
+	// Header counters. Progress is the session's completion percentage:
+	// cards that have met their criterion over cards in play.
 	Remaining, Seen, Correct, Wrong int
+	Progress                        int
 
 	// Question / preview.
 	Question   []mediaView
@@ -76,7 +83,13 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	view := homeView{}
 	now := time.Now()
 	for _, info := range s.decks {
-		row := homeDeck{Slug: info.Slug, Name: info.Name, Cards: len(info.Cards)}
+		row := homeDeck{
+			Slug:    info.Slug,
+			Name:    info.Name,
+			Initial: string([]rune(info.Name)[:1]),
+			Hue:     info.Hue,
+			Cards:   len(info.Cards),
+		}
 		// The picker shows the guest's own schedule; a store is cheap to open
 		// (one JSON read) and this stays read-only.
 		if store, err := progress.NewStoreIn(filepath.Join(s.dataDir, "users", guest), info.Path); err == nil {
@@ -108,11 +121,15 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 	e := sess.engine
 	view := quizView{
 		Slug:      info.Slug,
-		DeckName:  e.Name(),
+		DeckName:  info.Name,
+		Hue:       info.Hue,
 		Remaining: e.Remaining(),
 		Seen:      e.TotalSeen,
 		Correct:   e.TotalCorrect,
 		Wrong:     e.TotalWrong,
+	}
+	if size := e.DeckSize(); size > 0 {
+		view.Progress = (size - view.Remaining) * 100 / size
 	}
 	speed := sess.deck.Speed
 	if speed == 0 {
@@ -185,11 +202,13 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 // through the /media handler by base name.
 func mediaViews(slug string, side []deck.Media) []mediaView {
 	var out []mediaView
+	first := true
 	for _, m := range side {
 		switch m.Type {
 		case deck.Text:
 			if m.Content != "" {
-				out = append(out, mediaView{Text: m.Content})
+				out = append(out, mediaView{Text: m.Content, Primary: first})
+				first = false
 			}
 		case deck.Image:
 			out = append(out, mediaView{ImageURL: mediaURL(slug, m.Content)})
