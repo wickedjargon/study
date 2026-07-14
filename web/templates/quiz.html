@@ -4,13 +4,9 @@
 <header class="bar">
   <span class="barleft">
     <a class="brand" href="/" title="all decks">study</a>
-    {{if .Position}}<span class="pos">{{.Position}}</span>{{end}}
     <span class="bartitle">
       {{if .GroupName}}<a class="crumb" href="{{.GroupURL}}">{{.GroupName}}</a> <span class="dim">›</span> {{end}}{{.DeckName}}
     </span>
-  </span>
-  <span class="counts">
-    {{if .Seen}}<span class="ok">{{.Correct}}✓</span> <span class="bad">{{.Wrong}}✗</span>{{end}}
   </span>
   <span class="barright">
     {{if ne .Screen "summary"}}
@@ -29,6 +25,14 @@
 <div class="progress ghost"></div>
 {{end}}
 <main data-speed="{{.AudioSpeed}}">
+
+{{if .Position}}
+<div class="cardstatus">
+  <span class="pos">{{.Position}}</span>
+  <span class="tally">{{if .Seen}}<span class="ok">{{.Correct}}✓</span> <span class="bad">{{.Wrong}}✗</span>{{end}}</span>
+  <span class="statuspad"></span>
+</div>
+{{end}}
 
 {{if eq .Screen "question"}}
   <section class="card">

@@ -88,9 +88,6 @@ body {
   margin-top: 0.9rem;
 }
 .grouptitle .roundel { width: 2.3rem; height: 2.3rem; font-size: 1.05rem; }
-/* The quiz bar is three zones, like the desktop's status bar: session
-   context left, the live tally dead center, actions right. The side zones
-   flex equally so the tally stays anchored to the true center. */
 .barleft {
   flex: 1;
   min-width: 0;
@@ -99,24 +96,25 @@ body {
   gap: 0.9rem;
 }
 .barright {
-  flex: 1;
+  flex: none;
   display: flex;
-  justify-content: flex-end;
   gap: 0.75rem;
 }
-.pos {
-  color: var(--dim);
-  font-size: 0.85rem;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.counts {
-  color: var(--dim);
-  font-size: 0.85rem;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
 .bar form { margin: 0; }
+
+/* The status strip above the card, as on the desktop: counter left, live
+   tally dead center. The side zones flex equally to anchor the centering. */
+.cardstatus {
+  display: flex;
+  align-items: baseline;
+  margin-bottom: 0.45rem;
+  font-size: 0.85rem;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cardstatus .pos { flex: 1; }
+.cardstatus .statuspad { flex: 1; }
 
 /* session progress: a hairline under the header, filled in the deck's hue */
 .progress {
