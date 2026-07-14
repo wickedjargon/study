@@ -409,7 +409,6 @@ button.quiet:hover { color: var(--fg); }
 }
 .deck.topic { padding: 0.8rem 1.25rem; }
 .deck.topic .deckname { font-size: 1.05rem; }
-.deck.everything { border-color: hsl(var(--h) 35% 62%); }
 .deckinfo { min-width: 0; }
 .deckname {
   display: block;
