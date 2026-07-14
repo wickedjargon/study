@@ -520,6 +520,40 @@ button.quiet:hover { color: var(--fg); }
 .contact a { color: var(--dim); text-decoration: none; }
 .contact a:hover { color: var(--fg); }
 
+/* ---- login ---- */
+.authline {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin: 0.3rem 0 0;
+  color: var(--dim);
+  font-size: 0.85rem;
+}
+.authline a { color: var(--accent); text-decoration: none; }
+.authline a:hover { text-decoration: underline; }
+.auth {
+  width: min(26rem, 100%);
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem;
+  box-sizing: border-box;
+}
+.auth h1 { font-size: 1.4rem; margin: 0 0 0.4rem; }
+.auth p { color: var(--dim); margin: 0 0 1.2rem; }
+.auth p b { color: var(--fg); }
+.auth a { color: var(--accent); }
+.authform { display: flex; flex-direction: column; gap: 0.7rem; }
+.authform input {
+  font: inherit;
+  color: var(--fg);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.6rem 0.9rem;
+}
+.authform input::placeholder { color: var(--dim); }
+.authform input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+.autherror { color: var(--bad); font-size: 0.9rem; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

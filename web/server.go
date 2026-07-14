@@ -44,19 +44,27 @@ var staticFS embed.FS
 // Server is the HTTP frontend. It owns the catalog (scanned once at startup)
 // and the live quiz sessions, one per guest per group.
 type Server struct {
-	groups  []*group
-	bySlug  map[string]*group
+	groups []*group
+	bySlug map[string]*group
 	// sections is home-page heading order: encounter order of the
 	// "[Section]" marker arguments, "" (unlabeled) first when present.
 	sections []string
 	section  string // current section while parsing arguments
 	dataDir  string
 
+	ids     *identity
+	mailer  Mailer
+	baseURL string
+	secure  bool // https base URL: session cookies get the Secure flag
+
 	tmpl *template.Template
 	mux  *http.ServeMux
 
 	mu       sync.Mutex
 	sessions map[string]*session
+
+	mailMu   sync.Mutex
+	lastMail map[string]time.Time
 }
 
 // group is one catalog entry on the home page: a language or subject whose
@@ -140,19 +148,35 @@ const (
 // freshly composed session.
 const sessionIdleLimit = 6 * time.Hour
 
-// New builds a server serving the given deck paths, keeping per-guest
-// progress under dataDir/users/<id>/. Each path is either a pack directory
-// or single *.deck file (one group), or a directory whose deck entries each
-// become a group. A "group=path" argument instead nests the pack as one
-// topic inside an existing group, whatever the argument order — so Mahjong
-// can live under Japanese rather than clutter the top level. A "@Display
-// Name" suffix on a deck path overrides the name derived from the file name,
-// e.g. …/study-mexican-spanish.deck@Spanish (Mexican).
-func New(deckPaths []string, dataDir string) (*Server, error) {
+// New builds a server serving the given deck paths, keeping per-visitor
+// progress under dataDir/users/<id>/ and identity in dataDir/identity.db.
+// Login links are minted against baseURL (scheme and host as visitors reach
+// the site, no trailing slash) and delivered by the mailer. Each path is
+// either a pack directory or single *.deck file (one group), or a directory
+// whose deck entries each become a group. A "group=path" argument instead
+// nests the pack as one topic inside an existing group, whatever the
+// argument order — so Mahjong can live under Japanese rather than clutter
+// the top level. A "@Display Name" suffix on a deck path overrides the name
+// derived from the file name, e.g. …/study-mexican-spanish.deck@Spanish
+// (Mexican).
+func New(deckPaths []string, dataDir, baseURL string, mailer Mailer) (*Server, error) {
+	baseURL = strings.TrimSuffix(baseURL, "/")
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		return nil, fmt.Errorf("creating data dir: %w", err)
+	}
+	ids, err := openIdentity(filepath.Join(dataDir, "identity.db"))
+	if err != nil {
+		return nil, err
+	}
 	s := &Server{
 		bySlug:   make(map[string]*group),
 		dataDir:  dataDir,
+		ids:      ids,
+		mailer:   mailer,
+		baseURL:  baseURL,
+		secure:   strings.HasPrefix(baseURL, "https://"),
 		sessions: make(map[string]*session),
+		lastMail: make(map[string]time.Time),
 	}
 
 	var nested [][3]string
@@ -206,6 +230,11 @@ func New(deckPaths []string, dataDir string) (*Server, error) {
 	mux.HandleFunc("GET /q/{group}/{deck}", s.handleQuiz)
 	mux.HandleFunc("POST /q/{group}/{deck}/{action}", s.handleAction)
 	mux.HandleFunc("GET /media/{group}/{deck}/{name}", s.handleMedia)
+	mux.HandleFunc("GET /login", s.handleLoginPage)
+	mux.HandleFunc("POST /login", s.handleLoginSend)
+	mux.HandleFunc("GET /auth/{token}", s.handleAuthPage)
+	mux.HandleFunc("POST /auth/{token}", s.handleAuthRedeem)
+	mux.HandleFunc("POST /logout", s.handleLogout)
 	mux.Handle("GET /static/", http.FileServerFS(staticFS))
 	s.mux = mux
 	return s, nil
@@ -546,19 +575,20 @@ func setIntros(w http.ResponseWriter, on bool) {
 	})
 }
 
-// guestStore opens the guest's progress store for a group.
-func (s *Server) guestStore(guest string, g *group) (*progress.Store, error) {
-	return progress.NewStoreIn(filepath.Join(s.dataDir, "users", guest), g.Path)
+// visitorStore opens a visitor's progress store for a group. Guests and
+// logged-in users share the layout: one directory per identity.
+func (s *Server) visitorStore(visitor string, g *group) (*progress.Store, error) {
+	return progress.NewStoreIn(filepath.Join(s.dataDir, "users", visitor), g.Path)
 }
 
-// getSession returns the guest's live session for a deck, composing a fresh
-// one (from their saved group progress) if none is live or a different topic
-// of the group is. modeQuiz and modeReview recompose even when the same
-// topic is live — the "start over" and "review" paths. A review session is
-// the deck in flip-through order: every card answer-visible, in authored
+// getSession returns the visitor's live session for a deck, composing a
+// fresh one (from their saved group progress) if none is live or a different
+// topic of the group is. modeQuiz and modeReview recompose even when the
+// same topic is live — the "start over" and "review" paths. A review session
+// is the deck in flip-through order: every card answer-visible, in authored
 // order, nothing recorded.
-func (s *Server) getSession(guest string, g *group, info *deckInfo, mode sessionMode, intros bool, forced string) (*session, error) {
-	key := guest + "|" + g.Slug
+func (s *Server) getSession(visitor string, g *group, info *deckInfo, mode sessionMode, intros bool, forced string) (*session, error) {
+	key := visitor + "|" + g.Slug
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -578,7 +608,7 @@ func (s *Server) getSession(guest string, g *group, info *deckInfo, mode session
 	if err != nil {
 		return nil, err
 	}
-	store, err := s.guestStore(guest, g)
+	store, err := s.visitorStore(visitor, g)
 	if err != nil {
 		return nil, err
 	}
@@ -655,7 +685,7 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 	if info == nil {
 		return
 	}
-	guest := s.guestID(w, r)
+	visitor := s.visitorID(w, r)
 	action := r.PathValue("action")
 	intros := introsOn(r)
 	forced := forcedMode(r, g)
@@ -681,7 +711,7 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		setForcedMode(w, g, forced)
 		mode = modeQuiz
 	}
-	sess, err := s.getSession(guest, g, info, mode, intros, forced)
+	sess, err := s.getSession(visitor, g, info, mode, intros, forced)
 	if err != nil {
 		s.fail(w, err)
 		return

@@ -44,6 +44,7 @@ type homeSection struct {
 
 type homeView struct {
 	Sections []homeSection
+	Email    string // logged-in address, "" for a guest
 }
 
 // groupDeck is one topic row on a group's page.
@@ -104,8 +105,8 @@ type quizView struct {
 	ResultAnswer   string
 	// Confused renders the confused-with card's question — media included,
 	// since an image-only card (a flag, a dog) has no text to name it by.
-	Confused []mediaView
-	WrongPause     int
+	Confused   []mediaView
+	WrongPause int
 
 	// Caught up / summary.
 	NextDue     string
@@ -121,8 +122,9 @@ func quizURL(g *group, info *deckInfo) string {
 }
 
 func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
-	guest := s.guestID(w, r)
+	visitor := s.visitorID(w, r)
 	view := homeView{}
+	_, view.Email = s.currentUser(r)
 	now := time.Now()
 	bySection := make(map[string][]homeGroup)
 	for _, g := range s.groups {
@@ -136,11 +138,11 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 		if g.single() {
 			row.URL = quizURL(g, g.Decks[0])
 		}
-		// The picker shows the guest's own schedule, totalled over the
+		// The picker shows the visitor's own schedule, totalled over the
 		// group's topics. A card can appear in more than one topic (the
 		// levels revisit vocab), so the union is taken by card ID; a store
 		// is cheap to open (one JSON read) and this stays read-only.
-		store, err := s.guestStore(guest, g)
+		store, err := s.visitorStore(visitor, g)
 		seen := make(map[string]bool)
 		var union []deck.Card
 		for _, info := range g.Decks {
@@ -171,7 +173,7 @@ func (s *Server) handleGroup(w http.ResponseWriter, r *http.Request) {
 	if g == nil {
 		return
 	}
-	guest := s.guestID(w, r)
+	visitor := s.visitorID(w, r)
 	if g.single() {
 		http.Redirect(w, r, quizURL(g, g.Decks[0]), http.StatusSeeOther)
 		return
@@ -182,7 +184,7 @@ func (s *Server) handleGroup(w http.ResponseWriter, r *http.Request) {
 		Initial: string([]rune(g.Name)[:1]),
 		Hue:     g.Hue,
 	}
-	store, err := s.guestStore(guest, g)
+	store, err := s.visitorStore(visitor, g)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -214,10 +216,10 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 	if info == nil {
 		return
 	}
-	guest := s.guestID(w, r)
+	visitor := s.visitorID(w, r)
 	intros := introsOn(r)
 	forced := forcedMode(r, g)
-	sess, err := s.getSession(guest, g, info, modeKeep, intros, forced)
+	sess, err := s.getSession(visitor, g, info, modeKeep, intros, forced)
 	if err != nil {
 		s.fail(w, err)
 		return

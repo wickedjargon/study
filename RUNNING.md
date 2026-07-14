@@ -42,6 +42,33 @@ Ctrl-C.
 
 `group=path` nests a pack under a language.
 
+## Logging in
+
+Guests study anonymously; logging in (email magic link) makes progress
+portable across devices. Identity lives in `<data>/identity.db`, progress
+stays in `<data>/users/<id>/`.
+
+Locally there is no email: the login link is printed to the server log —
+copy it into the browser.
+
+In production the link goes out through [Resend](https://resend.com):
+
+- One-time: create a Resend account, verify the `fftp.io` domain (add the
+  SPF/DKIM records Resend shows), mint an API key.
+- One-time, on the server: put the key in the unit —
+  `Environment=RESEND_API_KEY=re_…` in
+  `/etc/systemd/system/study-web.service` (or an `EnvironmentFile`), and add
+  `-base-url https://study.fftp.io` to `ExecStart`. Then
+  `sudo systemctl daemon-reload && sudo systemctl restart study-web`.
+
+Without the key the server still runs — links just land in the journal
+(`journalctl -u study-web`), which also works in a pinch.
+
+Login emails come from `-mail-from` (default `study <study@fftp.io>`).
+Links are single-use and expire in 15 minutes; sessions last a year.
+A new account adopts the requesting guest's progress; logging into an
+existing account leaves guest progress behind.
+
 ## Test playground
 
 ```sh
