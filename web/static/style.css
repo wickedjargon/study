@@ -11,8 +11,9 @@
   --shadow: 0 1px 2px rgb(60 50 30 / 0.05), 0 6px 24px -12px rgb(60 50 30 / 0.18);
   --accent: #3b7a57;
   --accent-fg: #f6fbf7;
-  --ok: #35704f;
-  --bad: #b04a37;
+  /* verdict colors from the desktop app's light theme */
+  --ok: #79740e;
+  --bad: #9d0006;
   /* playing-animation bars: light, not accent; near-white where the theme
      allows, a light warm neutral on the cream card where white would vanish */
   --bars: #d5cebf;
@@ -27,8 +28,9 @@
     --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 28px -14px rgb(0 0 0 / 0.6);
     --accent: #6fbb92;
     --accent-fg: #10201a;
-    --ok: #7cc49c;
-    --bad: #e08b77;
+    /* verdict colors from the desktop app's dark theme */
+    --ok: #22c55e;
+    --bad: #ef4444;
     --bars: #ffffff;
   }
 }
