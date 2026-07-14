@@ -152,6 +152,9 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 0.8rem;
+  /* The toggle is taller than the text, so without explicit air the
+     description crowds the row. */
+  margin-bottom: 0.35rem;
 }
 .mset .mi-title { display: inline; }
 .seg {
