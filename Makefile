@@ -19,8 +19,12 @@ WEB_DECKS = \
 	mandarin-chinese=$(HOME)/d/projects/study-chinese-numbers.deck \
 	$(HOME)/d/projects/study-dog-breeds.deck
 
+# Bind localhost by default; `make run ADDR=0.0.0.0:8091` opens it to the
+# LAN (e.g. to try it from a phone).
+ADDR = 127.0.0.1:8091
+
 run:
-	./study-web -addr 127.0.0.1:8091 -data ./data $(WEB_DECKS)
+	./study-web -addr $(ADDR) -data ./data $(WEB_DECKS)
 
 install: study
 	mkdir -p $(PREFIX)/bin
