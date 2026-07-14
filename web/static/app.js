@@ -59,13 +59,10 @@
         clearInterval(pauseTick);
         primary.disabled = false;
         primary.textContent = label;
-        primary.focus();
       } else {
         primary.textContent = label + " (" + pause + ")";
       }
     }, 1000);
-  } else if (primary) {
-    primary.focus();
   }
 
   document.addEventListener("keydown", function (ev) {
