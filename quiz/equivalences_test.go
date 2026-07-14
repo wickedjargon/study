@@ -65,3 +65,33 @@ func TestEquivalences(t *testing.T) {
 		}
 	}
 }
+
+func TestSpellings(t *testing.T) {
+	yes := [][2]string{
+		{"5 metres", "5 meters"},
+		{"5 meters", "5 metres"},
+		{"5 metres", "5 m"}, // unit expansion still meets the folded spelling
+		{"colour", "color"},
+		{"gray", "grey"},
+		{"recognise", "recognize"},
+		{"recognized", "recognised"},
+		{"50 kilometres per hour", "50 km/h"},
+		{"theatre", "theater"},
+	}
+	for _, c := range yes {
+		if !acceptsCase(t, c[0], nil, c[1]) {
+			t.Errorf("card %q should accept %q", c[0], c[1])
+		}
+	}
+
+	no := [][2]string{
+		{"four", "for"}, // no suffix rules: real words stay themselves
+		{"hour", "hor"},
+		{"tour", "tor"},
+	}
+	for _, c := range no {
+		if acceptsCase(t, c[0], nil, c[1]) {
+			t.Errorf("card %q should NOT accept %q", c[0], c[1])
+		}
+	}
+}
