@@ -163,12 +163,11 @@
     {{end}}
     {{if .NextDue}}<p class="dim">next review {{.NextDue}}</p>{{end}}
   </section>
+  {{if .CanContinue}}
   <div class="actions">
-    {{if .CanContinue}}
     <form method="post" action="{{.Base}}/continue"><button class="primary">keep studying</button></form>
-    {{end}}
-    <form method="post" action="{{.Base}}/start"><button>start over</button></form>
   </div>
+  {{end}}
   <p class="center backlink"><a class="dim" href="{{.GroupURL}}">← back</a></p>
 {{end}}
 
