@@ -67,6 +67,7 @@ type quizView struct {
 	DeckName  string
 	Hue       int
 	Reviewing bool
+	Intros    bool // the guest's introduction preference
 	// Position is the desktop's [seen/total] session counter, formatted
 	// per screen exactly as gui does.
 	Position string
@@ -200,7 +201,8 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	guest := s.guestID(w, r)
-	sess, err := s.getSession(guest, g, info, modeKeep)
+	intros := introsOn(r)
+	sess, err := s.getSession(guest, g, info, modeKeep, intros)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -217,6 +219,7 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		DeckName:  info.Name,
 		Hue:       g.Hue,
 		Reviewing: sess.review,
+		Intros:    intros,
 		Remaining: e.Remaining(),
 		Seen:      e.TotalSeen,
 		Correct:   e.TotalCorrect,

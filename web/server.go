@@ -424,6 +424,31 @@ func validGuestID(v string) bool {
 	return err == nil
 }
 
+// introsOn reports the guest's introduction preference: unseen cards are
+// shown answer-visible once before being quizzed. On unless opted out — a
+// guest who already knows a deck (say, after clearing cookies) can skip
+// straight to being tested.
+func introsOn(r *http.Request) bool {
+	c, err := r.Cookie("intros")
+	return err != nil || c.Value != "off"
+}
+
+// setIntros persists the introduction preference.
+func setIntros(w http.ResponseWriter, on bool) {
+	v := "on"
+	if !on {
+		v = "off"
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     "intros",
+		Value:    v,
+		Path:     "/",
+		MaxAge:   10 * 365 * 24 * 60 * 60,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
 // guestStore opens the guest's progress store for a group.
 func (s *Server) guestStore(guest string, g *group) (*progress.Store, error) {
 	return progress.NewStoreIn(filepath.Join(s.dataDir, "users", guest), g.Path)
@@ -435,7 +460,7 @@ func (s *Server) guestStore(guest string, g *group) (*progress.Store, error) {
 // topic is live — the "start over" and "review" paths. A review session is
 // the deck in flip-through order: every card answer-visible, in authored
 // order, nothing recorded.
-func (s *Server) getSession(guest string, g *group, info *deckInfo, mode sessionMode) (*session, error) {
+func (s *Server) getSession(guest string, g *group, info *deckInfo, mode sessionMode, intros bool) (*session, error) {
 	key := guest + "|" + g.Slug
 
 	s.mu.Lock()
@@ -463,6 +488,10 @@ func (s *Server) getSession(guest string, g *group, info *deckInfo, mode session
 	review := mode == modeReview
 	if review {
 		d.Order = deck.OrderFlipThrough
+	} else {
+		// The guest's introduction preference overrides the deck header in
+		// both directions: it is their call, not the author's.
+		d.Preview = intros
 	}
 	quiz.Compose(d, store, time.Now())
 	sess := &session{
@@ -510,14 +539,20 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 	}
 	guest := s.guestID(w, r)
 	action := r.PathValue("action")
+	intros := introsOn(r)
 	mode := modeKeep
 	switch action {
 	case "start":
 		mode = modeQuiz
 	case "review":
 		mode = modeReview
+	case "intros":
+		// Flip the preference and recompose the quiz under it.
+		intros = !intros
+		setIntros(w, intros)
+		mode = modeQuiz
 	}
-	sess, err := s.getSession(guest, g, info, mode)
+	sess, err := s.getSession(guest, g, info, mode, intros)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -526,7 +561,7 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 	sess.mu.Lock()
 	e := sess.engine
 	switch action {
-	case "start", "review":
+	case "start", "review", "intros":
 		// getSession already recomposed.
 	case "answer":
 		var res *quiz.Result

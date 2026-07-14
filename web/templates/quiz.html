@@ -13,6 +13,9 @@
     {{if .Reviewing}}
     <form method="post" action="{{.Base}}/start"><button class="quiet" title="back to being quizzed">quiz me</button></form>
     {{else}}
+    {{if not .Intros}}
+    <form method="post" action="{{.Base}}/intros"><button class="quiet" title="introduce new cards, answer visible, before quizzing them">intros</button></form>
+    {{end}}
     <form method="post" action="{{.Base}}/review"><button class="quiet" title="flip through the cards, answers visible, nothing recorded">review</button></form>
     {{end}}
     <form method="post" action="{{.Base}}/end"><button class="quiet" title="finish session">end</button></form>
@@ -72,9 +75,12 @@
     <hr class="divider">
     <div class="answerside">{{template "media" .AnswerSide}}</div>
   </section>
-  <form method="post" action="{{.Base}}/preview" class="actions" id="primaryform">
-    <button class="primary">{{if .FlipMode}}next →{{else}}got it — quiz me{{end}}</button>
-  </form>
+  <div class="actions" id="primaryform">
+    <form method="post" action="{{.Base}}/preview"><button class="primary">{{if .FlipMode}}next →{{else}}got it — quiz me{{end}}</button></form>
+    {{if not .FlipMode}}
+    <form method="post" action="{{.Base}}/intros"><button class="quiet" title="I know this deck — stop introducing cards, quiz me directly">skip intros</button></form>
+    {{end}}
+  </div>
 
 {{else if eq .Screen "result"}}
   <section class="card {{if .ResultCorrect}}won{{else}}lost{{end}}">
