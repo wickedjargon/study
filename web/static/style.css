@@ -1,4 +1,4 @@
-/* study — warm, minimal, editorial. One accent for actions; each deck gets
+/* study — warm, minimal, sans throughout. One accent for actions; each deck gets
    its own identity hue (--h, set inline) for the roundel and progress bar. */
 
 :root {
@@ -13,7 +13,6 @@
   --accent-fg: #f6fbf7;
   --ok: #35704f;
   --bad: #b04a37;
-  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -58,7 +57,6 @@ body {
   padding-top: 3.5rem;
 }
 .brand {
-  font-family: var(--serif);
   font-weight: 700;
   font-size: 1.15rem;
   letter-spacing: 0.01em;
@@ -66,7 +64,7 @@ body {
   text-decoration: none;
 }
 .bar.home .brand { font-size: 2.2rem; }
-.tagline { color: var(--dim); font-size: 0.95rem; font-style: italic; font-family: var(--serif); }
+.tagline { color: var(--dim); font-size: 0.95rem; }
 .bartitle {
   font-weight: 600;
   white-space: nowrap;
@@ -135,7 +133,6 @@ main.list { justify-content: flex-start; padding-top: 2.5rem; }
   overflow-wrap: break-word;
 }
 .cardtext.primary {
-  font-family: var(--serif);
   font-size: 2.2rem;
   line-height: 1.5;
   color: var(--fg);
@@ -297,7 +294,7 @@ button.quiet:hover { color: var(--fg); }
 /* ---- caught up / summary ---- */
 .card.standalone { padding: 2.6rem 2rem; }
 .bigmark { font-size: 2.6rem; margin: 0 0 0.4rem; color: var(--ok); }
-.lede { font-family: var(--serif); font-size: 1.7rem; font-weight: 700; margin: 0 0 0.7rem; }
+.lede { font-size: 1.7rem; font-weight: 700; margin: 0 0 0.7rem; }
 .score { font-size: 1.15rem; margin: 0.2rem 0 0.6rem; }
 .backlink { margin-top: 1.6rem; }
 .backlink a { text-decoration: none; }
@@ -334,7 +331,6 @@ button.quiet:hover { color: var(--fg); }
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-family: var(--serif);
   font-size: 1.3rem;
   font-weight: 700;
   background: hsl(var(--h) 45% 90%);
@@ -346,7 +342,6 @@ button.quiet:hover { color: var(--fg); }
 .deckinfo { min-width: 0; }
 .deckname {
   display: block;
-  font-family: var(--serif);
   font-weight: 700;
   font-size: 1.25rem;
 }
