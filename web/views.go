@@ -65,6 +65,7 @@ type quizView struct {
 	GroupName string
 	DeckName  string
 	Hue       int
+	Reviewing bool
 
 	// Header counters. Progress is the session's completion percentage:
 	// cards that have met their criterion over cards in play.
@@ -195,7 +196,7 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	guest := s.guestID(w, r)
-	sess, err := s.getSession(guest, g, info, false)
+	sess, err := s.getSession(guest, g, info, modeKeep)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -211,6 +212,7 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		GroupName: g.Name,
 		DeckName:  info.Name,
 		Hue:       g.Hue,
+		Reviewing: sess.review,
 		Remaining: e.Remaining(),
 		Seen:      e.TotalSeen,
 		Correct:   e.TotalCorrect,

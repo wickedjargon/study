@@ -113,8 +113,18 @@ type session struct {
 	engine  *quiz.Engine
 	store   *progress.Store
 	last    *quiz.Result
+	review  bool // flip-through: answers visible, nothing recorded
 	touched time.Time
 }
+
+// sessionMode says what getSession should do with an existing session.
+type sessionMode int
+
+const (
+	modeKeep   sessionMode = iota // reuse whatever is live, else start a quiz
+	modeQuiz                      // force a fresh quiz session
+	modeReview                    // force a fresh flip-through session
+)
 
 // sessionIdleLimit is how long an untouched session survives; pruned lazily
 // when new sessions are created. Progress is saved after every answer, so an
@@ -421,15 +431,17 @@ func (s *Server) guestStore(guest string, g *group) (*progress.Store, error) {
 
 // getSession returns the guest's live session for a deck, composing a fresh
 // one (from their saved group progress) if none is live or a different topic
-// of the group is. forceNew recomposes even when the same topic is live —
-// the "start over" path.
-func (s *Server) getSession(guest string, g *group, info *deckInfo, forceNew bool) (*session, error) {
+// of the group is. modeQuiz and modeReview recompose even when the same
+// topic is live — the "start over" and "review" paths. A review session is
+// the deck in flip-through order: every card answer-visible, in authored
+// order, nothing recorded.
+func (s *Server) getSession(guest string, g *group, info *deckInfo, mode sessionMode) (*session, error) {
 	key := guest + "|" + g.Slug
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if sess, ok := s.sessions[key]; ok && sess.info == info && !forceNew {
+	if sess, ok := s.sessions[key]; ok && sess.info == info && mode == modeKeep {
 		sess.touched = time.Now()
 		return sess, nil
 	}
@@ -448,12 +460,17 @@ func (s *Server) getSession(guest string, g *group, info *deckInfo, forceNew boo
 	if err != nil {
 		return nil, err
 	}
+	review := mode == modeReview
+	if review {
+		d.Order = deck.OrderFlipThrough
+	}
 	quiz.Compose(d, store, time.Now())
 	sess := &session{
 		info:    info,
 		deck:    d,
 		engine:  quiz.NewEngine(d, info.Cards, store),
 		store:   store,
+		review:  review,
 		touched: time.Now(),
 	}
 	s.sessions[key] = sess
@@ -493,7 +510,14 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 	}
 	guest := s.guestID(w, r)
 	action := r.PathValue("action")
-	sess, err := s.getSession(guest, g, info, action == "start")
+	mode := modeKeep
+	switch action {
+	case "start":
+		mode = modeQuiz
+	case "review":
+		mode = modeReview
+	}
+	sess, err := s.getSession(guest, g, info, mode)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -502,7 +526,7 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 	sess.mu.Lock()
 	e := sess.engine
 	switch action {
-	case "start":
+	case "start", "review":
 		// getSession already recomposed.
 	case "answer":
 		var res *quiz.Result

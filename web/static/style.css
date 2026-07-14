@@ -344,6 +344,17 @@ button.quiet:hover { color: var(--fg); }
   display: grid;
   gap: 0.8rem;
 }
+.decklist li { display: flex; gap: 0.6rem; align-items: stretch; }
+.decklist li .deck { flex: 1; min-width: 0; }
+.decklist li form { display: flex; }
+.flipbtn {
+  color: var(--dim);
+  font-size: 0.85rem;
+  border-radius: 14px;
+  padding: 0 1rem;
+  animation: rise 0.25s ease-out;
+}
+.flipbtn:hover { color: var(--accent); }
 .deck {
   display: flex;
   align-items: center;

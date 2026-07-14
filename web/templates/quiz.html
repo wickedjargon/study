@@ -10,6 +10,11 @@
     {{if .Seen}}<span class="ok">{{.Correct}}✓</span> <span class="bad">{{.Wrong}}✗</span>{{end}}
   </span>
   {{if ne .Screen "summary"}}
+  {{if .Reviewing}}
+  <form method="post" action="{{.Base}}/start"><button class="quiet" title="back to being quizzed">quiz me</button></form>
+  {{else}}
+  <form method="post" action="{{.Base}}/review"><button class="quiet" title="flip through the cards, answers visible, nothing recorded">review</button></form>
+  {{end}}
   <form method="post" action="{{.Base}}/end"><button class="quiet" title="finish session">end</button></form>
   {{end}}
 </header>
@@ -50,7 +55,10 @@
 
 {{else if eq .Screen "preview"}}
   <section class="card">
-    <div class="badges">{{if .IsNew}}<span class="badge new">new card — take it in first</span>{{end}}</div>
+    <div class="badges">
+      {{if .FlipMode}}<span class="badge ahead">reviewing</span>
+      {{else if .IsNew}}<span class="badge new">new card — take it in first</span>{{end}}
+    </div>
     {{template "media" .Question}}
     <hr class="divider">
     <div class="answerside">{{template "media" .AnswerSide}}</div>
@@ -84,9 +92,10 @@
     <p class="lede">You're all caught up</p>
     <p class="dim">Nothing is due for review{{if .NextDue}} — next review {{.NextDue}}{{end}}.</p>
   </section>
-  <form method="post" action="{{.Base}}/continue" class="actions" id="primaryform">
-    <button class="primary">keep studying anyway</button>
-  </form>
+  <div class="actions" id="primaryform">
+    <form method="post" action="{{.Base}}/continue"><button class="primary">keep studying anyway</button></form>
+    <form method="post" action="{{.Base}}/review"><button>flip through instead</button></form>
+  </div>
   <p class="center backlink"><a class="dim" href="{{.GroupURL}}">← back</a></p>
 
 {{else if eq .Screen "summary"}}
