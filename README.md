@@ -1,6 +1,11 @@
 # study
 
-A flashcard quiz tool inspired by suckless sent. Decks are plain text files. Sessions run in a minimal X11 window. The default card order, `adaptive`, is an evidence-based [spaced-repetition](https://en.wikipedia.org/wiki/Spaced_repetition) scheduler: it picks what's due, spaces repetitions within the session, and grows review intervals across days.
+A flashcard quiz tool inspired by suckless sent. Decks are plain text files. The default card order, `adaptive`, is an evidence-based [spaced-repetition](https://en.wikipedia.org/wiki/Spaced_repetition) scheduler: it picks what's due, spaces repetitions within the session, and grows review intervals across days.
+
+There are two frontends over the same engine, deck format, and progress files:
+
+- **`study` (desktop)** — sessions run in a minimal X11 window; progress is saved per user under `~/.local/share/study`.
+- **`study-web` (web)** — the same quizzes in a browser. Visitors are guests identified by a cookie, each with their own progress, no account needed. Decks are organized two levels deep: pick a language, then a topic (or its merged "Everything").
 
 The `adaptive` order is based on these papers:
 
@@ -14,9 +19,15 @@ The specific review intervals (1, 3, 7, … days) and the lapse handling (halvin
 
 # Screenshots
 
+## Desktop
+
 ![correct answer provided](screenshot.png)
 
 ![wrong answer provided](screenshot-wrong-answer.png)
+
+## Web
+
+![a multiple choice image card in study-web](screenshot-web.png)
 
 # Getting started
 
@@ -60,7 +71,24 @@ For more, [examples/basic.deck](examples/basic.deck) is a small beginner deck,
 and the [language packs](https://github.com/wickedjargon/study-language-packages)
 are full-size decks with audio, native script, and pack directories.
 
-# Usage
+# Web version
+
+```bash
+make study-web
+./study-web [flags] <deck-or-dir>...
+```
+
+Each argument is a deck (a `*.deck` file or pack directory), or a directory of
+decks. `group=path` nests a pack as a topic of an existing group;
+`path@Display Name` overrides the name shown. `make run` starts the server
+with this machine's decks — see [RUNNING.md](RUNNING.md).
+
+The web version follows the same scheduler as the desktop, with two guest
+conveniences: unseen cards introduce themselves once before being quizzed
+("skip intros" turns that off), and every deck offers a review mode that flips
+through cards, answers visible, without recording anything.
+
+# Desktop usage
 
 ```
 study [flags] <deck-file | pack-directory>
