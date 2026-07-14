@@ -137,7 +137,9 @@ const sessionIdleLimit = 6 * time.Hour
 // or single *.deck file (one group), or a directory whose deck entries each
 // become a group. A "group=path" argument instead nests the pack as one
 // topic inside an existing group, whatever the argument order — so Mahjong
-// can live under Japanese rather than clutter the top level.
+// can live under Japanese rather than clutter the top level. A "@Display
+// Name" suffix on a deck path overrides the name derived from the file name,
+// e.g. …/study-mexican-spanish.deck@Spanish (Mexican).
 func New(deckPaths []string, dataDir string) (*Server, error) {
 	s := &Server{
 		bySlug:   make(map[string]*group),
@@ -145,18 +147,22 @@ func New(deckPaths []string, dataDir string) (*Server, error) {
 		sessions: make(map[string]*session),
 	}
 
-	var nested [][2]string
+	var nested [][3]string
 	for _, p := range deckPaths {
+		var display string
+		if path, name, ok := strings.Cut(p, "@"); ok {
+			p, display = path, name
+		}
 		if name, path, ok := strings.Cut(p, "="); ok && !strings.Contains(name, "/") {
-			nested = append(nested, [2]string{name, filepath.Clean(path)})
+			nested = append(nested, [3]string{name, filepath.Clean(path), display})
 			continue
 		}
-		if err := s.scanPath(filepath.Clean(p)); err != nil {
+		if err := s.scanPath(filepath.Clean(p), display); err != nil {
 			return nil, err
 		}
 	}
 	for _, n := range nested {
-		if err := s.nestPack(n[0], n[1]); err != nil {
+		if err := s.nestPack(n[0], n[1], n[2]); err != nil {
 			return nil, err
 		}
 	}
@@ -191,10 +197,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // scanPath catalogs one command-line path: a *.deck name (file or pack
 // directory) becomes a group; anything else is a directory whose *.deck
-// entries each become one.
-func (s *Server) scanPath(path string) error {
+// entries each become one (display overrides only apply to deck paths).
+func (s *Server) scanPath(path, display string) error {
 	if strings.HasSuffix(path, ".deck") {
-		s.addGroup(path)
+		s.addGroup(path, display)
 		return nil
 	}
 	entries, err := os.ReadDir(path)
@@ -210,19 +216,23 @@ func (s *Server) scanPath(path string) error {
 		} else if !strings.HasSuffix(e.Name(), ".deck") {
 			continue
 		}
-		s.addGroup(sub)
+		s.addGroup(sub, "")
 	}
 	return nil
 }
 
-// addGroup catalogs one group from a pack directory or single deck file.
+// addGroup catalogs one group from a pack directory or single deck file,
+// displayed under the given name (or one prettified from the file name).
 // A group (or topic within it) that fails to parse is skipped with a log
 // line rather than sinking the whole server.
-func (s *Server) addGroup(path string) {
-	slug := s.uniqueGroupSlug(filepath.Base(path))
+func (s *Server) addGroup(path, display string) {
+	if display == "" {
+		display = prettyName(filepath.Base(path))
+	}
+	slug := s.uniqueGroupSlug(display)
 	g := &group{
 		Slug: slug,
-		Name: prettyName(filepath.Base(path)),
+		Name: display,
 		Hue:  deckHue(slug),
 		Path: path,
 	}
@@ -268,9 +278,10 @@ func (s *Server) addGroup(path string) {
 
 // nestPack adds a pack (or single deck file) as one topic of an existing
 // group, named without the group's own name ("Japanese Numbers" under
-// Japanese is just "Numbers"). Its cards share the group's progress store;
-// they are not part of the group's merged Everything session.
-func (s *Server) nestPack(groupSlug, path string) error {
+// Japanese is just "Numbers") unless a display override is given. Its cards
+// share the group's progress store; they are not part of the group's merged
+// Everything session.
+func (s *Server) nestPack(groupSlug, path, display string) error {
 	g := s.bySlug[groupSlug]
 	if g == nil {
 		known := make([]string, 0, len(s.groups))
@@ -289,7 +300,10 @@ func (s *Server) nestPack(groupSlug, path string) error {
 		taken[di.Slug] = true
 	}
 	base := filepath.Base(path)
-	name := strings.TrimPrefix(prettyName(base), g.Name+" ")
+	name := display
+	if name == "" {
+		name = strings.TrimPrefix(prettyName(base), g.Name+" ")
+	}
 	g.Decks = append(g.Decks, newDeckInfo(d, name, slugify(strings.TrimPrefix(base, "study-")), taken))
 	sort.Slice(g.Decks, func(i, j int) bool { return g.Decks[i].Name < g.Decks[j].Name })
 	return nil
@@ -364,7 +378,11 @@ func slugify(name string) string {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
 			b.WriteRune(r)
 		default:
-			b.WriteRune('-')
+			// Runs of separators collapse: "Spanish (Mexican)" →
+			// "spanish-mexican", not "spanish--mexican-".
+			if s := b.String(); s != "" && !strings.HasSuffix(s, "-") {
+				b.WriteRune('-')
+			}
 		}
 	}
 	slug := strings.Trim(b.String(), "-")

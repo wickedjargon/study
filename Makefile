@@ -10,9 +10,15 @@ study-web:
 
 # The local demo decks. `make run` needs the binary built first (go lives in
 # the archbox container; running the binary doesn't).
+# Language variants share a "Language (Variant)" display name (the @ suffix)
+# so they sort next to each other on the home page.
 WEB_DECKS = \
-	$(HOME)/d/projects/language-packs \
-	$(HOME)/d/projects/study-mexican-spanish.deck \
+	$(HOME)/d/projects/language-packs/study-japanese.deck \
+	$(HOME)/d/projects/language-packs/study-farsi.deck \
+	$(HOME)/d/projects/language-packs/study-mandarin-chinese.deck \
+	'$(HOME)/d/projects/language-packs/study-colombian-spanish.deck@Spanish (Colombian)' \
+	'$(HOME)/d/projects/study-mexican-spanish.deck@Spanish (Mexican)' \
+	'$(HOME)/d/projects/language-packs/study-brazilian-portuguese.deck@Portuguese (Brazilian)' \
 	japanese=$(HOME)/d/projects/study-japanese-numbers.deck \
 	japanese=$(HOME)/d/projects/study-mahjong.deck \
 	farsi=$(HOME)/d/projects/study-farsi-numbers.deck \
