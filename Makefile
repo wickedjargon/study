@@ -24,9 +24,12 @@ WEB_DECKS = \
 ADDR = 127.0.0.1:8091
 
 run:
+	@test -x study-web || { echo "study-web is not built — run: distrobox enter archbox -- make study-web"; exit 1; }
 	./study-web -addr $(ADDR) -data ./data $(WEB_DECKS)
 
-install: study
+# install also rebuilds study-web so a `make clean install` doesn't leave
+# `make run` without its binary.
+install: study study-web
 	mkdir -p $(PREFIX)/bin
 	cp -f study $(PREFIX)/bin/
 	@echo "installed to $(PREFIX)/bin/study"
