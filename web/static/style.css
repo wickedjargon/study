@@ -421,6 +421,14 @@ button.quiet:hover { color: var(--fg); }
 .deckmeta .done { color: var(--ok); font-weight: 600; }
 .go { margin-left: auto; color: var(--dim); font-size: 1.2rem; transition: transform 0.12s ease; }
 
+.contact {
+  margin-top: 2.5rem;
+  text-align: center;
+  font-size: 0.85rem;
+}
+.contact a { color: var(--dim); text-decoration: none; }
+.contact a:hover { color: var(--fg); }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
