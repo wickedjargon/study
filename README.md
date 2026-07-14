@@ -127,7 +127,12 @@ Set with the `--order` flag or the `# order:` deck header:
 
 `=` after the answer adds an extra accepted answer (type mode). Matching is
 lenient by default. Case, accents, punctuation, and extra spaces are
-forgiven (`salam` matches `salâm`):
+forgiven (`salam` matches `salâm`), and English contractions match their
+expansions in both directions (`I don't understand` matches
+`I do not understand`, `he's home` matches `he is home`) — no `=` variant
+needed. Ambiguous forms accept either reading (`she's` matches both
+`she is` and `she has`), while bare words that merely look like
+contractions (`ill`, `were`, `well`) are never expanded:
 
 ```
 bonjour
