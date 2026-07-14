@@ -98,6 +98,7 @@ study [flags] <deck-file | pack-directory>
 |------|-------------|
 | `--reverse` | Flip the deck: see the English, produce the target language |
 | `--order <mode>` | Override the deck's card order for this session. See [Card order](#card-order) |
+| `--answer-mode <type\|choice>` | Force how every card is answered this session, overriding the deck's `# answer-mode:` and per-card settings. Note the card's progress history is shared between modes, and recognition (choice) successes are easier evidence than production (type) ones |
 | `--ahead <N\|all>` | Adaptive order: also review cards due within N days, or all scheduled. See [Card order](#card-order) |
 | `--time-limit <N\|none>` | Override the per-question time limit, uniformly for every card |
 | `--wrong-pause <N\|none>` | How long a wrong answer's result screen refuses to advance (default 5s) |

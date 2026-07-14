@@ -31,6 +31,11 @@ a directory is a pack: every *.deck file inside is merged into one session.
 flags (each overrides the deck header's setting for this session):
   --reverse             flip the deck: see English, produce the target language
   --order <mode>        card order (see # order: below)
+  --answer-mode <type|choice>
+                        force how every card is answered this session,
+                        overriding the deck's answer-mode and per-card
+                        settings (incl. distractor-implied choice); progress
+                        is shared between modes
   --ahead <N|all>       adaptive order: also review cards due within N days
                         (or all scheduled); a clean early review leaves the
                         card's schedule untouched, a miss still counts
@@ -76,6 +81,7 @@ examples:
 func main() {
 	reverse := flag.Bool("reverse", false, "flip the deck: see English, produce the target language")
 	orderFlag := flag.String("order", "", "override the deck's card order for this session (see # order: values)")
+	answerModeFlag := flag.String("answer-mode", "", "force type or choice answering for every card this session")
 	aheadFlag := flag.String("ahead", "", "also review cards due within N days (or all), without advancing their schedule on success")
 	timeLimitFlag := flag.String("time-limit", "", "override every per-question time limit (seconds, or none)")
 	wrongPauseFlag := flag.String("wrong-pause", "", "override the wrong-answer pause (seconds, or none)")
@@ -127,10 +133,13 @@ func main() {
 	}
 
 	// Session overrides. Precedence is built-in default ← deck header ← flag,
-	// so a flag always wins; only session-shaped settings have flags (order,
-	// timing, preview, presentation) — settings that change what counts as a
-	// correct answer (answer-mode, answer-case, choice-count) are deliberately
-	// file-only. Applied after Reversed() so they survive the deck copy.
+	// so a flag always wins. Most flags are session-shaped (order, timing,
+	// preview, presentation); settings that change what counts as a correct
+	// answer are file-only (answer-case, choice-count) with one deliberate
+	// exception: --answer-mode, so a recognition deck can be drilled as
+	// production. The card's history is shared between modes — recognition
+	// successes are easier evidence than production successes — which is the
+	// price of the flag. Applied after Reversed() so they survive the copy.
 	if *orderFlag != "" {
 		m, ok := deck.ParseOrderMode(*orderFlag)
 		if !ok {
@@ -138,6 +147,24 @@ func main() {
 			os.Exit(1)
 		}
 		d.Order = m
+	}
+	if *answerModeFlag != "" {
+		var m deck.QuizMode
+		switch strings.TrimSpace(strings.ToLower(*answerModeFlag)) {
+		case "type":
+			m = deck.ModeType
+		case "choice":
+			m = deck.ModeChoice
+		default:
+			fmt.Fprintf(os.Stderr, "✗ --answer-mode: need type or choice (got %q)\n", *answerModeFlag)
+			os.Exit(1)
+		}
+		// Every card follows, outranking per-card directives and the
+		// distractor-implied choice inference.
+		d.Mode = m
+		for i := range d.Cards {
+			d.Cards[i].Mode = m
+		}
 	}
 	if *timeLimitFlag != "" {
 		n, ok := deck.ParseTimeLimit(*timeLimitFlag)
