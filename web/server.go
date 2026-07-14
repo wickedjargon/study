@@ -748,8 +748,6 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		e.ConfirmPreview()
 	case "continue":
 		e.ContinueAll()
-	case "end":
-		e.End()
 	default:
 		sess.mu.Unlock()
 		http.NotFound(w, r)
