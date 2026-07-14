@@ -129,7 +129,10 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		Wrong:     e.TotalWrong,
 	}
 	if size := e.DeckSize(); size > 0 {
-		view.Progress = (size - view.Remaining) * 100 / size
+		// On a result screen the just-requeued card is momentarily counted
+		// both as current and in the queue, pushing Remaining past size —
+		// clamp, or the bar's width goes negative (which CSS renders full).
+		view.Progress = max((size-view.Remaining)*100/size, 0)
 	}
 	speed := sess.deck.Speed
 	if speed == 0 {
