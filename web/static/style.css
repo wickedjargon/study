@@ -153,6 +153,7 @@ main.list { justify-content: flex-start; padding-top: 2.5rem; }
 .play {
   width: 3.4rem;
   height: 3.4rem;
+  padding: 0;
   border-radius: 50%;
   border: 0;
   background: var(--accent);
@@ -165,17 +166,16 @@ main.list { justify-content: flex-start; padding-top: 2.5rem; }
 }
 .play:hover { transform: scale(1.06); }
 .play:active { transform: scale(0.96); }
-.play .icon { margin-left: 2px; }
-.play .bars { display: none; align-items: flex-end; gap: 3px; height: 20px; }
+.play .bars { display: none; align-items: flex-end; gap: 3px; height: 22px; }
 .play .bars i {
-  width: 4px;
-  border-radius: 2px;
+  width: 5px;
+  border-radius: 2.5px;
   background: var(--accent-fg);
   animation: bounce 0.9s ease-in-out infinite;
 }
-.play .bars i:nth-child(1) { height: 9px; }
-.play .bars i:nth-child(2) { height: 17px; animation-delay: 0.15s; }
-.play .bars i:nth-child(3) { height: 12px; animation-delay: 0.3s; }
+.play .bars i:nth-child(1) { height: 11px; }
+.play .bars i:nth-child(2) { height: 21px; animation-delay: 0.15s; }
+.play .bars i:nth-child(3) { height: 15px; animation-delay: 0.3s; }
 @keyframes bounce { 50% { transform: scaleY(0.45); } }
 .player.playing .icon { display: none; }
 .player.playing .bars { display: inline-flex; }
