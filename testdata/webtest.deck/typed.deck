@@ -1,0 +1,15 @@
+# Playground — Typed
+# answer-mode: type
+# wrong-pause: none
+
+# Two instant cards plus a cloze. Answers are single characters.
+
+1 + 1
+---
+2
+
+first letter of the alphabet
+---
+a
+
+the answer is {{b}}

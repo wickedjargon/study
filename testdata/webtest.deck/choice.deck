@@ -1,0 +1,17 @@
+# Playground — Multiple Choice
+# answer-mode: choice
+# wrong-pause: none
+
+pick the letter A
+---
+A
+~ B
+~ C
+~ D
+
+pick the letter B
+---
+B
+~ A
+~ C
+~ D

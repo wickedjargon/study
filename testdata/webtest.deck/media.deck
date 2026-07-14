@@ -1,0 +1,17 @@
+# Playground — Image & Audio
+# answer-mode: type
+# wrong-pause: none
+
+@img media/red.png
+what color is this? (type: red)
+---
+red
+
+@audio media/beep.mp3
+you hear a beep. type: beep
+---
+beep
+
+@img media/blue.png
+---
+blue

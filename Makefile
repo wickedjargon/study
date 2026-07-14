@@ -40,6 +40,13 @@ run:
 	@test -x study-web || { echo "study-web is not built — run: distrobox enter archbox -- make study-web"; exit 1; }
 	./study-web -addr $(ADDR) -data ./data $(WEB_DECKS)
 
+# A local playground on its own port: tiny decks that reach every screen in
+# a few keystrokes (one-letter answers, no wrong-pause). Progress goes to a
+# throwaway directory, so every start is a fresh, predictable state.
+test-run:
+	@test -x study-web || { echo "study-web is not built — run: distrobox enter archbox -- make study-web"; exit 1; }
+	./study-web -addr 127.0.0.1:8095 -data $$(mktemp -d) 'testdata/webtest.deck@Playground'
+
 # install also rebuilds study-web so a `make clean install` doesn't leave
 # `make run` without its binary.
 install: study study-web

@@ -1,0 +1,8 @@
+# Playground — Wrong Pause
+# answer-mode: type
+
+# Default 5s pause on wrong answers: answer wrong to see the countdown.
+
+type z (or answer wrong to test the pause)
+---
+z

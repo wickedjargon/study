@@ -1,0 +1,8 @@
+# Playground — Timer
+# answer-mode: type
+# time-limit: 5
+# wrong-pause: none
+
+type x before the 5s timer runs out
+---
+x
