@@ -166,7 +166,7 @@ main.list { justify-content: flex-start; padding-top: 2.5rem; }
   cursor: pointer;
   transition: color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
 }
-.play:hover { color: var(--accent); border-color: var(--accent); }
+.play:hover { color: var(--accent); }
 .play:active { transform: scale(0.94); }
 .play .icon { width: 18px; height: 18px; }
 
@@ -197,7 +197,7 @@ main.list { justify-content: flex-start; padding-top: 2.5rem; }
 .play .bars i:nth-child(2) { height: 14px; animation-delay: 0.15s; }
 .play .bars i:nth-child(3) { height: 10px; animation-delay: 0.3s; }
 @keyframes bounce { 50% { transform: scaleY(0.45); } }
-.player.playing .play { color: var(--accent); border-color: var(--accent); }
+.player.playing .play { color: var(--accent); }
 .player.playing .icon { display: none; }
 .player.playing .bars { display: inline-flex; }
 .player audio { display: none; }
