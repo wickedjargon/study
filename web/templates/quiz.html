@@ -3,12 +3,14 @@
 <div class="page" style="--h: {{.Hue}}">
 <header class="bar">
   <a class="brand" href="/" title="all decks">study</a>
-  <span class="bartitle">{{.DeckName}}</span>
+  <span class="bartitle">
+    {{if .GroupName}}<a class="crumb" href="{{.GroupURL}}">{{.GroupName}}</a> <span class="dim">›</span> {{end}}{{.DeckName}}
+  </span>
   <span class="counts">
     {{if .Seen}}<span class="ok">{{.Correct}}✓</span> <span class="bad">{{.Wrong}}✗</span>{{end}}
   </span>
   {{if ne .Screen "summary"}}
-  <form method="post" action="/q/{{.Slug}}/end"><button class="quiet" title="finish session">end</button></form>
+  <form method="post" action="{{.Base}}/end"><button class="quiet" title="finish session">end</button></form>
   {{end}}
 </header>
 {{if or (eq .Screen "question") (eq .Screen "preview") (eq .Screen "result")}}
@@ -29,19 +31,19 @@
     {{template "media" .Question}}
   </section>
   {{if .Choice}}
-  <form method="post" action="/q/{{.Slug}}/answer" class="choices" id="answerform">
+  <form method="post" action="{{.Base}}/answer" class="choices" id="answerform">
     {{range $i, $opt := .Options}}
     <button name="choice" value="{{$i}}" class="choice" dir="auto"><kbd>{{keynum $i}}</kbd><span dir="auto">{{$opt}}</span></button>
     {{end}}
   </form>
   {{else}}
-  <form method="post" action="/q/{{.Slug}}/answer" class="typed" id="answerform">
+  <form method="post" action="{{.Base}}/answer" class="typed" id="answerform">
     <input type="text" name="answer" dir="auto" autofocus autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="type your answer…">
     <button class="primary">check</button>
   </form>
   {{end}}
   {{if .TimeLimit}}
-  <form method="post" action="/q/{{.Slug}}/answer" id="timeoutform" hidden>
+  <form method="post" action="{{.Base}}/answer" id="timeoutform" hidden>
     <input type="hidden" name="timeout" value="1">
   </form>
   {{end}}
@@ -53,7 +55,7 @@
     <hr class="divider">
     <div class="answerside">{{template "media" .AnswerSide}}</div>
   </section>
-  <form method="post" action="/q/{{.Slug}}/preview" class="actions" id="primaryform">
+  <form method="post" action="{{.Base}}/preview" class="actions" id="primaryform">
     <button class="primary">{{if .FlipMode}}next →{{else}}got it — quiz me{{end}}</button>
   </form>
 
@@ -72,7 +74,7 @@
     <div class="answerside">{{template "media" .AnswerSide}}</div>
     {{if .ConfusedWith}}<p class="confused">that's the answer to a different card: <span dir="auto">{{.ConfusedWith}}</span></p>{{end}}
   </section>
-  <form method="post" action="/q/{{.Slug}}/next" class="actions" id="primaryform">
+  <form method="post" action="{{.Base}}/next" class="actions" id="primaryform">
     <button class="primary" {{if .WrongPause}}data-pause="{{.WrongPause}}"{{end}}>next →</button>
   </form>
 
@@ -82,10 +84,10 @@
     <p class="lede">You're all caught up</p>
     <p class="dim">Nothing is due for review{{if .NextDue}} — next review {{.NextDue}}{{end}}.</p>
   </section>
-  <form method="post" action="/q/{{.Slug}}/continue" class="actions" id="primaryform">
+  <form method="post" action="{{.Base}}/continue" class="actions" id="primaryform">
     <button class="primary">keep studying anyway</button>
   </form>
-  <p class="center backlink"><a class="dim" href="/">← all decks</a></p>
+  <p class="center backlink"><a class="dim" href="{{.GroupURL}}">← back</a></p>
 
 {{else if eq .Screen "summary"}}
   <section class="card center standalone">
@@ -100,11 +102,11 @@
   </section>
   <div class="actions">
     {{if .CanContinue}}
-    <form method="post" action="/q/{{.Slug}}/continue"><button class="primary">keep studying</button></form>
+    <form method="post" action="{{.Base}}/continue"><button class="primary">keep studying</button></form>
     {{end}}
-    <form method="post" action="/q/{{.Slug}}/start"><button>start over</button></form>
+    <form method="post" action="{{.Base}}/start"><button>start over</button></form>
   </div>
-  <p class="center backlink"><a class="dim" href="/">← all decks</a></p>
+  <p class="center backlink"><a class="dim" href="{{.GroupURL}}">← back</a></p>
 {{end}}
 
 </main>

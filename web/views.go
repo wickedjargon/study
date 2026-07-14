@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"study/deck"
-	"study/progress"
 	"study/quiz"
 )
 
@@ -20,13 +19,15 @@ type mediaView struct {
 	AudioURL string
 }
 
-// homeDeck is one row of the picker: the deck plus this guest's schedule
-// against it, so a returning friend sees their reviews waiting.
-type homeDeck struct {
-	Slug    string
+// homeGroup is one row of the home page: a language (or subject) plus this
+// guest's schedule against it, so a returning friend sees their reviews
+// waiting.
+type homeGroup struct {
+	URL     string // the group page, or straight into the quiz for a single topic
 	Name    string
 	Initial string
 	Hue     int
+	Topics  int
 	Cards   int
 	Due     int
 	Fresh   int
@@ -34,16 +35,36 @@ type homeDeck struct {
 }
 
 type homeView struct {
-	Decks []homeDeck
+	Groups []homeGroup
+}
+
+// groupDeck is one topic row on a group's page.
+type groupDeck struct {
+	URL     string
+	Name    string
+	All     bool // the merged "Everything" entry
+	Cards   int
+	Due     int
+	Fresh   int
+	Studied bool
+}
+
+type groupView struct {
+	Name    string
+	Initial string
+	Hue     int
+	Decks   []groupDeck
 }
 
 // quizView carries every screen of the session; Screen selects the template
 // block ("question", "preview", "result", "caughtup", "summary").
 type quizView struct {
-	Screen   string
-	Slug     string
-	DeckName string
-	Hue      int
+	Screen    string
+	Base      string // action/URL prefix: /q/{group}/{deck}
+	GroupURL  string
+	GroupName string
+	DeckName  string
+	Hue       int
 
 	// Header counters. Progress is the session's completion percentage:
 	// cards that have met their criterion over cards in play.
@@ -78,38 +99,94 @@ type quizView struct {
 	AllCorrect, AllWrong, CardsStudied int
 }
 
+// quizURL returns the quiz page for a group's deck.
+func quizURL(g *group, info *deckInfo) string {
+	return "/q/" + g.Slug + "/" + info.Slug
+}
+
 func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	guest := s.guestID(w, r)
 	view := homeView{}
 	now := time.Now()
-	for _, info := range s.decks {
-		row := homeDeck{
-			Slug:    info.Slug,
-			Name:    info.Name,
-			Initial: string([]rune(info.Name)[:1]),
-			Hue:     info.Hue,
-			Cards:   len(info.Cards),
+	for _, g := range s.groups {
+		all := g.All
+		if all == nil {
+			all = g.Decks[0]
 		}
-		// The picker shows the guest's own schedule; a store is cheap to open
-		// (one JSON read) and this stays read-only.
-		if store, err := progress.NewStoreIn(filepath.Join(s.dataDir, "users", guest), info.Path); err == nil {
-			reviews, fresh, _, _ := quiz.SplitDue(info.Cards, store, now)
+		row := homeGroup{
+			URL:     "/g/" + g.Slug,
+			Name:    g.Name,
+			Initial: string([]rune(g.Name)[:1]),
+			Hue:     g.Hue,
+			Topics:  len(g.Decks),
+			Cards:   len(all.Cards),
+		}
+		if g.single() {
+			row.URL = quizURL(g, g.Decks[0])
+		}
+		// The picker shows the guest's own schedule; a store is cheap to
+		// open (one JSON read) and this stays read-only.
+		if store, err := s.guestStore(guest, g); err == nil {
+			reviews, fresh, _, _ := quiz.SplitDue(all.Cards, store, now)
 			row.Due = len(reviews)
 			row.Fresh = len(fresh)
-			row.Studied = len(fresh) < len(info.Cards)
+			row.Studied = len(fresh) < len(all.Cards)
 		}
-		view.Decks = append(view.Decks, row)
+		view.Groups = append(view.Groups, row)
 	}
 	s.render(w, "home", view)
 }
 
+func (s *Server) handleGroup(w http.ResponseWriter, r *http.Request) {
+	g := s.groupOr404(w, r)
+	if g == nil {
+		return
+	}
+	guest := s.guestID(w, r)
+	if g.single() {
+		http.Redirect(w, r, quizURL(g, g.Decks[0]), http.StatusSeeOther)
+		return
+	}
+
+	view := groupView{
+		Name:    g.Name,
+		Initial: string([]rune(g.Name)[:1]),
+		Hue:     g.Hue,
+	}
+	store, err := s.guestStore(guest, g)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	now := time.Now()
+	row := func(info *deckInfo, all bool) groupDeck {
+		reviews, fresh, _, _ := quiz.SplitDue(info.Cards, store, now)
+		return groupDeck{
+			URL:     quizURL(g, info),
+			Name:    info.Name,
+			All:     all,
+			Cards:   len(info.Cards),
+			Due:     len(reviews),
+			Fresh:   len(fresh),
+			Studied: len(fresh) < len(info.Cards),
+		}
+	}
+	for _, info := range g.Decks {
+		view.Decks = append(view.Decks, row(info, false))
+	}
+	if g.All != nil {
+		view.Decks = append(view.Decks, row(g.All, true))
+	}
+	s.render(w, "group", view)
+}
+
 func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
-	info := s.deckOr404(w, r)
+	g, info := s.deckOr404(w, r)
 	if info == nil {
 		return
 	}
 	guest := s.guestID(w, r)
-	sess, err := s.getSession(guest, info, false)
+	sess, err := s.getSession(guest, g, info, false)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -120,13 +197,21 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 
 	e := sess.engine
 	view := quizView{
-		Slug:      info.Slug,
+		Base:      quizURL(g, info),
+		GroupURL:  "/g/" + g.Slug,
+		GroupName: g.Name,
 		DeckName:  info.Name,
-		Hue:       info.Hue,
+		Hue:       g.Hue,
 		Remaining: e.Remaining(),
 		Seen:      e.TotalSeen,
 		Correct:   e.TotalCorrect,
 		Wrong:     e.TotalWrong,
+	}
+	if g.single() {
+		// No topic list to go back to — the breadcrumb points home.
+		view.GroupURL = "/"
+		view.GroupName = ""
+		view.DeckName = g.Name
 	}
 	if size := e.DeckSize(); size > 0 {
 		// On a result screen the just-requeued card is momentarily counted
@@ -140,11 +225,13 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 	}
 	view.AudioSpeed = speed
 
+	mediaBase := "/media/" + g.Slug + "/" + info.Slug + "/"
+
 	switch e.State() {
 	case quiz.ShowQuestion:
 		card := e.Current()
 		view.Screen = "question"
-		view.Question = mediaViews(info.Slug, card.Question)
+		view.Question = mediaViews(mediaBase, card.Question)
 		view.Choice = card.Mode == deck.ModeChoice
 		view.Options = e.Options()
 		view.TimeLimit = e.TimeLimit()
@@ -155,8 +242,8 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 	case quiz.ShowPreview:
 		card := e.Current()
 		view.Screen = "preview"
-		view.Question = mediaViews(info.Slug, card.Question)
-		view.AnswerSide = mediaViews(info.Slug, card.Answer)
+		view.Question = mediaViews(mediaBase, card.Question)
+		view.AnswerSide = mediaViews(mediaBase, card.Answer)
 		view.FlipMode = e.Order() == deck.OrderFlipThrough
 		view.IsNew = e.CurrentIsNew()
 
@@ -169,8 +256,8 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 			view.Screen = "question"
 			break
 		}
-		view.Question = mediaViews(info.Slug, res.Card.Question)
-		view.AnswerSide = mediaViews(info.Slug, res.Card.Answer)
+		view.Question = mediaViews(mediaBase, res.Card.Question)
+		view.AnswerSide = mediaViews(mediaBase, res.Card.Answer)
 		view.ResultCorrect = res.Correct
 		view.ResultTimedOut = res.TimedOut
 		view.ResultTyped = res.Typed
@@ -203,7 +290,7 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 
 // mediaViews converts a card side for the template, routing file media
 // through the /media handler by base name.
-func mediaViews(slug string, side []deck.Media) []mediaView {
+func mediaViews(base string, side []deck.Media) []mediaView {
 	var out []mediaView
 	first := true
 	for _, m := range side {
@@ -214,14 +301,10 @@ func mediaViews(slug string, side []deck.Media) []mediaView {
 				first = false
 			}
 		case deck.Image:
-			out = append(out, mediaView{ImageURL: mediaURL(slug, m.Content)})
+			out = append(out, mediaView{ImageURL: base + filepath.Base(m.Content)})
 		case deck.Audio:
-			out = append(out, mediaView{AudioURL: mediaURL(slug, m.Content)})
+			out = append(out, mediaView{AudioURL: base + filepath.Base(m.Content)})
 		}
 	}
 	return out
-}
-
-func mediaURL(slug, path string) string {
-	return "/media/" + slug + "/" + filepath.Base(path)
 }

@@ -1,21 +1,21 @@
-{{define "home"}}
-{{template "top" "decks"}}
-<header class="bar home">
-  <span class="brand">study</span>
-  <span class="tagline">a little every day</span>
+{{define "group"}}
+{{template "top" .Name}}
+<header class="bar home" style="--h: {{.Hue}}">
+  <a class="brand" href="/">study</a>
+  <span class="grouptitle"><span class="roundel">{{.Initial}}</span> {{.Name}}</span>
 </header>
 <main class="list">
   <ul class="decklist">
-    {{range .Groups}}
+    {{range .Decks}}
     <li>
-      <a class="deck" href="{{.URL}}" style="--h: {{.Hue}}">
-        <span class="roundel">{{.Initial}}</span>
+      <a class="deck topic {{if .All}}everything{{end}}" href="{{.URL}}" style="--h: {{$.Hue}}">
         <span class="deckinfo">
           <span class="deckname">{{.Name}}</span>
           <span class="deckmeta">
-            {{if gt .Topics 1}}{{.Topics}} topics · {{end}}{{.Cards}} cards
+            {{.Cards}} cards
             {{if .Studied}}
               {{if .Due}}· <b class="due">{{.Due}} to review</b>{{end}}
+              {{if .Fresh}}· {{.Fresh}} unseen{{end}}
               {{if and (not .Due) (not .Fresh)}}· <b class="done">caught up ✓</b>{{end}}
             {{end}}
           </span>
@@ -25,7 +25,6 @@
     </li>
     {{end}}
   </ul>
-  <p class="hint">No account needed — your progress lives in this browser, and cards you get right come back for review over the following days.</p>
 </main>
 {{template "bottom"}}
 {{end}}

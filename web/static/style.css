@@ -75,6 +75,17 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.crumb { color: var(--dim); font-weight: 500; text-decoration: none; }
+.crumb:hover { color: var(--fg); }
+.grouptitle {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: 0.9rem;
+}
+.grouptitle .roundel { width: 2.3rem; height: 2.3rem; font-size: 1.05rem; }
 .counts {
   margin-left: auto;
   color: var(--dim);
@@ -364,6 +375,9 @@ button.quiet:hover { color: var(--fg); }
 @media (prefers-color-scheme: dark) {
   .roundel { background: hsl(var(--h) 30% 24%); color: hsl(var(--h) 45% 78%); }
 }
+.deck.topic { padding: 0.8rem 1.25rem; }
+.deck.topic .deckname { font-size: 1.05rem; }
+.deck.everything { border-color: hsl(var(--h) 35% 62%); }
 .deckinfo { min-width: 0; }
 .deckname {
   display: block;
