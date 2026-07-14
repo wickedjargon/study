@@ -93,6 +93,10 @@ type Deck struct {
 	Path          string    // absolute path to deck file
 	Choices       int       // number of answer choices (default 4)
 	Mode          QuizMode  // choice or type
+	// ModeSet records that the deck header declared its answer-mode
+	// explicitly. Distractor-implied choice then stays off: a typed deck may
+	// author "~" wrong answers purely for choice-mode sessions.
+	ModeSet bool
 	CaseSensitive bool      // case-sensitive matching for type mode
 	TimeLimit     int       // global per-question time limit in seconds (0 = none)
 	Order         OrderMode // session ordering mode ("# order:", default adaptive)
@@ -259,7 +263,7 @@ func Parse(path string) (*Deck, error) {
 	}
 
 	for _, block := range blocks {
-		card, err := parseCard(block, dir, deck.Mode, deck.warn)
+		card, err := parseCard(block, dir, deck.Mode, deck.ModeSet, deck.warn)
 		if err != nil {
 			return nil, err
 		}
@@ -382,8 +386,10 @@ func applyDeckMetadata(deck *Deck, block []string) {
 			switch strings.TrimSpace(after) {
 			case "type":
 				deck.Mode = ModeType
+				deck.ModeSet = true
 			case "choice":
 				deck.Mode = ModeChoice
+				deck.ModeSet = true
 			default:
 				deck.warn("ignoring %q (# answer-mode: must be type or choice)", trimmed)
 			}
@@ -480,7 +486,7 @@ func splitBlocks(lines []string) [][]string {
 
 // parseCard parses a block of lines into a Card. Returns nil for comment-only
 // blocks. warn records non-fatal issues (e.g. a malformed per-card directive).
-func parseCard(block []string, baseDir string, defaultMode QuizMode, warn func(string, ...any)) (*Card, error) {
+func parseCard(block []string, baseDir string, defaultMode QuizMode, deckModeSet bool, warn func(string, ...any)) (*Card, error) {
 	// A comment-only block carries no card. Leading ones are deck metadata
 	// (handled in applyDeckMetadata); any later one is just a comment. Return
 	// early so the per-card directive scan below doesn't double-report a bad
@@ -557,7 +563,7 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, warn func(s
 	// answer side. Anything else without a separator is malformed.
 	if sepIdx == -1 {
 		if card, ok, err := parseClozeCard(filtered, baseDir, cardMode, cardChoices, cardTime, warn); ok || err != nil {
-			if card != nil && !modeSet && len(card.Distractors) > 0 {
+			if card != nil && !modeSet && !deckModeSet && len(card.Distractors) > 0 {
 				card.Mode = ModeChoice // distractors imply choice (see below)
 			}
 			return card, err
@@ -624,10 +630,10 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, warn func(s
 	}
 
 	// Custom distractors only mean anything in choice mode, so authoring them
-	// implies it — no "# answer-mode: choice" needed on the card. An explicit
-	// per-card directive still wins; the deck header is just the default it
-	// overrides.
-	if !modeSet && len(distractors) > 0 {
+	// implies it — no "# answer-mode: choice" needed on the card. Any
+	// explicit answer-mode wins, per-card or deck header: a typed deck may
+	// carry "~" wrong answers purely for choice-mode sessions.
+	if !modeSet && !deckModeSet && len(distractors) > 0 {
 		cardMode = ModeChoice
 	}
 

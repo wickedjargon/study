@@ -347,7 +347,9 @@ func TestDistractorsImplyChoiceMode(t *testing.T) {
 		{"distractors alone imply choice", "q\n---\na\n~ b\n~ c\n", ModeChoice},
 		{"no distractors stays type", "q\n---\na\n", ModeType},
 		{"explicit per-card type wins", "# answer-mode: type\nq\n---\na\n~ b\n", ModeType},
-		{"inference beats deck-header type", "# answer-mode: type\n\nq\n---\na\n~ b\n", ModeChoice},
+		// A deck-header answer-mode also beats the inference: a typed deck
+		// may author "~" wrong answers purely for choice-mode sessions.
+		{"deck-header type beats inference", "# answer-mode: type\n\nq\n---\na\n~ b\n", ModeType},
 		{"cloze with distractors", "the answer is {{a}}\n~ b\n~ c\n", ModeChoice},
 	}
 	for _, tc := range cases {
@@ -990,5 +992,40 @@ func TestParseValidDirectivesNoWarnings(t *testing.T) {
 	}
 	if len(d.Warnings) != 0 {
 		t.Errorf("expected no warnings, got %v", d.Warnings)
+	}
+}
+
+// TestDeckModeBeatsDistractorInference: an explicit deck-level answer-mode
+// wins over distractor-implied choice, so a typed deck can author "~" wrong
+// answers purely for choice-mode sessions. Without the header, and with a
+// per-card directive, behavior is unchanged.
+func TestDeckModeBeatsDistractorInference(t *testing.T) {
+	card := "q1\n---\na1\n~ w1\n~ w2\n"
+
+	d, err := Parse(writeTempDeck(t, "# answer-mode: type\n\n"+card))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := d.Cards[0].Mode; got != ModeType {
+		t.Errorf("deck-level type: card mode = %v, want ModeType", got)
+	}
+	if len(d.Cards[0].Distractors) != 2 {
+		t.Errorf("distractors should be kept for choice sessions, got %v", d.Cards[0].Distractors)
+	}
+
+	d, err = Parse(writeTempDeck(t, card))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := d.Cards[0].Mode; got != ModeChoice {
+		t.Errorf("no header: card mode = %v, want inferred ModeChoice", got)
+	}
+
+	d, err = Parse(writeTempDeck(t, "# answer-mode: type\n\n# answer-mode: choice\n"+card))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := d.Cards[0].Mode; got != ModeChoice {
+		t.Errorf("per-card choice under typed deck: card mode = %v, want ModeChoice", got)
 	}
 }
