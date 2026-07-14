@@ -16,7 +16,7 @@
     {{if not .Intros}}
     <form method="post" action="{{.Base}}/intros"><button class="quiet" title="introduce new cards, answer visible, before quizzing them">intros</button></form>
     {{end}}
-    <form method="post" action="{{.Base}}/mode"><button class="quiet" title="cycle answering: deck default / typed / multiple choice (restarts the session)">mode: {{.ModeLabel}}</button></form>
+    <form method="post" action="{{.Base}}/mode"><button class="quiet" title="switch between typed and multiple choice answering (restarts the session)">mode: {{.ModeLabel}}</button></form>
     <form method="post" action="{{.Base}}/review"><button class="quiet" title="flip through the cards, answers visible, nothing recorded">review</button></form>
     {{end}}
     <form method="post" action="{{.Base}}/end"><button class="quiet" title="finish session">end</button></form>

@@ -96,6 +96,7 @@ type deckInfo struct {
 	Slug  string
 	Name  string
 	Path  string
+	Mode  deck.QuizMode // the deck's authored answer mode
 	Cards []deck.Card
 	// media maps a file's base name to its absolute path. Media URLs carry
 	// only the base name, so a request can never name a path outside the
@@ -249,7 +250,8 @@ func (s *Server) addGroup(path, display string) {
 		if d == nil {
 			return
 		}
-		g.Decks = []*deckInfo{newDeckInfo(d, g.Name, "all", taken)}
+		// A fresh taken set: this group's one deck may claim "all" itself.
+		g.Decks = []*deckInfo{newDeckInfo(d, g.Name, "all", map[string]bool{})}
 	} else {
 		inner, _ := filepath.Glob(filepath.Join(path, "*.deck"))
 		sort.Strings(inner)
@@ -335,6 +337,7 @@ func newDeckInfo(d *deck.Deck, name, slug string, taken map[string]bool) *deckIn
 		Slug:  candidate,
 		Name:  name,
 		Path:  d.Path,
+		Mode:  d.Mode,
 		Cards: d.Cards,
 		media: make(map[string]string),
 	}
@@ -453,6 +456,23 @@ func forcedMode(r *http.Request, g *group) string {
 		return ""
 	}
 	return c.Value
+}
+
+// modeName renders a quiz mode for the toggle label.
+func modeName(m deck.QuizMode) string {
+	if m == deck.ModeChoice {
+		return "choice"
+	}
+	return "type"
+}
+
+// effectiveMode is what the toggle shows and flips from: the forced override
+// when set, else the deck's authored mode.
+func effectiveMode(forced string, info *deckInfo) string {
+	if forced != "" {
+		return forced
+	}
+	return modeName(info.Mode)
 }
 
 // setForcedMode persists the answering-mode override for a group; "" clears.
@@ -608,8 +628,13 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		setIntros(w, intros)
 		mode = modeQuiz
 	case "mode":
-		// Cycle the answering-mode override and recompose under it.
-		forced = map[string]string{"": "type", "type": "choice", "choice": ""}[forced]
+		// Flip between typed and choice — from whatever the session is
+		// currently doing, the deck's authored mode being the start.
+		if effectiveMode(forced, info) == "type" {
+			forced = "choice"
+		} else {
+			forced = "type"
+		}
 		setForcedMode(w, g, forced)
 		mode = modeQuiz
 	}
