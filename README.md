@@ -127,12 +127,20 @@ Set with the `--order` flag or the `# order:` deck header:
 
 `=` after the answer adds an extra accepted answer (type mode). Matching is
 lenient by default. Case, accents, punctuation, and extra spaces are
-forgiven (`salam` matches `salâm`), and English contractions match their
-expansions in both directions (`I don't understand` matches
-`I do not understand`, `he's home` matches `he is home`) — no `=` variant
-needed. Ambiguous forms accept either reading (`she's` matches both
-`she is` and `she has`), while bare words that merely look like
-contractions (`ill`, `were`, `well`) are never expanded:
+forgiven (`salam` matches `salâm`), and common English notation matches its
+expansions in both directions — no `=` variant needed:
+
+- contractions: `I don't understand` matches `I do not understand`; ambiguous
+  forms accept either reading (`she's` matches `she is` and `she has`)
+- numbers and ordinals: `two seconds` matches `2 seconds`, `1st` matches `first`
+- unit abbreviations: `5m`, `5 m`, and `five metres` all match `5 metres`
+  (only the short form expands: `5 miles` never matches `5 metres`)
+- British/American spellings: `5 meters`, `colour`/`color`, `recognise`/`recognize`
+- symbols: `rock & roll` matches `rock and roll`, `50 %` matches `50 percent`,
+  `50 km/h` matches `50 kilometres per hour`
+
+Bare words that merely look like short forms (`ill`, `were`, `in`) are never
+expanded:
 
 ```
 bonjour
