@@ -105,12 +105,11 @@ main {
   flex: 1;
   width: min(42rem, 100%);
   margin: 0 auto;
-  padding: 1rem 1.25rem 2.5rem;
+  padding: 2.25rem 1.25rem 2.5rem;
   display: flex;
   flex-direction: column;
-  justify-content: center;
 }
-main.list { justify-content: flex-start; padding-top: 2.5rem; }
+main.list { padding-top: 2.5rem; }
 
 .ok { color: var(--ok); }
 .bad { color: var(--bad); }
