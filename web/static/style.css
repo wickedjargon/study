@@ -56,12 +56,6 @@ body {
   margin: 0 auto;
   padding: 1rem 1.25rem 0.6rem;
 }
-.bar.home {
-  flex-direction: column;
-  gap: 0;
-  align-items: center;
-  padding-top: 3.5rem;
-}
 .brand {
   font-weight: 700;
   font-size: 1.15rem;
@@ -69,7 +63,6 @@ body {
   color: var(--accent);
   text-decoration: none;
 }
-.bar.home .brand { font-size: 2.2rem; }
 .bartitle {
   font-weight: 600;
   white-space: nowrap;
@@ -81,12 +74,11 @@ body {
 .grouptitle {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  font-size: 1.5rem;
+  gap: 0.5rem;
+  font-size: 1.15rem;
   font-weight: 700;
-  margin-top: 0.9rem;
 }
-.grouptitle .roundel { width: 2.3rem; height: 2.3rem; font-size: 1.05rem; }
+.grouptitle .roundel { width: 1.7rem; height: 1.7rem; font-size: 0.8rem; }
 .barleft {
   flex: 1;
   min-width: 0;
