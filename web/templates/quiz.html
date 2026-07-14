@@ -23,7 +23,7 @@
         {{if .Reviewing}}
         <form method="post" action="{{.Base}}/start"><button class="mact">
           <span class="mi-title">Quiz this deck</span>
-          <span class="mi-desc">I'm ready to be quizzed</span>
+          <span class="mi-desc">ready to be quizzed</span>
         </button></form>
         {{else}}
         <div class="mset">
@@ -39,7 +39,7 @@
               {{end}}
             </span>
           </div>
-          <span class="mi-desc">how you give each answer</span>
+          <span class="mi-desc">the method an answer is provided</span>
         </div>
         <div class="mset">
           <div class="mset-head">
@@ -54,12 +54,12 @@
               {{end}}
             </span>
           </div>
-          <span class="mi-desc">show a new card's answer once before it is quizzed</span>
+          <span class="mi-desc">reveal answers for new cards on first view</span>
         </div>
         <hr class="menusep">
         <form method="post" action="{{.Base}}/review"><button class="mact">
           <span class="mi-title">Review this deck</span>
-          <span class="mi-desc">I'd like to review the deck with the answers revealed</span>
+          <span class="mi-desc">review cards with answers revealed</span>
         </button></form>
         {{end}}
         {{if .Email}}
@@ -132,7 +132,7 @@
   <div class="actions" id="primaryform">
     <form method="post" action="{{.Base}}/preview"><button class="primary">{{if .FlipMode}}next →{{else}}got it: quiz me{{end}}</button></form>
     {{if not .FlipMode}}
-    <form method="post" action="{{.Base}}/intros"><button class="quiet" title="stop revealing answers on first viewing">skip intros</button></form>
+    <form method="post" action="{{.Base}}/intros"><button class="quiet" title="stop revealing answers on first view">skip intros</button></form>
     {{end}}
   </div>
 
