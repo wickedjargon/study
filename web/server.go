@@ -583,6 +583,7 @@ func (s *Server) getSession(guest string, g *group, info *deckInfo, mode session
 		return nil, err
 	}
 	review := mode == modeReview
+	pool := info.Cards
 	if review {
 		d.Order = deck.OrderFlipThrough
 	} else {
@@ -590,7 +591,10 @@ func (s *Server) getSession(guest string, g *group, info *deckInfo, mode session
 		// both directions: it is their call, not the author's.
 		d.Preview = intros
 		// Forced answering mode outranks per-card directives and the
-		// distractor-implied choice inference, like the desktop's flag.
+		// distractor-implied choice inference, like the desktop's flag. The
+		// engine's pool must carry the override too — ContinueAll re-seeds
+		// from the pool, and serving catalog-mode cards there would quietly
+		// revert the session (a copy: the catalog is shared across guests).
 		if forced == "type" || forced == "choice" {
 			m := deck.ModeType
 			if forced == "choice" {
@@ -600,13 +604,18 @@ func (s *Server) getSession(guest string, g *group, info *deckInfo, mode session
 			for i := range d.Cards {
 				d.Cards[i].Mode = m
 			}
+			pool = make([]deck.Card, len(info.Cards))
+			copy(pool, info.Cards)
+			for i := range pool {
+				pool[i].Mode = m
+			}
 		}
 	}
 	quiz.Compose(d, store, time.Now())
 	sess := &session{
 		info:    info,
 		deck:    d,
-		engine:  quiz.NewEngine(d, info.Cards, store),
+		engine:  quiz.NewEngine(d, pool, store),
 		store:   store,
 		review:  review,
 		touched: time.Now(),
