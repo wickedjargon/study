@@ -186,8 +186,12 @@ main.list { padding-top: 2.5rem; }
 .card > .player .play {
   width: 3rem;
   height: 3rem;
+  /* Only the tab's own two sides are drawn — the top and right would
+     stack on the card's border and render darker than every other line. */
   border: 1px solid var(--line);
-  border-radius: 0 16px 0 14px;
+  border-top: 0;
+  border-right: 0;
+  border-radius: 0 16px 0 16px;
 }
 .play .bars { display: none; align-items: flex-end; gap: 2.5px; height: 15px; }
 .play .bars i {
@@ -384,7 +388,7 @@ button.quiet:hover { color: var(--fg); }
 
 @media (max-width: 480px) {
   .card { padding: 1.3rem 1.2rem 1.4rem; border-radius: 14px; }
-  .card > .player .play { border-radius: 0 14px 0 12px; }
+  .card > .player .play { border-radius: 0 14px 0 14px; }
   .cardtext.primary { font-size: 1.6rem; }
   .bar { padding-top: 0.8rem; }
   .actions button { min-width: 0; flex: 1; }
