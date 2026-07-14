@@ -24,15 +24,15 @@
             <span class="mi-title">Answering</span>
             <span class="seg">
               {{if eq .ModeLabel "type"}}
-              <span class="seg-on">typed</span>
+              <span class="seg-on">typed in</span>
               <form method="post" action="{{.Base}}/mode"><button class="seg-off">multiple choice</button></form>
               {{else}}
-              <form method="post" action="{{.Base}}/mode"><button class="seg-off">typed</button></form>
+              <form method="post" action="{{.Base}}/mode"><button class="seg-off">typed in</button></form>
               <span class="seg-on">multiple choice</span>
               {{end}}
             </span>
           </div>
-          <span class="mi-desc">how every card asks for its answer — switching restarts the session</span>
+          <span class="mi-desc">the method the user provides their answer</span>
         </div>
         <div class="mset">
           <div class="mset-head">
@@ -52,7 +52,7 @@
         <hr class="menusep">
         <form method="post" action="{{.Base}}/review"><button class="mact">
           <span class="mi-title">Review this deck</span>
-          <span class="mi-desc">flip through with answers shown — nothing is recorded</span>
+          <span class="mi-desc">flip through deck with each card's answer revealed</span>
         </button></form>
         {{end}}
         <form method="post" action="{{.Base}}/end"><button class="mact">
@@ -111,16 +111,16 @@
   <section class="card">
     <div class="badges">
       {{if .FlipMode}}<span class="badge ahead">reviewing</span>
-      {{else if .IsNew}}<span class="badge new">new card — take it in first</span>{{end}}
+      {{else if .IsNew}}<span class="badge new">new card: take it in first</span>{{end}}
     </div>
     {{template "media" .Question}}
     <hr class="divider">
     <div class="answerside">{{template "media" .AnswerSide}}</div>
   </section>
   <div class="actions" id="primaryform">
-    <form method="post" action="{{.Base}}/preview"><button class="primary">{{if .FlipMode}}next →{{else}}got it — quiz me{{end}}</button></form>
+    <form method="post" action="{{.Base}}/preview"><button class="primary">{{if .FlipMode}}next →{{else}}got it: quiz me{{end}}</button></form>
     {{if not .FlipMode}}
-    <form method="post" action="{{.Base}}/intros"><button class="quiet" title="I know this deck — stop introducing cards, quiz me directly">skip intros</button></form>
+    <form method="post" action="{{.Base}}/intros"><button class="quiet" title="stop revealing answers on first viewing">skip intros</button></form>
     {{end}}
   </div>
 
@@ -147,7 +147,7 @@
   <section class="card center standalone">
     <p class="bigmark">✓</p>
     <p class="lede">You're all caught up</p>
-    <p class="dim">Nothing is due for review{{if .NextDue}} — next review {{.NextDue}}{{end}}.</p>
+    <p class="dim">Nothing is due for review{{if .NextDue}}: next review {{.NextDue}}{{end}}.</p>
   </section>
   <div class="actions" id="primaryform">
     <form method="post" action="{{.Base}}/continue"><button class="primary">keep studying anyway</button></form>
