@@ -67,7 +67,8 @@ type quizView struct {
 	DeckName  string
 	Hue       int
 	Reviewing bool
-	Intros    bool // the guest's introduction preference
+	Intros    bool   // the guest's introduction preference
+	ModeLabel string // answering-mode override: "auto", "type", or "choice"
 	// Position is the desktop's [seen/total] session counter, formatted
 	// per screen exactly as gui does.
 	Position string
@@ -202,7 +203,8 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 	}
 	guest := s.guestID(w, r)
 	intros := introsOn(r)
-	sess, err := s.getSession(guest, g, info, modeKeep, intros)
+	forced := forcedMode(r, g)
+	sess, err := s.getSession(guest, g, info, modeKeep, intros, forced)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -220,10 +222,14 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		Hue:       g.Hue,
 		Reviewing: sess.review,
 		Intros:    intros,
+		ModeLabel: "auto",
 		Remaining: e.Remaining(),
 		Seen:      e.TotalSeen,
 		Correct:   e.TotalCorrect,
 		Wrong:     e.TotalWrong,
+	}
+	if forced != "" {
+		view.ModeLabel = forced
 	}
 	if g.single() {
 		// No topic list to go back to — the breadcrumb points home.

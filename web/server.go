@@ -442,6 +442,31 @@ func validGuestID(v string) bool {
 	return err == nil
 }
 
+// forcedMode reports the guest's answering-mode override for a group:
+// "type" or "choice" force every card, "" (or anything else) leaves the deck
+// author's per-card modes alone. The web's equivalent of the desktop's
+// --answer-mode flag, kept per group so drilling one deck as production
+// doesn't flip every other deck too.
+func forcedMode(r *http.Request, g *group) string {
+	c, err := r.Cookie("mode-" + g.Slug)
+	if err != nil || (c.Value != "type" && c.Value != "choice") {
+		return ""
+	}
+	return c.Value
+}
+
+// setForcedMode persists the answering-mode override for a group; "" clears.
+func setForcedMode(w http.ResponseWriter, g *group, v string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "mode-" + g.Slug,
+		Value:    v,
+		Path:     "/",
+		MaxAge:   10 * 365 * 24 * 60 * 60,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
 // introsOn reports the guest's introduction preference: unseen cards are
 // shown answer-visible once before being quizzed. On unless opted out — a
 // guest who already knows a deck (say, after clearing cookies) can skip
@@ -478,7 +503,7 @@ func (s *Server) guestStore(guest string, g *group) (*progress.Store, error) {
 // topic is live — the "start over" and "review" paths. A review session is
 // the deck in flip-through order: every card answer-visible, in authored
 // order, nothing recorded.
-func (s *Server) getSession(guest string, g *group, info *deckInfo, mode sessionMode, intros bool) (*session, error) {
+func (s *Server) getSession(guest string, g *group, info *deckInfo, mode sessionMode, intros bool, forced string) (*session, error) {
 	key := guest + "|" + g.Slug
 
 	s.mu.Lock()
@@ -510,6 +535,18 @@ func (s *Server) getSession(guest string, g *group, info *deckInfo, mode session
 		// The guest's introduction preference overrides the deck header in
 		// both directions: it is their call, not the author's.
 		d.Preview = intros
+		// Forced answering mode outranks per-card directives and the
+		// distractor-implied choice inference, like the desktop's flag.
+		if forced == "type" || forced == "choice" {
+			m := deck.ModeType
+			if forced == "choice" {
+				m = deck.ModeChoice
+			}
+			d.Mode = m
+			for i := range d.Cards {
+				d.Cards[i].Mode = m
+			}
+		}
 	}
 	quiz.Compose(d, store, time.Now())
 	sess := &session{
@@ -558,6 +595,7 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 	guest := s.guestID(w, r)
 	action := r.PathValue("action")
 	intros := introsOn(r)
+	forced := forcedMode(r, g)
 	mode := modeKeep
 	switch action {
 	case "start":
@@ -569,8 +607,13 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		intros = !intros
 		setIntros(w, intros)
 		mode = modeQuiz
+	case "mode":
+		// Cycle the answering-mode override and recompose under it.
+		forced = map[string]string{"": "type", "type": "choice", "choice": ""}[forced]
+		setForcedMode(w, g, forced)
+		mode = modeQuiz
 	}
-	sess, err := s.getSession(guest, g, info, mode, intros)
+	sess, err := s.getSession(guest, g, info, mode, intros, forced)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -579,7 +622,7 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 	sess.mu.Lock()
 	e := sess.engine
 	switch action {
-	case "start", "review", "intros":
+	case "start", "review", "intros", "mode":
 		// getSession already recomposed.
 	case "answer":
 		var res *quiz.Result
