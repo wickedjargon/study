@@ -176,6 +176,15 @@ body {
 .seg-off:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 6%, transparent); }
 .menusep { border: 0; border-top: 1px solid var(--line); margin: 0.3rem 0.4rem; }
 
+/* the account menu: the logged-in email with a Log out dropdown */
+.menu.account > summary {
+  font-size: 0.85rem;
+  padding: 0.1rem 0.2rem;
+  white-space: nowrap;
+}
+.menu.account .menuitems { width: max-content; min-width: 9rem; }
+.menu.account .chev { font-size: 0.7rem; }
+
 /* The status strip above the card, as on the desktop: counter left, live
    tally dead center. The side zones flex equally to anchor the centering. */
 .cardstatus {

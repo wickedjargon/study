@@ -16,15 +16,23 @@
 </html>
 {{end}}
 
+{{define "authmenu"}}
+{{if .}}
+<details class="menu account">
+  <summary>{{.}} <span class="chev" aria-hidden="true">▾</span></summary>
+  <div class="menuitems">
+    <form method="post" action="/logout"><button class="mact">
+      <span class="mi-title">Log out</span>
+    </button></form>
+  </div>
+</details>
+{{else}}
+<a class="loginlink" href="/login">LOGIN</a>
+{{end}}
+{{end}}
+
 {{define "logincorner"}}
-<div class="logincorner">
-  {{if .}}
-    <span>{{.}}</span>
-    <form method="post" action="/logout"><button type="submit" class="quiet">log out</button></form>
-  {{else}}
-    <a class="loginlink" href="/login">LOGIN</a>
-  {{end}}
-</div>
+<div class="logincorner">{{template "authmenu" .}}</div>
 {{end}}
 
 {{define "media"}}

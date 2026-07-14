@@ -13,13 +13,18 @@
     <details class="menu">
       <summary aria-label="session menu" title="session menu">⋮</summary>
       <div class="menuitems">
-        {{if not .Email}}
+        {{if .Email}}
+        <form method="post" action="/logout"><button class="mact">
+          <span class="mi-title">Log out</span>
+          <span class="mi-desc">{{.Email}}</span>
+        </button></form>
+        {{else}}
         <a class="mact" href="/login">
           <span class="mi-title">Login</span>
           <span class="mi-desc">keep your progress beyond this browser</span>
         </a>
-        <hr class="menusep">
         {{end}}
+        <hr class="menusep">
         {{if .Reviewing}}
         <form method="post" action="{{.Base}}/start"><button class="mact">
           <span class="mi-title">Quiz this deck</span>
@@ -65,8 +70,8 @@
         </button></form>
       </div>
     </details>
-    {{else if not .Email}}
-    <a class="loginlink" href="/login">LOGIN</a>
+    {{else}}
+    {{template "authmenu" .Email}}
     {{end}}
   </span>
 </header>
