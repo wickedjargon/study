@@ -3,7 +3,7 @@ PREFIX = $(HOME)/.local
 all: study
 
 study:
-	go build -o study
+	go build -o study ./cmd/study
 
 install: study
 	mkdir -p $(PREFIX)/bin
