@@ -23,11 +23,12 @@ WEB_DECKS = \
 	japanese=$(HOME)/d/projects/study-mahjong.deck \
 	farsi=$(HOME)/d/projects/study-farsi-numbers.deck \
 	mandarin-chinese=$(HOME)/d/projects/study-chinese-numbers.deck \
+	'mandarin-chinese=$(HOME)/d/projects/study-chinese-mahjong-terms.deck@Mahjong' \
 	$(HOME)/d/projects/study-dog-breeds.deck \
-	'$(HOME)/d/projects/study-bc-driving.deck@BC Driving' \
+	'$(HOME)/d/projects/study-bc-driving.deck@British Columbia Driving' \
 	$(HOME)/d/projects/study-world-flags.deck \
 	$(HOME)/d/projects/study-world-capitals.deck \
-	'$(HOME)/d/projects/study-bc-birds.deck@BC Birds'
+	'$(HOME)/d/projects/study-bc-birds.deck@British Columbia Birds'
 
 # Bind localhost by default; `make run ADDR=0.0.0.0:8091` opens it to the
 # LAN (e.g. to try it from a phone).
