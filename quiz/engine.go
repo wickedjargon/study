@@ -974,7 +974,11 @@ func (e *Engine) requeueTail(card *deck.Card) {
 	e.main = append(e.main, queuedCard{card: card, due: due + 1})
 }
 
-// generateChoices builds the multiple choice options for a card.
+// generateChoices builds the multiple choice options for a card. A wrong
+// option must actually be wrong: any candidate the card accepts as correct —
+// its "=" variants, e.g. "you are welcome" next to "you're welcome" — is
+// excluded, whether it comes from the card's own distractors or another
+// card's answer.
 func (e *Engine) generateChoices(card *deck.Card) ([]string, int) {
 	numChoices := e.choices
 	if card.Choices > 0 {
@@ -990,7 +994,7 @@ func (e *Engine) generateChoices(card *deck.Card) ([]string, int) {
 		if len(choices) >= numChoices {
 			break
 		}
-		if !used[d] {
+		if !used[d] && !e.accepts(card, d) {
 			choices = append(choices, d)
 			used[d] = true
 		}
@@ -1001,7 +1005,7 @@ func (e *Engine) generateChoices(card *deck.Card) ([]string, int) {
 		// Build pool of other answers, shuffled.
 		pool := make([]string, 0)
 		for _, c := range e.allCards {
-			if !used[c.AnswerText] {
+			if !used[c.AnswerText] && !e.accepts(card, c.AnswerText) {
 				pool = append(pool, c.AnswerText)
 			}
 		}
