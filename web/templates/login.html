@@ -12,13 +12,12 @@
         <button type="submit">Log out</button>
       </form>
     {{else}}
-      <h1>Log in</h1>
-      <p>No password — we email you a link. Logging in keeps your progress
-      beyond this browser.</p>
+      <h1>✉️ Secure Link Login</h1>
+      <p>Log in with a secure login link sent to your email.</p>
       <form method="post" action="/login" class="authform">
         <input type="email" name="email" required autofocus
                autocomplete="email" placeholder="you@example.com">
-        <button type="submit" class="primary">Email me a login link</button>
+        <button type="submit" class="primary">Send login link</button>
       </form>
       {{if .Error}}<p class="autherror">{{.Error}}</p>{{end}}
     {{end}}
