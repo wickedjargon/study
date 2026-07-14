@@ -1,0 +1,176 @@
+:root {
+  --bg: #fbfaf7;
+  --fg: #23211c;
+  --dim: #7d7768;
+  --line: #e3ddd0;
+  --card: #ffffff;
+  --accent: #2f6f4f;
+  --ok: #2f6f4f;
+  --bad: #a63d2f;
+  --badge-new: #33538a;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14130f;
+    --fg: #e8e4da;
+    --dim: #8f8a7c;
+    --line: #2c2a23;
+    --card: #1d1b16;
+    --accent: #6cbf94;
+    --ok: #6cbf94;
+    --bad: #e08573;
+    --badge-new: #8fb0e8;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.55 system-ui, sans-serif;
+}
+main {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 3rem;
+}
+
+.bar {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 0.9rem 1rem 0;
+}
+.brand {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  text-decoration: none;
+}
+.bartitle {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.counts { margin-left: auto; color: var(--dim); font-size: 0.85rem; white-space: nowrap; }
+.bar form { margin: 0; }
+
+.ok { color: var(--ok); }
+.bad { color: var(--bad); }
+.dim { color: var(--dim); }
+.center { text-align: center; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 1.5rem 1.5rem;
+  margin: 1rem 0;
+}
+.cardtext {
+  font-size: 1.45rem;
+  margin: 0.4rem 0;
+  overflow-wrap: break-word;
+}
+.cardimg {
+  display: block;
+  max-width: 100%;
+  max-height: 45vh;
+  margin: 0.75rem auto;
+  border-radius: 6px;
+}
+.cardaudio { display: block; width: 100%; margin: 0.75rem 0; }
+.divider { border: 0; border-top: 1px solid var(--line); margin: 1rem 0; }
+
+.badges { min-height: 1.4rem; margin-bottom: 0.35rem; }
+.badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.5rem;
+  border-radius: 99px;
+  border: 1px solid currentColor;
+  margin-right: 0.4rem;
+}
+.badge.new { color: var(--badge-new); }
+.badge.retry { color: var(--bad); }
+.badge.ahead { color: var(--dim); }
+.badge.timer { color: var(--fg); font-variant-numeric: tabular-nums; }
+.badge.timer.low { color: var(--bad); }
+
+button {
+  font: inherit;
+  color: var(--fg);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.55rem 1.1rem;
+  cursor: pointer;
+}
+button:hover { border-color: var(--dim); }
+button:disabled { opacity: 0.5; cursor: default; }
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+}
+button.quiet {
+  border: 0;
+  background: none;
+  color: var(--dim);
+  padding: 0 0.2rem;
+  font-size: 0.85rem;
+}
+
+.typed { display: flex; gap: 0.6rem; }
+.typed input {
+  flex: 1;
+  font: inherit;
+  font-size: 1.15rem;
+  color: var(--fg);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.55rem 0.8rem;
+}
+.typed input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+
+.choices { display: grid; gap: 0.6rem; }
+.choice { text-align: left; font-size: 1.05rem; padding: 0.7rem 1rem; }
+.choice kbd {
+  font: 0.8rem/1.4 monospace;
+  color: var(--dim);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 0.35rem;
+  margin-right: 0.5rem;
+}
+
+.actions { display: flex; gap: 0.6rem; justify-content: center; margin: 1.25rem 0; }
+.verdict { font-size: 1.2rem; font-weight: 700; margin: 0 0 0.75rem; }
+.typedanswer { color: var(--dim); margin: 0.3rem 0; }
+.typedanswer s { color: var(--bad); }
+.confused { color: var(--dim); font-size: 0.95rem; border-left: 3px solid var(--line); padding-left: 0.7rem; }
+.bigmark { font-size: 1.6rem; font-weight: 700; margin: 0.2rem 0 0.6rem; }
+
+.decklist { list-style: none; padding: 0; margin: 1rem 0; display: grid; gap: 0.7rem; }
+.deck {
+  display: block;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.9rem 1.2rem;
+  text-decoration: none;
+  color: var(--fg);
+}
+.deck:hover { border-color: var(--accent); }
+.deckname { display: block; font-weight: 600; font-size: 1.1rem; }
+.deckmeta { color: var(--dim); font-size: 0.9rem; }
+.deckmeta .due { color: var(--accent); }
+.hint { color: var(--dim); font-size: 0.9rem; margin-top: 2rem; }

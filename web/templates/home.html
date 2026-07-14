@@ -1,0 +1,27 @@
+{{define "home"}}
+{{template "top" "decks"}}
+<header class="bar">
+  <span class="brand">study</span>
+</header>
+<main>
+  <ul class="decklist">
+    {{range .Decks}}
+    <li>
+      <a class="deck" href="/q/{{.Slug}}">
+        <span class="deckname">{{.Name}}</span>
+        <span class="deckmeta">
+          {{.Cards}} cards
+          {{if .Studied}}
+            {{if .Due}}· <b class="due">{{.Due}} due</b>{{end}}
+            {{if .Fresh}}· {{.Fresh}} new{{end}}
+            {{if and (not .Due) (not .Fresh)}}· caught up{{end}}
+          {{end}}
+        </span>
+      </a>
+    </li>
+    {{end}}
+  </ul>
+  <p class="hint">Your progress is remembered in this browser — cards you get right come back for review over the following days.</p>
+</main>
+{{template "bottom"}}
+{{end}}
