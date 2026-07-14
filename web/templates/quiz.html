@@ -14,15 +14,51 @@
       <summary aria-label="session menu" title="session menu">⋮</summary>
       <div class="menuitems">
         {{if .Reviewing}}
-        <form method="post" action="{{.Base}}/start"><button title="back to being quizzed">quiz me</button></form>
+        <form method="post" action="{{.Base}}/start"><button class="mact">
+          <span class="mi-title">Back to quizzing</span>
+          <span class="mi-desc">be tested again — answers count</span>
+        </button></form>
         {{else}}
-        {{if not .Intros}}
-        <form method="post" action="{{.Base}}/intros"><button title="introduce new cards, answer visible, before quizzing them">intros</button></form>
+        <div class="mset">
+          <div class="mset-head">
+            <span class="mi-title">Answering</span>
+            <span class="seg">
+              {{if eq .ModeLabel "type"}}
+              <span class="seg-on">typed</span>
+              <form method="post" action="{{.Base}}/mode"><button class="seg-off">multiple choice</button></form>
+              {{else}}
+              <form method="post" action="{{.Base}}/mode"><button class="seg-off">typed</button></form>
+              <span class="seg-on">multiple choice</span>
+              {{end}}
+            </span>
+          </div>
+          <span class="mi-desc">how every card asks for its answer — switching restarts the session</span>
+        </div>
+        <div class="mset">
+          <div class="mset-head">
+            <span class="mi-title">Introductions</span>
+            <span class="seg">
+              {{if .Intros}}
+              <span class="seg-on">on</span>
+              <form method="post" action="{{.Base}}/intros"><button class="seg-off">off</button></form>
+              {{else}}
+              <form method="post" action="{{.Base}}/intros"><button class="seg-off">on</button></form>
+              <span class="seg-on">off</span>
+              {{end}}
+            </span>
+          </div>
+          <span class="mi-desc">show a new card's answer once before it is quizzed</span>
+        </div>
+        <hr class="menusep">
+        <form method="post" action="{{.Base}}/review"><button class="mact">
+          <span class="mi-title">Review this deck</span>
+          <span class="mi-desc">flip through with answers shown — nothing is recorded</span>
+        </button></form>
         {{end}}
-        <form method="post" action="{{.Base}}/mode"><button title="switch between typed and multiple choice answering (restarts the session)">mode: {{.ModeLabel}}</button></form>
-        <form method="post" action="{{.Base}}/review"><button title="flip through the cards, answers visible, nothing recorded">review</button></form>
-        {{end}}
-        <form method="post" action="{{.Base}}/end"><button title="finish session">end</button></form>
+        <form method="post" action="{{.Base}}/end"><button class="mact">
+          <span class="mi-title">End session</span>
+          <span class="mi-desc">stop here and see the summary</span>
+        </button></form>
       </div>
     </details>
     {{end}}
