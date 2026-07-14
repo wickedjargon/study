@@ -114,6 +114,7 @@ body {
 }
 .cardstatus .pos { flex: 1; }
 .cardstatus .statuspad { flex: 1; }
+.cardstatus .tally { display: inline-flex; gap: 0.9rem; }
 
 /* session progress: a hairline under the header, filled in the deck's hue */
 .progress {
