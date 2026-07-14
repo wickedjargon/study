@@ -22,7 +22,7 @@ func main() {
 	addr := flag.String("addr", "127.0.0.1:8091", "listen address")
 	data := flag.String("data", "data", "directory for per-visitor progress and identity")
 	baseURL := flag.String("base-url", "", "public URL login links point at (default http://<addr>)")
-	mailFrom := flag.String("mail-from", "study <study@fftp.io>", "sender for login emails")
+	mailFrom := flag.String("mail-from", "study <login@study.fftp.io>", "sender for login emails")
 	flag.Parse()
 
 	paths := flag.Args()

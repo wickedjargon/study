@@ -31,7 +31,7 @@ func (LogMailer) SendLogin(to, url string) error {
 // authenticated by the API key.
 type ResendMailer struct {
 	Key  string // API key (re_…)
-	From string // sender, e.g. "study <study@fftp.io>" — a domain verified with Resend
+	From string // sender, e.g. "study <login@study.fftp.io>" — a domain verified with Resend
 }
 
 func (m ResendMailer) SendLogin(to, url string) error {

@@ -53,7 +53,7 @@ copy it into the browser.
 
 In production the link goes out through [Resend](https://resend.com):
 
-- One-time: create a Resend account, verify the `fftp.io` domain (add the
+- One-time: create a Resend account, verify the `study.fftp.io` domain (add the
   SPF/DKIM records Resend shows), mint an API key.
 - One-time, on the server: put the key in the unit —
   `Environment=RESEND_API_KEY=re_…` in
@@ -64,7 +64,7 @@ In production the link goes out through [Resend](https://resend.com):
 Without the key the server still runs — links just land in the journal
 (`journalctl -u study-web`), which also works in a pinch.
 
-Login emails come from `-mail-from` (default `study <study@fftp.io>`).
+Login emails come from `-mail-from` (default `study <login@study.fftp.io>`).
 Links are single-use and expire in 15 minutes; sessions last a year.
 A new account adopts the requesting guest's progress; logging into an
 existing account leaves guest progress behind.
