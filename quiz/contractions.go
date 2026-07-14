@@ -69,12 +69,16 @@ var irregularContractions = map[string][]string{
 
 // maxReadings caps the expansion set; an answer with many ambiguous tokens
 // falls back to plain comparison rather than a combinatorial blow-up.
-const maxReadings = 64
+const maxReadings = 128
 
 // tokenReadings returns every rendering of one lowercased token that still
 // carries its apostrophes: the apostrophe-stripped original, plus any
-// contraction expansions.
+// contraction, number, ordinal, unit, or synonym expansions (see
+// equivalences.go). Symbol tokens read as their word or nothing at all.
 func tokenReadings(tok string) []string {
+	if r, ok := symbolReadings[tok]; ok {
+		return r
+	}
 	readings := []string{strings.ReplaceAll(tok, "'", "")}
 	if exp, ok := irregularContractions[tok]; ok {
 		return append(readings, exp...)
@@ -91,18 +95,24 @@ func tokenReadings(tok string) []string {
 		}
 		return readings
 	}
-	return append(readings, bareContractions[tok]...)
+	readings = append(readings, bareContractions[tok]...)
+	return append(readings, equivalenceReadings(tok)...)
 }
 
 // contractionTokens lowercases and strips an answer like normalizeAnswer,
 // but keeps apostrophes (folding the typographic ’) so contractions are
-// still recognizable, and returns the words.
+// still recognizable, keeps meaningful symbols as their own tokens, and
+// splits digit–letter boundaries ("5m" → "5", "m") except ordinals ("1st").
 func contractionTokens(s string) []string {
 	var b strings.Builder
 	for _, r := range norm.NFD.String(s) {
 		switch {
 		case r == '\'' || r == '’':
 			b.WriteRune('\'')
+		case symbolReadings[string(r)] != nil:
+			b.WriteRune(' ')
+			b.WriteRune(r)
+			b.WriteRune(' ')
 		case unicode.Is(unicode.Mn, r):
 		case unicode.IsLetter(r) || unicode.IsNumber(r):
 			b.WriteRune(unicode.ToLower(r))
@@ -110,7 +120,11 @@ func contractionTokens(s string) []string {
 			b.WriteRune(' ')
 		}
 	}
-	return strings.Fields(b.String())
+	var toks []string
+	for _, f := range strings.Fields(b.String()) {
+		toks = append(toks, splitDigitBoundaries(f)...)
+	}
+	return toks
 }
 
 // readings renders an answer into the set of its normalized readings under
@@ -126,9 +140,12 @@ func readings(s string) map[string]bool {
 		next := make([]string, 0, len(variants)*len(renderings))
 		for _, v := range variants {
 			for _, r := range renderings {
-				if v == "" {
+				switch {
+				case r == "": // droppable symbol: the token vanishes
+					next = append(next, v)
+				case v == "":
 					next = append(next, r)
-				} else {
+				default:
 					next = append(next, v+" "+r)
 				}
 			}
@@ -142,9 +159,9 @@ func readings(s string) map[string]bool {
 	return set
 }
 
-// matchesContracted reports whether two answers agree under some reading of
-// their contractions.
-func matchesContracted(got, cand string) bool {
+// matchesLenient reports whether two answers agree under some reading of
+// their contractions and notation equivalences.
+func matchesLenient(got, cand string) bool {
 	gs, cs := readings(got), readings(cand)
 	if gs == nil || cs == nil {
 		return false

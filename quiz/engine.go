@@ -618,9 +618,10 @@ func (e *Engine) accepts(c *deck.Card, got string) bool {
 			}
 		} else if normalizeAnswer(got) == normalizeAnswer(cand) {
 			return true
-		} else if matchesContracted(got, cand) {
+		} else if matchesLenient(got, cand) {
 			// "I don't understand" and "I do not understand" agree under
-			// contraction expansion; no "=" variant needed.
+			// contraction expansion — likewise "5 m"/"five metres", "1st"/
+			// "first", "rock & roll"/"rock and roll"; no "=" variant needed.
 			return true
 		}
 	}
@@ -691,18 +692,26 @@ func (e *Engine) pullForward(card *deck.Card, gap int) {
 
 // normalizeAnswer canonicalizes a typed answer for lenient comparison: it
 // lowercases, strips diacritics (so "salâm" matches "salam"), drops punctuation
-// and symbols (so "i'm" matches "im" and "hello!" matches "hello"), and
-// collapses runs of whitespace to single spaces. Letters and digits of any
-// script are kept, so CJK and Arabic answers are unaffected beyond spacing.
+// and symbols (so "i'm" matches "im" and "hello!" matches "hello"), splits
+// digit–letter boundaries (so "5m" matches "5 m"), and collapses runs of
+// whitespace to single spaces. Letters and digits of any script are kept, so
+// CJK and Arabic answers are unaffected beyond spacing.
 func normalizeAnswer(s string) string {
 	var b strings.Builder
+	prevDigit, prevWord := false, false
 	for _, r := range norm.NFD.String(s) {
 		switch {
 		case unicode.Is(unicode.Mn, r): // combining mark (accent) — drop
 		case unicode.IsLetter(r) || unicode.IsNumber(r):
+			digit := unicode.IsNumber(r)
+			if prevWord && digit != prevDigit {
+				b.WriteRune(' ')
+			}
 			b.WriteRune(unicode.ToLower(r))
+			prevDigit, prevWord = digit, true
 		case unicode.IsSpace(r):
 			b.WriteRune(' ')
+			prevWord = false
 		default: // punctuation, symbols — drop
 		}
 	}
