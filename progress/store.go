@@ -85,13 +85,20 @@ type Store struct {
 	path string // path to the progress file
 }
 
-// NewStore creates a progress store for a given deck.
+// NewStore creates a progress store for a given deck in the default
+// per-user directory (~/.local/share/study).
 func NewStore(deckPath string) (*Store, error) {
 	dir, err := progressDir()
 	if err != nil {
 		return nil, err
 	}
+	return NewStoreIn(dir, deckPath)
+}
 
+// NewStoreIn creates a progress store for a given deck inside an explicit
+// directory. The web server keeps one directory per user this way; the file
+// layout inside is identical to the desktop default.
+func NewStoreIn(dir, deckPath string) (*Store, error) {
 	hash := deckHash(deckPath)
 	path := filepath.Join(dir, hash+".json")
 
