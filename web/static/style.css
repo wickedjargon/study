@@ -532,4 +532,4 @@ button.quiet:hover { color: var(--fg); }
   .actions button { min-width: 0; flex: 1; }
 }
 
-.studynote { font-size: 0.85rem; margin-top: 0.6rem; }
+.recommend { font-size: 0.9rem; margin-top: 0.9rem; }
