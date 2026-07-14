@@ -1,8 +1,8 @@
 # study
 
-A flashcard quiz tool inspired by suckless sent. Decks are plain text files. Sessions run in a minimal X11 window. The default card-order / card-scheduling follows evidence-based [spaced repetition](https://en.wikipedia.org/wiki/Spaced_repetition).
+A flashcard quiz tool inspired by suckless sent. Decks are plain text files. Sessions run in a minimal X11 window. The default card order, `adaptive`, is an evidence-based [spaced-repetition](https://en.wikipedia.org/wiki/Spaced_repetition) scheduler: it picks what's due, spaces repetitions within the session, and grows review intervals across days.
 
-The default `adaptive` card-ordering this package uses is based on these papers:
+The `adaptive` order is based on these papers:
 
 - Rawson, K. A., & Dunlosky, J. (2011). [Optimizing schedules of retrieval practice for durable and efficient learning: How much is enough?](https://pubmed.ncbi.nlm.nih.gov/21707204/) *Journal of Experimental Psychology: General, 140*(3), 283–302. — the session criterion: three correct recalls for new material, one per relearning session.
 - Karpicke, J. D., & Bauernschmidt, A. (2011). [Spaced retrieval: Absolute spacing enhances learning regardless of relative spacing.](https://learninglab.psych.purdue.edu/downloads/2011/2011_Karpicke_Bauernschmidt_JEPLMC.pdf) *Journal of Experimental Psychology: Learning, Memory, and Cognition, 37*(5), 1250–1257. — within-session spacing: any nonzero gap between repetitions beats none, and the gap pattern doesn't matter.
