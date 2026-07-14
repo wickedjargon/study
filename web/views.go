@@ -102,7 +102,9 @@ type quizView struct {
 	ResultTimedOut bool
 	ResultTyped    string
 	ResultAnswer   string
-	ConfusedWith   string
+	// Confused renders the confused-with card's question — media included,
+	// since an image-only card (a flag, a dog) has no text to name it by.
+	Confused []mediaView
 	WrongPause     int
 
 	// Caught up / summary.
@@ -303,7 +305,7 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		view.ResultTyped = res.Typed
 		view.ResultAnswer = res.Answer
 		if res.ConfusedWith != nil {
-			view.ConfusedWith = deck.JoinText(res.ConfusedWith.Question)
+			view.Confused = mediaViews(mediaBase, res.ConfusedWith.Question)
 		}
 		if !res.Correct {
 			view.WrongPause = e.WrongPause()

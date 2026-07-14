@@ -425,11 +425,11 @@ button.quiet:hover { color: var(--fg); }
 .card.lost { border-color: color-mix(in srgb, var(--bad) 35%, var(--line)); }
 .typedanswer { color: var(--dim); margin: 0.2rem 0 0.4rem; }
 .typedanswer s { color: var(--bad); text-decoration-thickness: 1.5px; }
-.confused {
-  color: var(--dim);
-  font-size: 0.95rem;
-  margin-top: 0.9rem;
-}
+.confused { margin-top: 1rem; }
+.confused-note { color: var(--dim); font-size: 0.95rem; margin: 0 0 0.2rem; }
+.confused .cardimg { max-height: 14vh; }
+.confused .cardtext.primary { font-size: 1.15rem; }
+.confused .cardtext { font-size: 0.9rem; }
 
 /* ---- caught up / summary ---- */
 .card.standalone { padding: 2.6rem 2rem; }

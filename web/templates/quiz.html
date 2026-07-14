@@ -134,7 +134,12 @@
     <hr class="divider">
     {{if and (not .ResultCorrect) .ResultTyped}}<p class="typedanswer">you answered <s dir="auto">{{.ResultTyped}}</s></p>{{end}}
     <div class="answerside">{{template "media" .AnswerSide}}</div>
-    {{if .ConfusedWith}}<p class="confused">that's the answer to a different card: <span dir="auto">{{.ConfusedWith}}</span></p>{{end}}
+    {{if .Confused}}
+    <div class="confused">
+      <p class="confused-note">that's the answer to this card:</p>
+      {{template "media" .Confused}}
+    </div>
+    {{end}}
   </section>
   <form method="post" action="{{.Base}}/next" class="actions" id="primaryform">
     <button class="primary" {{if .WrongPause}}data-pause="{{.WrongPause}}"{{end}}>next →</button>
