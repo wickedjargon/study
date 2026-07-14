@@ -13,6 +13,9 @@
   --accent-fg: #f6fbf7;
   --ok: #35704f;
   --bad: #b04a37;
+  /* playing-animation bars: light, not accent; near-white where the theme
+     allows, a light warm neutral on the cream card where white would vanish */
+  --bars: #d5cebf;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -26,6 +29,7 @@
     --accent-fg: #10201a;
     --ok: #7cc49c;
     --bad: #e08b77;
+    --bars: #ffffff;
   }
 }
 
@@ -190,7 +194,7 @@ main.list { justify-content: flex-start; padding-top: 2.5rem; }
 .play .bars i {
   width: 3.5px;
   border-radius: 2px;
-  background: currentColor;
+  background: var(--bars);
   animation: bounce 0.9s ease-in-out infinite;
 }
 .play .bars i:nth-child(1) { height: 8px; }
