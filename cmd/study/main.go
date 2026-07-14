@@ -8,7 +8,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"sort"
@@ -247,32 +246,27 @@ func main() {
 	// engine keeps the full list for confusion detection.
 	full := d.Cards
 
-	// Compose and order the session according to the deck's "# order:" mode.
-	// This sets up what's served and in what starting order — how cards recur
-	// afterwards (spaced criterion scheduling vs. laps) is the engine's side
-	// of the same mode.
+	// Compose and order the session according to the deck's "# order:" mode
+	// (quiz.Compose is shared with the web frontend); the flag-only extras
+	// layer on top here. How cards recur afterwards (spaced criterion
+	// scheduling vs. laps) is the engine's side of the same mode.
+	now := time.Now()
+	quiz.Compose(d, store, now)
 	switch d.Order {
 	case deck.OrderAdaptive:
-		// The default is a successive-relearning session: cards due for review
-		// (most overdue first), then a bounded batch of never-studied cards.
-		// Cards scheduled further out are excluded — distributing practice
-		// across days is the point, and re-drilling tomorrow's cards today
-		// would just collapse the spacing. --ahead pulls them in anyway,
+		// Cards scheduled further out are excluded by Compose — distributing
+		// practice across days is the point, and re-drilling tomorrow's cards
+		// today would just collapse the spacing. --ahead pulls them in anyway,
 		// soonest-due first (closest to forgetting, so highest-yield); the
 		// engine then keeps their schedules honest — a clean early review
 		// doesn't advance the ladder, only a miss moves it.
-		now := time.Now()
-		reviews, fresh, future, _ := splitDue(d.Cards, store, now)
-		if d.NewPerSession >= 0 && len(fresh) > d.NewPerSession {
-			fresh = fresh[:d.NewPerSession]
-		}
-		d.Cards = append(reviews, fresh...)
 		if *aheadFlag != "" {
 			days, all, ok := parseAhead(*aheadFlag)
 			if !ok {
 				fmt.Fprintf(os.Stderr, "✗ --ahead: need a day count >= 1, or all (got %q)\n", *aheadFlag)
 				os.Exit(1)
 			}
+			_, _, future, _ := quiz.SplitDue(full, store, now)
 			cutoff := now.Add(time.Duration(days) * 24 * time.Hour)
 			for _, c := range future {
 				if all || !store.Get(c.ID).Due.After(cutoff) {
@@ -285,15 +279,10 @@ func main() {
 		// and offers a full ahead-of-schedule pass, so the user is never
 		// prevented from studying.
 	case deck.OrderWeakOnly:
-		d.Cards = store.FilterWeak(d.Cards)
 		if len(d.Cards) == 0 {
 			fmt.Printf("✓ nothing to cram — every card in %s is above the weak threshold\n", d.Name)
 			os.Exit(0)
 		}
-		shuffleCards(d.Cards)
-		d.Cards = store.PrioritizeCards(d.Cards)
-	case deck.OrderSequential, deck.OrderFlipThrough:
-		// Authored order, untouched.
 	}
 
 	engine := quiz.NewEngine(d, full, store)
@@ -303,37 +292,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "✗ %v\n", err)
 		os.Exit(1)
 	}
-}
-
-// splitDue partitions the deck for an adaptive session: reviews are studied
-// cards due now, sorted most overdue first (so an interrupted session spends
-// its time where forgetting is most advanced); fresh are never-studied cards,
-// shuffled; future are studied cards scheduled past now, sorted soonest-due
-// first — normally excluded from the session, --ahead pulls them in. nextDue
-// reports the earliest future review time (zero when none are scheduled).
-func splitDue(cards []deck.Card, store *progress.Store, now time.Time) (reviews, fresh, future []deck.Card, nextDue time.Time) {
-	for _, c := range cards {
-		cp := store.Get(c.ID)
-		switch {
-		case cp.TimesCorrect+cp.TimesWrong == 0:
-			fresh = append(fresh, c)
-		case cp.DueNow(now):
-			reviews = append(reviews, c)
-		default:
-			future = append(future, c)
-			if nextDue.IsZero() || cp.Due.Before(nextDue) {
-				nextDue = cp.Due
-			}
-		}
-	}
-	sort.SliceStable(reviews, func(i, j int) bool {
-		return store.Get(reviews[i].ID).Due.Before(store.Get(reviews[j].ID).Due)
-	})
-	sort.SliceStable(future, func(i, j int) bool {
-		return store.Get(future[i].ID).Due.Before(store.Get(future[j].ID).Due)
-	})
-	shuffleCards(fresh)
-	return reviews, fresh, future, nextDue
 }
 
 // parseAhead parses an --ahead value: a whole number of days >= 1, or "all".
@@ -346,13 +304,6 @@ func parseAhead(s string) (days int, all bool, ok bool) {
 		return 0, false, false
 	}
 	return n, false, true
-}
-
-// shuffleCards randomizes card order in place.
-func shuffleCards(cards []deck.Card) {
-	rand.Shuffle(len(cards), func(i, j int) {
-		cards[i], cards[j] = cards[j], cards[i]
-	})
 }
 
 // printStats writes a plain-text progress summary for the deck to stdout.
@@ -390,7 +341,7 @@ func printStats(d *deck.Deck, store *progress.Store) {
 	fmt.Printf("  Cards in deck    %d\n", len(d.Cards))
 
 	// Review schedule: what an adaptive session would serve right now.
-	reviews, fresh, _, nextDue := splitDue(d.Cards, store, time.Now())
+	reviews, fresh, _, nextDue := quiz.SplitDue(d.Cards, store, time.Now())
 	dueLine := fmt.Sprintf("  Due now          %d reviews + %d new\n", len(reviews), len(fresh))
 
 	if len(studied) == 0 {
