@@ -35,8 +35,15 @@ type homeGroup struct {
 	Studied bool
 }
 
-type homeView struct {
+// homeSection is one headed block of the home page; an empty Name renders
+// its groups without a heading.
+type homeSection struct {
+	Name   string
 	Groups []homeGroup
+}
+
+type homeView struct {
+	Sections []homeSection
 }
 
 // groupDeck is one topic row on a group's page.
@@ -115,6 +122,7 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	guest := s.guestID(w, r)
 	view := homeView{}
 	now := time.Now()
+	bySection := make(map[string][]homeGroup)
 	for _, g := range s.groups {
 		row := homeGroup{
 			URL:     "/g/" + g.Slug,
@@ -148,7 +156,10 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 			row.Fresh = len(fresh)
 			row.Studied = row.Fresh < row.Cards
 		}
-		view.Groups = append(view.Groups, row)
+		bySection[g.Section] = append(bySection[g.Section], row)
+	}
+	for _, name := range s.sections {
+		view.Sections = append(view.Sections, homeSection{Name: name, Groups: bySection[name]})
 	}
 	s.render(w, "home", view)
 }

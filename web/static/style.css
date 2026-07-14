@@ -441,6 +441,15 @@ button.quiet:hover { color: var(--fg); }
 .backlink a:hover { color: var(--fg); }
 
 /* ---- deck picker ---- */
+.sectionhead {
+  font-size: 0.8rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin: 1.6rem 0.2rem 0.7rem;
+}
+.sectionhead:first-child { margin-top: 0.4rem; }
 .decklist {
   list-style: none;
   padding: 0;

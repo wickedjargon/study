@@ -46,7 +46,11 @@ var staticFS embed.FS
 type Server struct {
 	groups  []*group
 	bySlug  map[string]*group
-	dataDir string
+	// sections is home-page heading order: encounter order of the
+	// "[Section]" marker arguments, "" (unlabeled) first when present.
+	sections []string
+	section  string // current section while parsing arguments
+	dataDir  string
 
 	tmpl *template.Template
 	mux  *http.ServeMux
@@ -60,7 +64,10 @@ type Server struct {
 type group struct {
 	Slug string
 	Name string
-	Hue  int // identity color (0-359), from the slug
+	// Section is the home-page heading this group files under, set by a
+	// "[Section Name]" marker argument; "" is the unlabeled default.
+	Section string
+	Hue     int // identity color (0-359), from the slug
 	// Path keys the guest's progress store for every deck in the group, so
 	// the same card studied under two topics shares one history.
 	Path  string
@@ -150,6 +157,11 @@ func New(deckPaths []string, dataDir string) (*Server, error) {
 
 	var nested [][3]string
 	for _, p := range deckPaths {
+		// "[Section Name]" files every following group under that heading.
+		if inner, ok := strings.CutPrefix(p, "["); ok && strings.HasSuffix(inner, "]") {
+			s.setSection(strings.TrimSuffix(inner, "]"))
+			continue
+		}
 		var display string
 		if path, name, ok := strings.Cut(p, "@"); ok {
 			p, display = path, name
@@ -171,6 +183,13 @@ func New(deckPaths []string, dataDir string) (*Server, error) {
 		return nil, fmt.Errorf("no decks found in %s", strings.Join(deckPaths, ", "))
 	}
 	sort.Slice(s.groups, func(i, j int) bool { return s.groups[i].Name < s.groups[j].Name })
+	// Unlabeled groups list before the named sections.
+	for _, g := range s.groups {
+		if g.Section == "" {
+			s.sections = append([]string{""}, s.sections...)
+			break
+		}
+	}
 
 	tmpl, err := template.New("").Funcs(template.FuncMap{
 		// keynum labels a choice with its 1-based keyboard shortcut.
@@ -194,6 +213,20 @@ func New(deckPaths []string, dataDir string) (*Server, error) {
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mux.ServeHTTP(w, r)
+}
+
+// setSection switches the section that subsequently scanned groups file
+// under, recording heading order.
+func (s *Server) setSection(name string) {
+	s.section = name
+	for _, have := range s.sections {
+		if have == name {
+			return
+		}
+	}
+	if name != "" {
+		s.sections = append(s.sections, name)
+	}
 }
 
 // scanPath catalogs one command-line path: a *.deck name (file or pack
@@ -232,10 +265,11 @@ func (s *Server) addGroup(path, display string) {
 	}
 	slug := s.uniqueGroupSlug(display)
 	g := &group{
-		Slug: slug,
-		Name: display,
-		Hue:  deckHue(slug),
-		Path: path,
+		Slug:    slug,
+		Name:    display,
+		Section: s.section,
+		Hue:     deckHue(slug),
+		Path:    path,
 	}
 
 	fi, err := os.Stat(path)

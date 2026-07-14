@@ -13,6 +13,7 @@ study-web:
 # Language variants share a "Language (Variant)" display name (the @ suffix)
 # so they sort next to each other on the home page.
 WEB_DECKS = \
+	'[Languages]' \
 	$(HOME)/d/projects/language-packs/study-japanese.deck \
 	$(HOME)/d/projects/language-packs/study-farsi.deck \
 	$(HOME)/d/projects/language-packs/study-mandarin-chinese.deck \
@@ -24,6 +25,7 @@ WEB_DECKS = \
 	farsi=$(HOME)/d/projects/study-farsi-numbers.deck \
 	mandarin-chinese=$(HOME)/d/projects/study-chinese-numbers.deck \
 	'mandarin-chinese=$(HOME)/d/projects/study-chinese-mahjong-terms.deck@Mahjong' \
+	'[More]' \
 	$(HOME)/d/projects/study-dog-breeds.deck \
 	'$(HOME)/d/projects/study-bc-driving.deck@British Columbia Driving' \
 	$(HOME)/d/projects/study-world-flags.deck \
