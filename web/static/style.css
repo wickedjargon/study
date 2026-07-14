@@ -136,7 +136,7 @@ main {
   flex: 1;
   width: min(42rem, 100%);
   margin: 0 auto;
-  padding: 2.25rem 1.25rem 2.5rem;
+  padding: 0.9rem 1.25rem 2.5rem;
   display: flex;
   flex-direction: column;
 }
@@ -178,7 +178,7 @@ main.list { padding-top: 2.5rem; }
 .cardimg {
   display: block;
   max-width: 100%;
-  max-height: 42vh;
+  max-height: 34vh;
   margin: 0.9rem auto;
   border-radius: 10px;
 }
@@ -306,14 +306,14 @@ button.quiet:hover { color: var(--fg); }
 .typed input::placeholder { color: var(--dim); }
 .typed input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
 
-.choices { display: grid; gap: 0.65rem; }
+.choices { display: grid; gap: 0.5rem; }
 .choice {
   display: flex;
   align-items: center;
   gap: 0.8rem;
   text-align: left;
   font-size: 1.1rem;
-  padding: 0.8rem 1.1rem;
+  padding: 0.5rem 1rem;
   box-shadow: var(--shadow);
 }
 .choice:hover { border-color: var(--accent); }
