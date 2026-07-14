@@ -531,3 +531,5 @@ button.quiet:hover { color: var(--fg); }
   .bar { padding-top: 0.8rem; }
   .actions button { min-width: 0; flex: 1; }
 }
+
+.studynote { font-size: 0.85rem; margin-top: 0.6rem; }

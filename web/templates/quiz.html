@@ -152,7 +152,7 @@
     <p class="dim">Nothing is due for review{{if .NextDue}}: next review {{.NextDue}}{{end}}.</p>
   </section>
   <div class="actions" id="primaryform">
-    <form method="post" action="{{.Base}}/continue"><button class="primary">keep studying anyway</button></form>
+    <form method="post" action="{{.Base}}/continue"><button>keep studying anyway</button></form>
     <form method="post" action="{{.Base}}/review"><button>flip through instead</button></form>
   </div>
   <p class="center backlink"><a class="dim" href="{{.GroupURL}}">← back</a></p>
@@ -170,8 +170,9 @@
   </section>
   {{if .CanContinue}}
   <div class="actions">
-    <form method="post" action="{{.Base}}/continue"><button class="primary">keep studying</button></form>
+    <form method="post" action="{{.Base}}/continue"><button>keep studying anyway</button></form>
   </div>
+  <p class="center dim studynote">coming back when reviews are due works better than pushing on</p>
   {{end}}
   <p class="center backlink"><a class="dim" href="{{.GroupURL}}">← back</a></p>
 {{end}}
