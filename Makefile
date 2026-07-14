@@ -25,7 +25,8 @@ WEB_DECKS = \
 	mandarin-chinese=$(HOME)/d/projects/study-chinese-numbers.deck \
 	$(HOME)/d/projects/study-dog-breeds.deck \
 	'$(HOME)/d/projects/study-bc-driving.deck@BC Driving' \
-	$(HOME)/d/projects/study-world-flags.deck
+	$(HOME)/d/projects/study-world-flags.deck \
+	$(HOME)/d/projects/study-world-capitals.deck
 
 # Bind localhost by default; `make run ADDR=0.0.0.0:8091` opens it to the
 # LAN (e.g. to try it from a phone).
