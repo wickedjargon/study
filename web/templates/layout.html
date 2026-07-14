@@ -16,6 +16,17 @@
 </html>
 {{end}}
 
+{{define "logincorner"}}
+<div class="logincorner">
+  {{if .}}
+    <span>{{.}}</span>
+    <form method="post" action="/logout"><button type="submit" class="quiet">log out</button></form>
+  {{else}}
+    <a class="loginlink" href="/login">LOGIN</a>
+  {{end}}
+</div>
+{{end}}
+
 {{define "media"}}
 {{range .}}
 {{if .Text}}<p class="cardtext{{if .Primary}} primary{{end}}" dir="auto">{{.Text}}</p>{{end}}

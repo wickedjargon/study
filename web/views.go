@@ -63,6 +63,7 @@ type groupView struct {
 	Initial string
 	Hue     int
 	Decks   []groupDeck
+	Email   string // logged-in address, "" for a guest
 }
 
 // quizView carries every screen of the session; Screen selects the template
@@ -75,6 +76,7 @@ type quizView struct {
 	DeckName  string
 	Hue       int
 	Reviewing bool
+	Email     string // logged-in address, "" for a guest
 	Intros    bool   // the guest's introduction preference
 	ModeLabel string // the session's answering mode: "type" or "choice"
 	// Position is the desktop's [seen/total] session counter, formatted
@@ -184,6 +186,7 @@ func (s *Server) handleGroup(w http.ResponseWriter, r *http.Request) {
 		Initial: string([]rune(g.Name)[:1]),
 		Hue:     g.Hue,
 	}
+	_, view.Email = s.currentUser(r)
 	store, err := s.visitorStore(visitor, g)
 	if err != nil {
 		s.fail(w, err)
@@ -243,6 +246,7 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		Correct:   e.TotalCorrect,
 		Wrong:     e.TotalWrong,
 	}
+	_, view.Email = s.currentUser(r)
 	if g.single() {
 		// No topic list to go back to — the breadcrumb points home.
 		view.GroupURL = "/"

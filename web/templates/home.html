@@ -1,15 +1,8 @@
 {{define "home"}}
 {{template "top" "decks"}}
+{{template "logincorner" .Email}}
 <header class="bar home">
   <span class="brand">study</span>
-  <div class="authline">
-    {{if .Email}}
-      <span>{{.Email}}</span>
-      <form method="post" action="/logout"><button type="submit" class="quiet">log out</button></form>
-    {{else}}
-      <a href="/login">log in</a><span> to keep your progress</span>
-    {{end}}
-  </div>
 </header>
 <main class="list">
   {{range .Sections}}

@@ -521,16 +521,27 @@ button.quiet:hover { color: var(--fg); }
 .contact a:hover { color: var(--fg); }
 
 /* ---- login ---- */
-.authline {
+/* The login corner sits top right of every page; quiz screens fold it into
+   the kebab instead, where the header is already spoken for. */
+.logincorner {
+  position: absolute;
+  top: 1rem;
+  right: 1.25rem;
   display: flex;
   align-items: baseline;
-  gap: 0.35rem;
-  margin: 0.3rem 0 0;
+  gap: 0.6rem;
   color: var(--dim);
   font-size: 0.85rem;
 }
-.authline a { color: var(--accent); text-decoration: none; }
-.authline a:hover { text-decoration: underline; }
+.loginlink {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+}
+.loginlink:hover { text-decoration: underline; }
+a.mact { display: block; text-decoration: none; }
 .auth {
   width: min(26rem, 100%);
   margin: 0 auto;
