@@ -115,6 +115,7 @@ main.list { justify-content: flex-start; padding-top: 2.5rem; }
 
 /* ---- the card ---- */
 .card {
+  position: relative;
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -168,6 +169,23 @@ main.list { justify-content: flex-start; padding-top: 2.5rem; }
 .play:hover { color: var(--accent); border-color: var(--accent); }
 .play:active { transform: scale(0.94); }
 .play .icon { width: 18px; height: 18px; }
+
+/* The cue's audio docks flush into the card's top-right corner: the
+   button's outer corner continues the card border on the same curve, the
+   inner corner answers it. Only the question side (a direct child of the
+   card) docks — answer-side audio stays inline. */
+.card > .player {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  margin: 0;
+}
+.card > .player .play {
+  width: 3rem;
+  height: 3rem;
+  border: 1px solid var(--line);
+  border-radius: 0 16px 0 14px;
+}
 .play .bars { display: none; align-items: flex-end; gap: 2.5px; height: 15px; }
 .play .bars i {
   width: 3.5px;
@@ -198,7 +216,6 @@ main.list { justify-content: flex-start; padding-top: 2.5rem; }
 .badge.retry { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
 .badge.ahead { color: var(--dim); background: color-mix(in srgb, var(--dim) 14%, transparent); }
 .badge.timer {
-  margin-left: auto;
   color: var(--fg);
   background: color-mix(in srgb, var(--fg) 8%, transparent);
   font-variant-numeric: tabular-nums;
@@ -364,6 +381,7 @@ button.quiet:hover { color: var(--fg); }
 
 @media (max-width: 480px) {
   .card { padding: 1.3rem 1.2rem 1.4rem; border-radius: 14px; }
+  .card > .player .play { border-radius: 0 14px 0 12px; }
   .cardtext.primary { font-size: 1.6rem; }
   .bar { padding-top: 0.8rem; }
   .actions button { min-width: 0; flex: 1; }
