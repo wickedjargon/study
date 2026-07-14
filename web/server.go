@@ -79,20 +79,24 @@ type session struct {
 // freshly composed session.
 const sessionIdleLimit = 6 * time.Hour
 
-// New builds a server serving every deck found in decksDir (files or pack
-// directories), keeping per-guest progress under dataDir/users/<id>/.
-func New(decksDir, dataDir string) (*Server, error) {
+// New builds a server serving the given deck paths, keeping per-guest
+// progress under dataDir/users/<id>/. Each path is either a deck itself — a
+// *.deck file, or a pack directory named *.deck/ — or a directory whose deck
+// entries are all catalogued.
+func New(deckPaths []string, dataDir string) (*Server, error) {
 	s := &Server{
 		bySlug:   make(map[string]*deckInfo),
 		dataDir:  dataDir,
 		sessions: make(map[string]*session),
 	}
 
-	if err := s.scanDecks(decksDir); err != nil {
-		return nil, err
+	for _, p := range deckPaths {
+		if err := s.scanPath(filepath.Clean(p)); err != nil {
+			return nil, err
+		}
 	}
 	if len(s.decks) == 0 {
-		return nil, fmt.Errorf("no decks found in %s", decksDir)
+		return nil, fmt.Errorf("no decks found in %s", strings.Join(deckPaths, ", "))
 	}
 
 	tmpl, err := template.New("").Funcs(template.FuncMap{
@@ -119,55 +123,67 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mux.ServeHTTP(w, r)
 }
 
-// scanDecks catalogs every deck under dir: *.deck files, and directories
-// (packs — possibly themselves named *.deck/) containing deck files.
-func (s *Server) scanDecks(dir string) error {
-	entries, err := os.ReadDir(dir)
+// scanPath catalogs one command-line path: a *.deck name (file or pack
+// directory) is a deck itself; anything else is a directory whose *.deck
+// entries are all added.
+func (s *Server) scanPath(path string) error {
+	if strings.HasSuffix(path, ".deck") {
+		s.addDeck(path)
+		return nil
+	}
+	entries, err := os.ReadDir(path)
 	if err != nil {
 		return fmt.Errorf("reading decks dir: %w", err)
 	}
 	for _, e := range entries {
-		path := filepath.Join(dir, e.Name())
+		sub := filepath.Join(path, e.Name())
 		if e.IsDir() {
-			if m, _ := filepath.Glob(filepath.Join(path, "*.deck")); len(m) == 0 {
+			if m, _ := filepath.Glob(filepath.Join(sub, "*.deck")); len(m) == 0 {
 				continue
 			}
 		} else if !strings.HasSuffix(e.Name(), ".deck") {
 			continue
 		}
+		s.addDeck(sub)
+	}
+	return nil
+}
 
-		d, err := deck.Parse(path)
-		if err != nil {
-			log.Printf("skipping %s: %v", path, err)
-			continue
-		}
-		for _, w := range d.Warnings {
-			log.Printf("%s: %s", e.Name(), w)
-		}
+// addDeck parses one deck (file or pack directory) into the catalog; a deck
+// that fails to parse is skipped with a log line rather than sinking the
+// whole server.
+func (s *Server) addDeck(path string) {
+	d, err := deck.Parse(path)
+	if err != nil {
+		log.Printf("skipping %s: %v", path, err)
+		return
+	}
+	base := filepath.Base(path)
+	for _, w := range d.Warnings {
+		log.Printf("%s: %s", base, w)
+	}
 
-		slug := s.uniqueSlug(e.Name())
-		info := &deckInfo{
-			Slug:  slug,
-			Name:  prettyName(e.Name()),
-			Hue:   deckHue(slug),
-			Path:  d.Path,
-			Cards: d.Cards,
-			media: make(map[string]string),
-		}
-		for _, c := range d.Cards {
-			for _, side := range [][]deck.Media{c.Question, c.Answer} {
-				for _, m := range side {
-					if m.Type == deck.Image || m.Type == deck.Audio {
-						info.media[filepath.Base(m.Content)] = m.Content
-					}
+	slug := s.uniqueSlug(base)
+	info := &deckInfo{
+		Slug:  slug,
+		Name:  prettyName(base),
+		Hue:   deckHue(slug),
+		Path:  d.Path,
+		Cards: d.Cards,
+		media: make(map[string]string),
+	}
+	for _, c := range d.Cards {
+		for _, side := range [][]deck.Media{c.Question, c.Answer} {
+			for _, m := range side {
+				if m.Type == deck.Image || m.Type == deck.Audio {
+					info.media[filepath.Base(m.Content)] = m.Content
 				}
 			}
 		}
-		s.decks = append(s.decks, info)
-		s.bySlug[info.Slug] = info
 	}
+	s.decks = append(s.decks, info)
+	s.bySlug[info.Slug] = info
 	sort.Slice(s.decks, func(i, j int) bool { return s.decks[i].Name < s.decks[j].Name })
-	return nil
 }
 
 // prettyName turns a deck's file name into a display title:
