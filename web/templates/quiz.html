@@ -16,7 +16,6 @@
         {{if .Reviewing}}
         <form method="post" action="{{.Base}}/start"><button class="mact">
           <span class="mi-title">Quiz this deck</span>
-          <span class="mi-desc">answer from memory</span>
         </button></form>
         {{else}}
         <div class="mset">
@@ -52,12 +51,10 @@
         <hr class="menusep">
         <form method="post" action="{{.Base}}/review"><button class="mact">
           <span class="mi-title">Review this deck</span>
-          <span class="mi-desc">flip through deck with each card's answer revealed</span>
         </button></form>
         {{end}}
         <form method="post" action="{{.Base}}/end"><button class="mact">
           <span class="mi-title">End session</span>
-          <span class="mi-desc">stop here and see the summary</span>
         </button></form>
       </div>
     </details>
