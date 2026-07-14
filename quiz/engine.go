@@ -69,6 +69,11 @@ type Engine struct {
 	main  []queuedCard
 	retry []*retryCard
 
+	// pendingNew holds the session's never-studied cards beyond the
+	// introduction window (activeNewLimit), in serving order; each is
+	// admitted to main as a card in the window meets its criterion.
+	pendingNew []*deck.Card
+
 	// step is a monotonic logical clock incremented each time a card is shown
 	// from the main queue. A re-queued card's due tick is step+delay, so weak
 	// cards (small delay) recur sooner than strong ones — yet because due ticks
@@ -172,6 +177,19 @@ const (
 // Kornell & Bjork 2008).
 const gapConfused = 5
 
+// activeNewLimit bounds how many never-studied cards are in play at once:
+// the rest of the session's new batch waits, and the next one is introduced
+// when a card in the window meets its criterion. Learning arrives a few
+// cards at a time — the working set stays near working-memory capacity
+// (Cowan 2001), and gradual introduction against a small active pool is the
+// policy that beat random and learner-controlled ordering in Atkinson (1972).
+const activeNewLimit = 4
+
+// gapNewCard is how soon a freshly introduced card is served: quickly, so
+// the freed slot is refilled while attention is there, but not immediately
+// on the heels of the completion that freed it.
+const gapNewCard = 3
+
 // NewEngine creates a quiz engine from a parsed deck. Cards are presented in
 // the deck's existing order (the caller shuffles/prioritizes beforehand).
 // pool is the deck's complete card list for confusion detection, of which
@@ -248,6 +266,7 @@ func NewEngine(d *deck.Deck, pool []deck.Card, store *progress.Store) *Engine {
 		}
 	}
 
+	e.holdBackNew()
 	e.advance()
 	// An adaptive session that opens with nothing to serve isn't over — it
 	// never began: the user is caught up. Land on the caught-up screen (which
@@ -256,6 +275,41 @@ func NewEngine(d *deck.Deck, pool []deck.Card, store *progress.Store) *Engine {
 		e.state = CaughtUp
 	}
 	return e
+}
+
+// holdBackNew trims the queue's never-studied cards down to the introduction
+// window, keeping the rest in pendingNew (in order) to be admitted one at a
+// time as window cards meet their criterion. Studied cards are untouched.
+// Evidence-scheduled sessions only; the lap modes serve everything at once.
+func (e *Engine) holdBackNew() {
+	if !e.evidenceScheduled() {
+		return
+	}
+	e.pendingNew = nil
+	active := 0
+	kept := make([]queuedCard, 0, len(e.main))
+	for _, qc := range e.main {
+		if e.newCards[qc.card.ID] {
+			if active >= activeNewLimit {
+				e.pendingNew = append(e.pendingNew, qc.card)
+				continue
+			}
+			active++
+		}
+		kept = append(kept, qc)
+	}
+	e.main = kept
+}
+
+// admitNextNew introduces the next held-back card, if any: a slot in the
+// introduction window has freed up.
+func (e *Engine) admitNextNew() {
+	if len(e.pendingNew) == 0 {
+		return
+	}
+	c := e.pendingNew[0]
+	e.pendingNew = e.pendingNew[1:]
+	e.requeueGap(c, gapNewCard)
 }
 
 // ContinueAll re-seeds the adaptive session so running out of due cards never
@@ -328,6 +382,7 @@ func (e *Engine) ContinueAll() {
 		e.ahead[c.ID] = true
 	}
 	e.allCards = ordered
+	e.holdBackNew()
 	e.advance()
 }
 
@@ -461,9 +516,10 @@ func (e *Engine) CurrentIsAhead() bool {
 	return e.current != nil && e.ahead[e.current.ID]
 }
 
-// Remaining returns the number of cards left (main + retry).
+// Remaining returns the number of cards left (main + retry + introductions
+// not yet admitted).
 func (e *Engine) Remaining() int {
-	n := len(e.main) + len(e.retry)
+	n := len(e.main) + len(e.retry) + len(e.pendingNew)
 	if e.current != nil && e.state != Done {
 		n++
 	}
@@ -604,8 +660,8 @@ func (e *Engine) noteConfusion(got string) *deck.Card {
 }
 
 // pullForward moves a queued card's due tick up to step+gap so it is served
-// soon. A card already due sooner keeps its earlier tick, and one not in the
-// main queue is left alone rather than re-added.
+// soon. A card already due sooner keeps its earlier tick, and one neither
+// queued nor awaiting introduction is left alone rather than re-added.
 func (e *Engine) pullForward(card *deck.Card, gap int) {
 	due := e.step + gap
 	for i := range e.main {
@@ -614,6 +670,15 @@ func (e *Engine) pullForward(card *deck.Card, gap int) {
 				return
 			}
 			e.main = append(e.main[:i], e.main[i+1:]...)
+			e.requeueGap(card, gap)
+			return
+		}
+	}
+	// Not queued yet — a held-back introduction. The confusion is live now,
+	// so the card jumps the introduction window rather than waiting its turn.
+	for i, c := range e.pendingNew {
+		if c.ID == card.ID {
+			e.pendingNew = append(e.pendingNew[:i], e.pendingNew[i+1:]...)
 			e.requeueGap(card, gap)
 			return
 		}
@@ -716,6 +781,10 @@ func (e *Engine) handleCorrect() {
 			if e.store != nil && (!e.ahead[id] || e.lapsed[id]) {
 				e.store.Schedule(id, e.lapsed[id])
 			}
+			// A completed new card frees a slot in the introduction window.
+			if e.newCards[id] {
+				e.admitNextNew()
+			}
 			return // criterion met: leaves the session
 		}
 		e.requeueGap(e.current, gapAfterCorrect)
@@ -805,6 +874,12 @@ func (e *Engine) advance() {
 	} else if len(e.retry) > 0 {
 		e.current = e.retry[0].card
 		e.fromRetry = true
+	} else if len(e.pendingNew) > 0 {
+		// The queues drained with introductions still waiting (reviews can
+		// complete without freeing a window slot) — admit rather than end.
+		e.admitNextNew()
+		e.advance()
+		return
 	} else {
 		// Every card has met its session criterion — the session is complete.
 		// (Only the evidence scheduler gets here; the lap modes always requeue.)
