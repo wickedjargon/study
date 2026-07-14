@@ -104,6 +104,12 @@ body {
   justify-content: flex-end;
   gap: 0.75rem;
 }
+.pos {
+  color: var(--dim);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .counts {
   color: var(--dim);
   font-size: 0.85rem;

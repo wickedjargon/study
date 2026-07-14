@@ -7,6 +7,7 @@
     <span class="bartitle">
       {{if .GroupName}}<a class="crumb" href="{{.GroupURL}}">{{.GroupName}}</a> <span class="dim">›</span> {{end}}{{.DeckName}}
     </span>
+    {{if .Position}}<span class="pos">{{.Position}}</span>{{end}}
   </span>
   <span class="counts">
     {{if .Seen}}<span class="ok">{{.Correct}}✓</span> <span class="bad">{{.Wrong}}✗</span>{{end}}

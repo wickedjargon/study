@@ -1,6 +1,7 @@
 package web
 
 import (
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"time"
@@ -66,6 +67,9 @@ type quizView struct {
 	DeckName  string
 	Hue       int
 	Reviewing bool
+	// Position is the desktop's [seen/total] session counter, formatted
+	// per screen exactly as gui does.
+	Position string
 
 	// Header counters. Progress is the session's completion percentage:
 	// cards that have met their criterion over cards in play.
@@ -242,6 +246,7 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 	case quiz.ShowQuestion:
 		card := e.Current()
 		view.Screen = "question"
+		view.Position = fmt.Sprintf("[%d/%d]", e.TotalSeen+1, e.TotalSeen+e.Remaining())
 		view.Question = mediaViews(mediaBase, card.Question)
 		view.Choice = card.Mode == deck.ModeChoice
 		view.Options = e.Options()
@@ -257,10 +262,17 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		view.AnswerSide = mediaViews(mediaBase, card.Answer)
 		view.FlipMode = e.Order() == deck.OrderFlipThrough
 		view.IsNew = e.CurrentIsNew()
+		if view.FlipMode {
+			// Flip-through wraps forever; the counter is position in the lap.
+			view.Position = fmt.Sprintf("[%d/%d]", e.TotalSeen%e.DeckSize()+1, e.DeckSize())
+		} else {
+			view.Position = fmt.Sprintf("[%d/%d]", e.TotalSeen+1, e.TotalSeen+e.Remaining())
+		}
 
 	case quiz.ShowResult:
 		res := sess.last
 		view.Screen = "result"
+		view.Position = fmt.Sprintf("[%d/%d]", e.TotalSeen, e.TotalSeen+e.Remaining())
 		if res == nil {
 			// A session composed fresh can't be in ShowResult without a
 			// result; guard anyway rather than render a hole.
