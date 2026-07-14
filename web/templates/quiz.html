@@ -2,21 +2,25 @@
 {{template "top" .DeckName}}
 <div class="page" style="--h: {{.Hue}}">
 <header class="bar">
-  <a class="brand" href="/" title="all decks">study</a>
-  <span class="bartitle">
-    {{if .GroupName}}<a class="crumb" href="{{.GroupURL}}">{{.GroupName}}</a> <span class="dim">›</span> {{end}}{{.DeckName}}
+  <span class="barleft">
+    <a class="brand" href="/" title="all decks">study</a>
+    <span class="bartitle">
+      {{if .GroupName}}<a class="crumb" href="{{.GroupURL}}">{{.GroupName}}</a> <span class="dim">›</span> {{end}}{{.DeckName}}
+    </span>
   </span>
   <span class="counts">
     {{if .Seen}}<span class="ok">{{.Correct}}✓</span> <span class="bad">{{.Wrong}}✗</span>{{end}}
   </span>
-  {{if ne .Screen "summary"}}
-  {{if .Reviewing}}
-  <form method="post" action="{{.Base}}/start"><button class="quiet" title="back to being quizzed">quiz me</button></form>
-  {{else}}
-  <form method="post" action="{{.Base}}/review"><button class="quiet" title="flip through the cards, answers visible, nothing recorded">review</button></form>
-  {{end}}
-  <form method="post" action="{{.Base}}/end"><button class="quiet" title="finish session">end</button></form>
-  {{end}}
+  <span class="barright">
+    {{if ne .Screen "summary"}}
+    {{if .Reviewing}}
+    <form method="post" action="{{.Base}}/start"><button class="quiet" title="back to being quizzed">quiz me</button></form>
+    {{else}}
+    <form method="post" action="{{.Base}}/review"><button class="quiet" title="flip through the cards, answers visible, nothing recorded">review</button></form>
+    {{end}}
+    <form method="post" action="{{.Base}}/end"><button class="quiet" title="finish session">end</button></form>
+    {{end}}
+  </span>
 </header>
 {{if or (eq .Screen "question") (eq .Screen "preview") (eq .Screen "result")}}
 <div class="progress" title="session progress"><i style="width: {{.Progress}}%"></i></div>
