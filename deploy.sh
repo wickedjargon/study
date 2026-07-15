@@ -25,6 +25,7 @@ rsync -a --delete --exclude '__pycache__' --exclude '.git' \
 	"$P/study-farsi-numbers.deck" \
 	"$P/study-chinese-numbers.deck" \
 	"$P/study-chinese-mahjong-terms.deck" \
+	"$P/study-chinese-mahjong-tiles.deck" \
 	"$P/study-dog-breeds.deck" \
 	"$P/study-bc-driving.deck" \
 	"$P/study-world-flags.deck" \

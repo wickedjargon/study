@@ -21,10 +21,11 @@ WEB_DECKS = \
 	'$(HOME)/d/projects/study-mexican-spanish.deck@Spanish (Mexican)' \
 	'$(HOME)/d/projects/language-packs/study-brazilian-portuguese.deck@Portuguese (Brazilian)' \
 	japanese=$(HOME)/d/projects/study-japanese-numbers.deck \
-	japanese=$(HOME)/d/projects/study-mahjong.deck \
+	'japanese=$(HOME)/d/projects/study-mahjong.deck@Mahjong (Tiles)' \
 	farsi=$(HOME)/d/projects/study-farsi-numbers.deck \
 	mandarin-chinese=$(HOME)/d/projects/study-chinese-numbers.deck \
-	'mandarin-chinese=$(HOME)/d/projects/study-chinese-mahjong-terms.deck@Mahjong' \
+	'mandarin-chinese=$(HOME)/d/projects/study-chinese-mahjong-tiles.deck@Mahjong (Tiles)' \
+	'mandarin-chinese=$(HOME)/d/projects/study-chinese-mahjong-terms.deck@Mahjong (Vocab)' \
 	'[More]' \
 	$(HOME)/d/projects/study-dog-breeds.deck \
 	'$(HOME)/d/projects/study-bc-driving.deck@British Columbia Driving' \
