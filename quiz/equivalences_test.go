@@ -41,6 +41,18 @@ func TestEquivalences(t *testing.T) {
 		{"okay", "ok"},
 		{"ok", "okay"},
 		{"brazil versus argentina", "brazil vs argentina"},
+		// Pluralization is optional, both directions.
+		{"3 dots", "3 dot"},
+		{"3 dot", "3 dots"},
+		{"dog", "dogs"},
+		{"boxes", "box"},
+		{"watches", "watch"},
+		{"flies", "fly"},
+		// "of" is optional, and composes with numbers and plurals.
+		{"3 dots", "3 of dots"},
+		{"3 dots", "three of dot"},
+		{"2 characters", "two of character"},
+		{"9 bamboos", "nine of bamboo"},
 	}
 	for _, c := range yes {
 		if !acceptsCase(t, c[0], nil, c[1]) {
@@ -58,6 +70,11 @@ func TestEquivalences(t *testing.T) {
 		{"4", "5"},
 		{"four", "for"},
 		{"1st", "21st"},
+		// Plural stripping never mangles short or -ss/-us/-is words.
+		{"glass", "glas"},
+		{"plus", "plu"},
+		{"this", "thi"},
+		{"gas", "ga"},
 	}
 	for _, c := range no {
 		if acceptsCase(t, c[0], nil, c[1]) {

@@ -82,6 +82,9 @@ func tokenReadings(tok string) []string {
 	// Spellings fold first, on both sides of any comparison, so "metres"
 	// and "meters" are the same word everywhere downstream.
 	tok = canonicalSpelling(tok)
+	if droppableWords[tok] {
+		return []string{tok, ""}
+	}
 	readings := []string{strings.ReplaceAll(tok, "'", "")}
 	if exp, ok := irregularContractions[tok]; ok {
 		return append(readings, exp...)

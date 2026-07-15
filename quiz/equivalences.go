@@ -79,6 +79,46 @@ var wordPairs = map[string][]string{
 	"etc": {"et cetera"},
 }
 
+// droppableWords read as themselves or nothing, like droppable symbols:
+// "3 of dots" matches "3 dots" without the deck authoring an "=" variant.
+var droppableWords = map[string]bool{
+	"of": true,
+}
+
+// pluralReadings adds an English token's singular: pluralization never
+// decides correctness, so "3 dot" matches "3 Dots" and "dogs" matches "dog"
+// (both sides expand, so one stripping direction covers both). The guards
+// keep real words whole: short tokens and -ss/-us/-is endings ("glass",
+// "plus", "this") never strip.
+func pluralReadings(tok string) []string {
+	var out []string
+	n := len(tok)
+	switch {
+	case n >= 5 && strings.HasSuffix(tok, "ies"):
+		out = append(out, tok[:n-3]+"y") // flies → fly
+	case n >= 5 && strings.HasSuffix(tok, "es") && esPlural(tok):
+		out = append(out, tok[:n-2]) // boxes → box, dishes → dish
+	}
+	if n >= 4 && strings.HasSuffix(tok, "s") &&
+		!strings.HasSuffix(tok, "ss") && !strings.HasSuffix(tok, "us") && !strings.HasSuffix(tok, "is") {
+		out = append(out, tok[:n-1]) // dots → dot
+	}
+	return out
+}
+
+// esPlural reports whether a token ending in -es plausibly pluralizes a stem
+// that ends in a sibilant (box/boxes, bus/buses, dish/dishes, watch/watches).
+func esPlural(tok string) bool {
+	switch tok[len(tok)-3] {
+	case 'x', 'z', 's':
+		return true
+	case 'h':
+		c := tok[len(tok)-4]
+		return c == 'c' || c == 's'
+	}
+	return false
+}
+
 // symbolReadings gives symbol tokens their word forms. The empty reading
 // means "droppable": plain normalization discards symbols entirely, so
 // "rock & roll" must keep matching "rock roll" as well as gain
@@ -178,5 +218,6 @@ func equivalenceReadings(tok string) []string {
 	}
 	out = append(out, unitReadings[tok]...)
 	out = append(out, wordPairs[tok]...)
+	out = append(out, pluralReadings(tok)...)
 	return out
 }
