@@ -1,8 +1,8 @@
 {{define "home"}}
 {{template "top" "decks"}}
-{{template "logincorner" .Email}}
 <header class="bar">
-  <span class="brand">study</span>
+  <span class="barleft"><span class="brand">study</span></span>
+  <span class="barright">{{template "authmenu" .Email}}</span>
 </header>
 <main class="list">
   {{range .Sections}}

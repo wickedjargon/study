@@ -522,18 +522,6 @@ button.quiet:hover { color: var(--fg); }
 .contact a:hover { color: var(--fg); }
 
 /* ---- login ---- */
-/* The login corner sits top right of every page; quiz screens fold it into
-   the kebab instead, where the header is already spoken for. */
-.logincorner {
-  position: absolute;
-  top: 1rem;
-  right: 1.25rem;
-  display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
-  color: var(--dim);
-  font-size: 0.85rem;
-}
 .loginlink {
   color: var(--accent);
   text-decoration: none;

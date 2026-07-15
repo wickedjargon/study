@@ -1,9 +1,11 @@
 {{define "group"}}
 {{template "top" .Name}}
-{{template "logincorner" .Email}}
 <header class="bar" style="--h: {{.Hue}}">
-  <a class="brand" href="/">study</a>
-  <span class="grouptitle"><span class="roundel">{{.Initial}}</span> {{.Name}}</span>
+  <span class="barleft">
+    <a class="brand" href="/">study</a>
+    <span class="grouptitle"><span class="roundel">{{.Initial}}</span> {{.Name}}</span>
+  </span>
+  <span class="barright">{{template "authmenu" .Email}}</span>
 </header>
 <main class="list">
   <ul class="decklist">
