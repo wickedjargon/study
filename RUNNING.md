@@ -69,12 +69,18 @@ Links are single-use and expire in 15 minutes; sessions last a year.
 A new account adopts the requesting guest's progress; logging into an
 existing account leaves guest progress behind.
 
-## Test playground
+## Testing with simple decks
 
 ```sh
+distrobox enter archbox -- make study-web   # rebuild after code changes
 make test-run
 ```
 
-Tiny decks on http://127.0.0.1:8095 reaching every screen fast.
+Open http://127.0.0.1:8095 — a Playground group of tiny decks
+(`testdata/webtest.deck`) with one-letter answers: multiple choice, typed,
+image/audio, timer, wrong-pause, and confused-with cards. Every screen is
+a few keystrokes away.
 
-Progress is throwaway; restart for a clean state.
+Progress is throwaway (fresh temp dir per start); restart for a clean state.
+
+Logging in works here too: the magic link prints in the terminal.
