@@ -1,86 +1,50 @@
 # Running study-web
 
-Run from the repo root.
+Run from the repo root:
 
 ```sh
 make run
 ```
 
-Open http://127.0.0.1:8091.
+Open http://127.0.0.1:8091. Progress lands in `./data/`.
 
-Progress lands in `./data/`.
-
-## Phone access
-
-Bind to the network.
-
-```sh
-make run ADDR=0.0.0.0:8091
-```
-
-Same Wi-Fi: http://10.163.186.41:8091.
-
-Tailscale: http://100.107.125.11:8091.
-
-## After code changes
-
-Go lives in archbox. Rebuild first.
+Go lives in archbox. Rebuild after code changes:
 
 ```sh
 distrobox enter archbox -- make study-web
 ```
 
-Then `make run` again.
+## Phone access
 
-## Stop
+```sh
+make run ADDR=0.0.0.0:8091
+```
 
-Ctrl-C.
+Same Wi-Fi: http://10.163.186.41:8091. Tailscale: http://100.107.125.11:8091.
 
 ## Decks
 
-`make run` serves the deck list in the Makefile (`WEB_DECKS`).
+`make run` serves the Makefile's `WEB_DECKS` list. `group=path` nests a
+pack under a language. `path@Name` overrides the display name.
 
-`group=path` nests a pack under a language.
-
-## Logging in
-
-Guests study anonymously; logging in (email magic link) makes progress
-portable across devices. Identity lives in `<data>/identity.db`, progress
-stays in `<data>/users/<id>/`.
-
-Locally there is no email: the login link is printed to the server log —
-copy it into the browser.
-
-In production the link goes out through [Resend](https://resend.com):
-
-- One-time: create a Resend account, verify the `study.fftp.io` domain (add the
-  SPF/DKIM records Resend shows), mint an API key.
-- One-time, on the server: put the key in the unit —
-  `Environment=RESEND_API_KEY=re_…` in
-  `/etc/systemd/system/study-web.service` (or an `EnvironmentFile`), and add
-  `-base-url https://study.fftp.io` to `ExecStart`. Then
-  `sudo systemctl daemon-reload && sudo systemctl restart study-web`.
-
-Without the key the server still runs — links just land in the journal
-(`journalctl -u study-web`), which also works in a pinch.
-
-Login emails come from `-mail-from` (default `study <login@study.fftp.io>`).
-Links are single-use and expire in 15 minutes; sessions last a year.
-A new account adopts the requesting guest's progress; logging into an
-existing account leaves guest progress behind.
-
-## Testing with simple decks
+## Test playground
 
 ```sh
-distrobox enter archbox -- make study-web   # rebuild after code changes
 make test-run
 ```
 
-Open http://127.0.0.1:8095 — a Playground group of tiny decks
-(`testdata/webtest.deck`) with one-letter answers: multiple choice, typed,
-image/audio, timer, wrong-pause, and confused-with cards. Every screen is
-a few keystrokes away.
+Open http://127.0.0.1:8095. Tiny decks, one-letter answers, every screen a
+few keystrokes away. Progress is a fresh temp dir per start.
 
-Progress is throwaway (fresh temp dir per start); restart for a clean state.
+## Login
 
-Logging in works here too: the magic link prints in the terminal.
+Guests are anonymous. Logging in (email magic link) makes progress portable
+across devices. A new account adopts the guest's progress. Locally there is
+no email: the link prints to the server log.
+
+Production mail goes through [Resend](https://resend.com). One-time setup:
+verify the domain, mint an API key, then in
+`/etc/systemd/system/study-web.service` set
+`Environment=RESEND_API_KEY=re_…` and add `-base-url https://study.fftp.io`
+to `ExecStart`. Reload and restart. Without the key the server still runs,
+links land in `journalctl -u study-web`.
