@@ -6,6 +6,13 @@
 # site, certbot) was done by hand and lives in /etc on the server; this
 # script only refreshes what changes: code and content.
 #
+# Login mail (one-time, already done): production magic links go out through
+# Resend (resend.com) — domain verified there, RESEND_API_KEY in
+# /opt/study-web/env (EnvironmentFile in the systemd unit), and
+# -base-url https://study.fftp.io on ExecStart. Without the key the server
+# still runs; links land in `journalctl -u study-web`. Locally there is
+# never email — the link prints to the server log.
+#
 # Run from the repo root, on the host (it enters archbox for the build).
 set -e
 

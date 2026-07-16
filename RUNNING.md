@@ -36,15 +36,3 @@ make test-run
 Open http://127.0.0.1:8095. Tiny decks, one-letter answers, every screen a
 few keystrokes away. Progress is a fresh temp dir per start.
 
-## Login
-
-Guests are anonymous. Logging in (email magic link) makes progress portable
-across devices. A new account adopts the guest's progress. Locally there is
-no email: the link prints to the server log.
-
-Production mail goes through [Resend](https://resend.com). One-time setup:
-verify the domain, mint an API key, then in
-`/etc/systemd/system/study-web.service` set
-`Environment=RESEND_API_KEY=re_…` and add `-base-url https://study.fftp.io`
-to `ExecStart`. Reload and restart. Without the key the server still runs,
-links land in `journalctl -u study-web`.
