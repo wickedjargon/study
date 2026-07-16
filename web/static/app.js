@@ -76,12 +76,18 @@
   document.addEventListener("keydown", function (ev) {
     if (ev.target.tagName === "INPUT" || ev.ctrlKey || ev.altKey || ev.metaKey) return;
 
-    // 1-9 pick a choice.
+    // 1-9 pick a choice; 0 declines instead of guessing blind.
     var choices = document.querySelectorAll(".choices .choice");
     var n = parseInt(ev.key, 10);
     if (choices.length && n >= 1 && n <= choices.length) {
       ev.preventDefault();
       choices[n - 1].click();
+      return;
+    }
+    var noidea = document.querySelector(".choices .noidea");
+    if (ev.key === "0" && noidea) {
+      ev.preventDefault();
+      noidea.click();
       return;
     }
 

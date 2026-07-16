@@ -106,6 +106,10 @@
     {{range $i, $opt := .Options}}
     <button name="choice" value="{{$i}}" class="choice" dir="auto"><kbd>{{keynum $i}}</kbd><span dir="auto">{{$opt}}</span></button>
     {{end}}
+    {{/* The opt-out for when every option would be a blind guess — a random
+         pick that lands on another card's answer fakes a confusion signal.
+         Deliberately understated: an educated guess is still wanted. */}}
+    <button name="noidea" value="1" class="noidea"><kbd>0</kbd><span>no idea</span></button>
   </form>
   {{else}}
   <form method="post" action="{{.Base}}/answer" class="typed" id="answerform">
@@ -142,6 +146,8 @@
     <p class="verdict ok">✓ correct</p>
     {{else if .ResultTimedOut}}
     <p class="verdict bad">✗ time's up</p>
+    {{else if .ResultNoIdea}}
+    <p class="verdict bad">✗ no idea</p>
     {{else}}
     <p class="verdict bad">✗ wrong</p>
     {{end}}

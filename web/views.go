@@ -103,6 +103,7 @@ type quizView struct {
 	// Result.
 	ResultCorrect  bool
 	ResultTimedOut bool
+	ResultNoIdea   bool
 	ResultTyped    string
 	ResultAnswer   string
 	// Confused renders the confused-with card's question — media included,
@@ -308,6 +309,7 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		view.AnswerSide = mediaViews(mediaBase, res.Card.Answer)
 		view.ResultCorrect = res.Correct
 		view.ResultTimedOut = res.TimedOut
+		view.ResultNoIdea = res.NoIdea
 		view.ResultTyped = res.Typed
 		view.ResultAnswer = res.Answer
 		if res.ConfusedWith != nil {

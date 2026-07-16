@@ -728,7 +728,9 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		case r.FormValue("timeout") == "1":
 			res = e.AnswerTimeout()
 		case e.Mode() == deck.ModeChoice:
-			if idx, err := strconv.Atoi(r.FormValue("choice")); err == nil {
+			if r.FormValue("noidea") == "1" {
+				res = e.AnswerNoIdea()
+			} else if idx, err := strconv.Atoi(r.FormValue("choice")); err == nil {
 				res = e.Answer(idx)
 			}
 		default:

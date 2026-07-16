@@ -411,6 +411,30 @@ button.quiet:hover { color: var(--fg); }
   padding: 0 0.4rem;
 }
 
+/* The opt-out below the options: styled as a footnote, not a fifth choice —
+   it should only draw the eye once guessing blind is the alternative. Not
+   .choice, so the 1-9 key mapping skips it. */
+.noidea {
+  justify-self: start;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-top: 0.2rem;
+  padding: 0.3rem 1rem;
+  border-color: transparent;
+  background: none;
+  color: var(--dim);
+  font-size: 0.9rem;
+}
+.noidea:hover { border-color: var(--line); color: var(--fg); }
+.noidea kbd {
+  flex: none;
+  font: 0.72rem/1.5 ui-monospace, monospace;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 0 0.4rem;
+}
+
 .actions { display: flex; gap: 0.7rem; justify-content: center; margin: 0.4rem 0 0; }
 .actions button { min-width: 11rem; padding: 0.7rem 1.4rem; }
 
