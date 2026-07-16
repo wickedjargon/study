@@ -126,7 +126,7 @@ study [flags] [deck-file | pack-directory]
 
 ## Library
 
-Watch a directory of decks:
+Watch a directory of decks. This adds it to your library:
 
 ```bash
 study --watch ~/decks
@@ -138,8 +138,9 @@ Open the library:
 study
 ```
 
-Loose `*.deck` files are decks. Subdirectories of decks are packs.
-Each row shows what's due. The keys are on the screen.
+### Screenshot of Library
+
+![the library: watched decks with due counts](screenshot-library.png)
 
 ## Card order
 
