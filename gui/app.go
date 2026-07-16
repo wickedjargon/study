@@ -227,6 +227,13 @@ type App struct {
 	// Text input buffer (type mode).
 	inputBuf string
 
+	// choiceSel is the arrow/vim-keys highlight on the choice screen: -1 for
+	// none (number keys need no highlight), 0..N-1 an option, N the no-idea
+	// row. Reset to -1 for every served card, so enter is inert until the
+	// user moves the highlight — mashing enter through a result screen must
+	// not answer the next card's first option by accident.
+	choiceSel int
+
 	// reverse is set when the session runs a flipped deck (--reverse): the prompt
 	// is the English and the user produces the target language, so the native
 	// script and audio are held back until the result screen, which renders the
@@ -483,6 +490,7 @@ func (a *App) main() error {
 // and the countdown stays disarmed — the timer belongs to recall, which only
 // begins once the reveal is confirmed.
 func (a *App) presentCard() {
+	a.choiceSel = -1
 	a.loadQuestionImage()
 	a.playQuestionAudio()
 	if a.engine.State() == quiz.ShowPreview {
@@ -802,9 +810,47 @@ func (a *App) handleChoiceKey(key string) {
 		a.setResult(a.engine.AnswerNoIdea())
 		a.saveProgress()
 		a.render()
+	case "j", "Down":
+		a.moveChoiceSel(+1)
+	case "k", "Up":
+		a.moveChoiceSel(-1)
+	case "Return":
+		// Answer the highlighted row. With no highlight, enter is inert (see
+		// choiceSel) — the number keys remain the direct path.
+		opts := a.engine.Options()
+		switch {
+		case a.choiceSel < 0:
+		case a.choiceSel < len(opts):
+			a.setResult(a.engine.Answer(a.choiceSel))
+			a.saveProgress()
+			a.render()
+		default: // the no-idea row
+			a.setResult(a.engine.AnswerNoIdea())
+			a.saveProgress()
+			a.render()
+		}
 	case "Escape":
 		a.endSession()
 	}
+}
+
+// moveChoiceSel moves the choice highlight: the options first, the no-idea
+// row last, no wrapping. From nothing selected, the first press lands on the
+// first row (down) or the no-idea row (up).
+func (a *App) moveChoiceSel(dir int) {
+	last := len(a.engine.Options()) // the no-idea row
+	next := a.choiceSel + dir
+	if a.choiceSel < 0 {
+		next = 0
+		if dir < 0 {
+			next = last
+		}
+	}
+	if next < 0 || next > last {
+		return
+	}
+	a.choiceSel = next
+	a.render()
 }
 
 func (a *App) handleTypeKey(key string, ev xevent.KeyPressEvent) {
@@ -1344,12 +1390,22 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 		opts := a.engine.Options()
 		for i, opt := range opts {
 			line := fmt.Sprintf("%d)  %s", i+1, opt)
-			a.drawText(canvas, line, padding+20, y, a.fontRegular, textColor)
+			c := textColor
+			if i == a.choiceSel {
+				c = accentColor
+				a.drawText(canvas, "›", padding+a.scaled(4), y, a.fontBold, accentColor)
+			}
+			a.drawText(canvas, line, padding+20, y, a.fontRegular, c)
 			y += lineHeight(a.fontRegular)
 		}
-		a.drawText(canvas, "0)  no idea", padding+20, y, a.fontRegular, dimColor)
+		c := dimColor
+		if a.choiceSel == len(opts) {
+			c = accentColor
+			a.drawText(canvas, "›", padding+a.scaled(4), y, a.fontBold, accentColor)
+		}
+		a.drawText(canvas, "0)  no idea", padding+20, y, a.fontRegular, c)
 		y += lineHeight(a.fontRegular)
-		action = fmt.Sprintf("1-%d: answer", len(opts))
+		action = fmt.Sprintf("1-%d or j/k + enter: answer", len(opts))
 	}
 
 	lines := append([]string{action}, a.audioLines(card.Question)...)
