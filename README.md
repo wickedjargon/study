@@ -126,36 +126,22 @@ study [flags] [deck-file | pack-directory]
 
 ## Library
 
-Running `study` with no deck argument opens the library: every deck you
-keep for long-term study, with each direction's state the way the web
-version badges it ("N to review", "N unseen", or "caught up ✓") and
-when each was last studied. Pick a deck and a session starts. When it
-ends you land back in the library with fresh counts, ready for the next
-deck.
+`study` with no deck argument opens the library: every deck under the
+watched directories, each direction's state ("12 to review", "79
+unseen", "caught up ✓"), and when it was last studied. A session
+started here returns to the library when it ends.
 
-Membership is explicit. Studying a file never shelves it, so trying out
-a downloaded deck with `study test.deck` leaves your library untouched.
-The library is the directories you watch:
+Membership is the watched directories, nothing else. Studying a file
+never shelves it. Loose `*.deck` files are decks, subdirectories
+holding `*.deck` files are packs:
 
 ```bash
 study --watch ~/decks
 ```
 
-Every `*.deck` file in a watched directory is a library deck, and every
-subdirectory containing `*.deck` files is a library pack. To shelve a
-deck for good, move it into a watched directory.
-
-Library screen keys: `enter` studies the selected deck as a direct run
-would. On a pack, `enter` studies everything merged and `tab` unfolds
-it so one of its decks can be picked instead, like the web version's
-group page. `r` studies the selection reversed. `f` flips through it
-without recording.
-`w` crams its weak cards. `t` and `c` force every card to typed or
-multiple choice for the session, like `--answer-mode`. `s` opens the
-deck's statistics, the same report as `--stats`, with `r` there
-flipping to the reversed direction. `x` forgets the deck: all its saved
-progress is cleared (after a confirm), the deck itself stays shelved.
-`j`/`k` or arrows move, `q` quits.
+A pack row studies everything merged. `tab` unfolds it so one deck can
+be picked instead. The other keys (reversed, flip-through, weak-only,
+stats, forget) are listed on the screen itself.
 
 ## Card order
 
@@ -261,18 +247,3 @@ What is 1 + 1?
 
 - A flag overrides the deck-header setting of the same name for that session.
 
-# Controls
-
-| Key | Action |
-|-----|--------|
-| `1`–`9` | Select answer (choice mode) |
-| Type + `Enter` | Submit answer (type mode) |
-| `Backspace` | Delete character (type mode) |
-| `Ctrl`+`V` / middle-click | Paste clipboard / primary selection (type mode) |
-| `Enter` / `Space` | Continue after result / preview (a wrong answer pauses this for `# wrong-pause:` seconds, counted down in the timer's corner) |
-| `Ctrl`+`R` | Replay audio (in reverse mode, the reveal's clip on the result screen) |
-| `Ctrl`+`,` / `Ctrl`+`.` | Slow down / speed up audio and replay (0.25 steps, 0.25–4x, needs `mpv`) |
-| `Ctrl`+`/` | Reset audio speed |
-| `Ctrl`+`=` / `Ctrl`+`-` / `Ctrl`+`0` | Grow / shrink / reset font size |
-| `Escape` | End session (summary screen, `Escape` or `Enter` exits) |
-| `c` | Keep studying from the summary or caught-up screen: the waiting new batch, or a full ahead-of-schedule pass |
