@@ -4,23 +4,29 @@ A flashcard quiz tool. Decks are plain text files. Available for Linux and web. 
 
 [study.fftp.io](https://study.fftp.io/)
 
+The default study mode, `adaptive`, is a [spaced-repetition](https://en.wikipedia.org/wiki/Spaced_repetition) scheduler based on evidence gathered from these papers:
 
-The default card order, `adaptive`, is an evidence-based [spaced-repetition](https://en.wikipedia.org/wiki/Spaced_repetition) scheduler: it picks what's due, spaces repetitions within the session, and grows review intervals across days.
+| Paper | Takeaway |
+|-------|----------|
+| [Rawson & Dunlosky 2011](https://pubmed.ncbi.nlm.nih.gov/21707204/) | The session criterion: three correct recalls for new material, one per relearning session. |
+| [Karpicke & Bauernschmidt 2011](https://learninglab.psych.purdue.edu/downloads/2011/2011_Karpicke_Bauernschmidt_JEPLMC.pdf) | Within-session spacing: any nonzero gap between repetitions beats none, and the gap pattern doesn't matter. |
+| [Kornell & Bjork 2008](https://doi.org/10.1111/j.1467-9280.2008.02127.x) | Interleaving: a card confused with another is pulled near it, so the pair is told apart. |
+| [Atkinson 1972](https://doi.org/10.1037/h0033475) | Gradual introduction: new cards enter a few at a time as earlier ones are learned, not as one big batch. |
+| [Cowan 2001](https://doi.org/10.1017/S0140525X01003922) | The size of the introduction window. |
 
-There are two frontends over the same engine, deck format, and progress files:
+# Compared to Anki
 
-- **`study` (desktop)** — sessions run in a minimal X11 window; progress is saved per user under `~/.local/share/study`.
-- **`study-web` (web)** — the same quizzes in a browser. Visitors are guests identified by a cookie, each with their own progress, no account needed. Decks are organized two levels deep: pick a language, then a topic (or its merged "Everything").
-
-The `adaptive` order is based on these papers:
-
-- Rawson, K. A., & Dunlosky, J. (2011). [Optimizing schedules of retrieval practice for durable and efficient learning: How much is enough?](https://pubmed.ncbi.nlm.nih.gov/21707204/) *Journal of Experimental Psychology: General, 140*(3), 283–302. — the session criterion: three correct recalls for new material, one per relearning session.
-- Karpicke, J. D., & Bauernschmidt, A. (2011). [Spaced retrieval: Absolute spacing enhances learning regardless of relative spacing.](https://learninglab.psych.purdue.edu/downloads/2011/2011_Karpicke_Bauernschmidt_JEPLMC.pdf) *Journal of Experimental Psychology: Learning, Memory, and Cognition, 37*(5), 1250–1257. — within-session spacing: any nonzero gap between repetitions beats none, and the gap pattern doesn't matter.
-- Kornell, N., & Bjork, R. A. (2008). [Learning concepts and categories: Is spacing the "enemy of induction"?](https://doi.org/10.1111/j.1467-9280.2008.02127.x) *Psychological Science, 19*(6), 585–592. — interleaving: a card confused with another is pulled near it, so the pair is told apart.
-- Atkinson, R. C. (1972). [Optimizing the learning of a second-language vocabulary.](https://doi.org/10.1037/h0033475) *Journal of Experimental Psychology, 96*(1), 124–129. — gradual introduction: new cards enter a few at a time as earlier ones are learned, not as one big batch.
-- Cowan, N. (2001). [The magical number 4 in short-term memory: A reconsideration of mental storage capacity.](https://doi.org/10.1017/S0140525X01003922) *Behavioral and Brain Sciences, 24*(1), 87–114. — the size of the introduction window.
-
-The specific review intervals (1, 3, 7, … days) and the lapse handling (halving a card's level) are conventional heuristics in the spirit of this literature, not prescribed by it.
+- Anki flips the card and you grade yourself. In study the answer is
+  provided by the user and grading is the program's job.
+- study decks are plain text. Great for version control. Anki keeps a
+  SQLite collection for storing decks.
+- In study, if a wrong answer that belongs to another card is provided,
+  study pulls it near, so the pair can be distinguished while the
+  confusion is fresh. Anki has nothing like this.
+- Anki shows a due card once and moves on. study keeps a card in the
+  session until it earns its exit: three correct answers when new, one
+  on review, always with other cards in between so the user can't
+  simply rely on short-term memory.
 
 # Screenshots
 
