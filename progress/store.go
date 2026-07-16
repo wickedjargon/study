@@ -88,7 +88,7 @@ type Store struct {
 // NewStore creates a progress store for a given deck in the default
 // per-user directory (~/.local/share/study).
 func NewStore(deckPath string) (*Store, error) {
-	dir, err := progressDir()
+	dir, err := Dir()
 	if err != nil {
 		return nil, err
 	}
@@ -337,6 +337,20 @@ func (s *Store) Summary() (totalCorrect, totalWrong, cardsStudied int) {
 	return
 }
 
+// LastStudied returns the most recent answer time recorded anywhere in the
+// store — either direction, current or orphaned cards — or the zero time when
+// the deck has never been answered. The library view sorts and labels decks
+// with it.
+func (s *Store) LastStudied() time.Time {
+	var last time.Time
+	for _, cp := range s.data.Cards {
+		if cp.LastSeen.After(last) {
+			last = cp.LastSeen
+		}
+	}
+	return last
+}
+
 // SummaryFor returns aggregate stats scoped to the given card IDs — i.e. the
 // deck as it exists now, in the direction being studied — so orphaned progress
 // and the opposite direction's history don't inflate the numbers.
@@ -382,8 +396,9 @@ func (s *Store) load() (*DeckProgress, error) {
 	return &dp, nil
 }
 
-// progressDir returns the directory for storing progress files.
-func progressDir() (string, error) {
+// Dir returns the per-user study data directory (~/.local/share/study): home
+// of the progress files, and of the library registry, which lives beside them.
+func Dir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("getting home dir: %w", err)
