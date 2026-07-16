@@ -160,7 +160,7 @@ Set with the `--order` flag or the `# order:` deck header:
 
 | Mode | Behavior |
 |------|----------|
-| `adaptive` | **Default: "what's due?"** Reviews that are due plus a batch of new cards, with spaced repetitions. Review intervals grow across days. When nothing is due, says so — and offers to keep studying anyway, ahead of schedule; new cards still enter a batch at a time, and early reviews don't advance the intervals (see `--ahead`). |
+| `adaptive` | **Default: "what's due?"** Reviews that are due plus a batch of new cards, with spaced repetitions. Review intervals grow across days. When nothing is due, says so — and offers to keep studying anyway, ahead of schedule; new cards still enter a batch at a time, and early reviews don't advance the intervals (see `--ahead`). A deck already studied today opens on the same notice: the next batch of new cards waits for a deliberate `c`, since batches spaced across days are where the retention gains come from. |
 | `sequential` | **"In order."** Deck order, wrapping forever. Misses get the immediate-repeat drill. For material where the sequence is the content: verse, digits, procedures. |
 | `flip-through` | **"Just show me."** Answers visible, enter advances, wraps at the end. Nothing recorded. |
 | `weak-only` | **"What am I bad at?"** Cram mode: only weak or never-studied cards, ignoring review dates. |
@@ -271,4 +271,5 @@ What is 1 + 1?
 | `Ctrl`+`,` / `Ctrl`+`.` | Slow down / speed up audio and replay (0.25 steps, 0.25–4x, needs `mpv`) |
 | `Ctrl`+`/` | Reset audio speed |
 | `Ctrl`+`=` / `Ctrl`+`-` / `Ctrl`+`0` | Grow / shrink / reset font size |
-| `Escape` | End session (summary screen, `Escape` again exits) |
+| `Escape` | End session (summary screen, `Escape` or `Enter` exits) |
+| `c` | Keep studying from the summary or caught-up screen: the waiting new batch, or a full ahead-of-schedule pass |

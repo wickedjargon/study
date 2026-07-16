@@ -268,6 +268,21 @@ func NewEngine(d *deck.Deck, pool []deck.Card, store *progress.Store) *Engine {
 	}
 
 	e.holdBackNew()
+
+	// An adaptive deck already studied today whose session would be nothing
+	// but new cards doesn't start quizzing on launch: no review is due, so
+	// the day's scheduled work is done, and a second batch of new material on
+	// the same day should be a choice, not an accident (the spacing gains
+	// come from batches landing on different days). The session stays queued;
+	// the caught-up screen's continue serves it. Due reviews or an --ahead
+	// launch start immediately, as before.
+	if d.Order == deck.OrderAdaptive && store != nil &&
+		len(e.main)+len(e.pendingNew) > 0 && e.allQueuedNew() &&
+		sameDay(store.LastStudied(), time.Now()) {
+		e.state = CaughtUp
+		return e
+	}
+
 	e.advance()
 	// An adaptive session that opens with nothing to serve isn't over — it
 	// never began: the user is caught up. Land on the caught-up screen (which
@@ -276,6 +291,28 @@ func NewEngine(d *deck.Deck, pool []deck.Card, store *progress.Store) *Engine {
 		e.state = CaughtUp
 	}
 	return e
+}
+
+// allQueuedNew reports whether every card in the session entered it
+// never-studied — the composition a launch produces when no review is due
+// and only fresh material remains.
+func (e *Engine) allQueuedNew() bool {
+	for i := range e.deck.Cards {
+		if !e.newCards[e.deck.Cards[i].ID] {
+			return false
+		}
+	}
+	return true
+}
+
+// sameDay reports whether two times fall on the same local calendar day.
+func sameDay(a, b time.Time) bool {
+	if a.IsZero() || b.IsZero() {
+		return false
+	}
+	ay, am, ad := a.Local().Date()
+	by, bm, bd := b.Local().Date()
+	return ay == by && am == bm && ad == bd
 }
 
 // holdBackNew trims the queue's never-studied cards down to the introduction
@@ -324,6 +361,14 @@ func (e *Engine) admitNextNew() {
 // indefinitely without ever flooding new material.
 func (e *Engine) ContinueAll() {
 	if e.deck.Order != deck.OrderAdaptive {
+		return
+	}
+
+	// A session queued but never started (the same-day launch notice): serve
+	// it as composed rather than re-seeding, which would rebuild the queue
+	// around it.
+	if e.state == CaughtUp && e.current == nil && len(e.main)+len(e.pendingNew) > 0 {
+		e.advance()
 		return
 	}
 

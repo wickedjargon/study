@@ -722,24 +722,23 @@ func (a *App) handleKey(ev xevent.KeyPressEvent) {
 		}
 
 	case quiz.Done:
+		// Exit is the default: the summary usually appears when the day's
+		// work is done, so the reflexive enter must not start another pass.
+		// Studying on is deliberate — c continues (adaptive only).
 		switch key {
-		case "Return":
-			// The adaptive summary is never a dead end: enter starts another
-			// full pass over the deck, ahead of schedule.
+		case "c":
 			if a.engine.Order() == deck.OrderAdaptive {
 				a.continueStudying()
-				return
 			}
-			a.quit()
-		case "Escape", "q":
+		case "Return", "Escape", "q":
 			a.quit()
 		}
 
 	case quiz.CaughtUp:
 		switch key {
-		case "Return", "space":
+		case "c":
 			a.continueStudying()
-		case "Escape", "q":
+		case "Return", "Escape", "q":
 			a.quit()
 		}
 	}
@@ -1558,8 +1557,18 @@ func (a *App) renderCaughtUp(canvas *image.RGBA) {
 		y += lineHeight(a.fontRegular)
 	}
 	y += a.scaled(16)
+
+	// Two ways to land here: a same-day relaunch with a batch of new cards
+	// queued (deliberate second helping), or a truly empty session (continue
+	// re-seeds an ahead-of-schedule pass).
+	if n := a.engine.Remaining(); n > 0 {
+		msg := fmt.Sprintf("already studied today — %d new cards are waiting for tomorrow's batch", n)
+		a.drawTextCentered(canvas, msg, y, a.fontSmall, dimColor)
+		a.drawControlsBox(canvas, []string{"c: study them now", "enter / esc: exit"})
+		return
+	}
 	a.drawTextCentered(canvas, "you can keep studying anyway — early reviews don't advance the schedule", y, a.fontSmall, dimColor)
-	a.drawControlsBox(canvas, []string{"enter: study anyway", "esc: quit"})
+	a.drawControlsBox(canvas, []string{"c: study anyway", "enter / esc: exit"})
 }
 
 func (a *App) renderSummary(canvas *image.RGBA) {
@@ -1656,7 +1665,7 @@ func (a *App) renderSummary(canvas *image.RGBA) {
 			}
 			a.drawTextCentered(canvas, msg, y, a.fontSmall, dimColor)
 		}
-		a.drawControlsBox(canvas, []string{"enter: keep studying", "esc: exit"})
+		a.drawControlsBox(canvas, []string{"c: keep studying", "enter / esc: exit"})
 		return
 	}
 
