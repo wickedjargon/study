@@ -6,6 +6,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -20,6 +21,7 @@ import (
 	"study/media"
 	"study/progress"
 	"study/quiz"
+	"study/session"
 )
 
 const helpText = `study — suckless quiz tool
@@ -107,31 +109,14 @@ func main() {
 
 	deckPath := flag.Arg(0)
 
-	// Parse deck.
-	d, err := deck.Parse(deckPath)
+	// Parse the deck, flip it under --reverse, and load its progress (warnings
+	// go straight to stderr). Flag overrides are applied to the deck below,
+	// between Load and Start — that's the seam the session package leaves for
+	// per-frontend configuration.
+	d, store, err := session.Load(deckPath, *reverse, os.Stderr)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "✗ %v\n", err)
 		os.Exit(1)
-	}
-
-	// Surface non-fatal parse issues (e.g. a typo'd directive that was ignored)
-	// so they aren't silently dropped.
-	for _, w := range d.Warnings {
-		fmt.Fprintf(os.Stderr, "study: %s\n", w)
-	}
-
-	// --reverse flips the deck for production practice (see English, type the
-	// target language). Applied before progress is loaded and cards are ordered
-	// so the whole session — stats, prioritization, the quiz itself — operates on
-	// the reversed cards, whose "r:"-prefixed IDs track separately from forward.
-	if *reverse {
-		d = d.Reversed()
-		// Cards that can't be reversed (cloze, media-only prompts, answers with
-		// no typeable Latin text) are dropped; a deck of nothing else can't run.
-		if len(d.Cards) == 0 {
-			fmt.Fprintf(os.Stderr, "✗ %s has no reversible cards\n", d.Name)
-			os.Exit(1)
-		}
 	}
 
 	// Session overrides. Precedence is built-in default ← deck header ← flag,
@@ -220,23 +205,6 @@ func main() {
 	// Check media viewers (audio only — images rendered in GUI).
 	viewer := media.NewViewer()
 
-	// Load progress.
-	store, err := progress.NewStore(d.Path)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "✗ progress: %v\n", err)
-		os.Exit(1)
-	}
-
-	// One-time migration: progress saved under a card's legacy ID (the old
-	// hash included @audio/@img lines, so renaming a media file orphaned the
-	// card's history) is moved to its current ID.
-	if store.MigrateIDs(d.Cards) {
-		if err := store.Save(); err != nil {
-			fmt.Fprintf(os.Stderr, "✗ saving migrated progress: %v\n", err)
-			os.Exit(1)
-		}
-	}
-
 	// --stats: print the saved summary for this deck and exit without
 	// entering the quiz. This is a read-only view of the same numbers the
 	// in-app "Session Complete" screen shows.
@@ -269,52 +237,29 @@ func main() {
 	if *aheadFlag != "" && d.Order != deck.OrderAdaptive {
 		fmt.Fprintln(os.Stderr, "study: --ahead only applies to the adaptive order; ignored")
 	}
-
-	// The session below may be a filtered subset of the deck (due cards, weak
-	// cards), but a confused answer can belong to any card in the file — the
-	// engine keeps the full list for confusion detection.
-	full := d.Cards
-
-	// Compose and order the session according to the deck's "# order:" mode
-	// (quiz.Compose is shared with the web frontend); the flag-only extras
-	// layer on top here. How cards recur afterwards (spaced criterion
-	// scheduling vs. laps) is the engine's side of the same mode.
-	now := time.Now()
-	quiz.Compose(d, store, now)
-	switch d.Order {
-	case deck.OrderAdaptive:
-		// Cards scheduled further out are excluded by Compose — distributing
-		// practice across days is the point, and re-drilling tomorrow's cards
-		// today would just collapse the spacing. --ahead pulls them in anyway,
-		// soonest-due first (closest to forgetting, so highest-yield); the
-		// engine then keeps their schedules honest — a clean early review
-		// doesn't advance the ladder, only a miss moves it.
-		if *aheadFlag != "" {
-			days, all, ok := parseAhead(*aheadFlag)
-			if !ok {
-				fmt.Fprintf(os.Stderr, "✗ --ahead: need a day count >= 1, or all (got %q)\n", *aheadFlag)
-				os.Exit(1)
-			}
-			_, _, future, _ := quiz.SplitDue(full, store, now)
-			cutoff := now.Add(time.Duration(days) * 24 * time.Hour)
-			for _, c := range future {
-				if all || !store.Get(c.ID).Due.After(cutoff) {
-					d.Cards = append(d.Cards, c)
-				}
-			}
+	var ahead session.Ahead
+	if *aheadFlag != "" {
+		days, all, ok := parseAhead(*aheadFlag)
+		if !ok {
+			fmt.Fprintf(os.Stderr, "✗ --ahead: need a day count >= 1, or all (got %q)\n", *aheadFlag)
+			os.Exit(1)
 		}
-		// An empty session (nothing due, no new cards to serve) is not a dead
-		// end: the engine opens in the CaughtUp state and the GUI says so —
-		// and offers a full ahead-of-schedule pass, so the user is never
-		// prevented from studying.
-	case deck.OrderWeakOnly:
-		if len(d.Cards) == 0 {
-			fmt.Printf("✓ nothing to cram — every card in %s is above the weak threshold\n", d.Name)
-			os.Exit(0)
-		}
+		ahead = session.Ahead{Days: days, All: all}
 	}
 
-	engine := quiz.NewEngine(d, full, store)
+	// Compose the session and build the engine. An empty adaptive session
+	// (nothing due, no new cards to serve) is not a dead end: the engine opens
+	// in the CaughtUp state and the GUI says so — and offers a full
+	// ahead-of-schedule pass, so the user is never prevented from studying.
+	engine, err := session.Start(d, store, ahead, time.Now())
+	if errors.Is(err, session.ErrNothingWeak) {
+		fmt.Printf("✓ nothing to cram — every card in %s is above the weak threshold\n", d.Name)
+		os.Exit(0)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "✗ %v\n", err)
+		os.Exit(1)
+	}
 
 	// Run GUI.
 	if err := gui.Run(engine, viewer, store, *reverse); err != nil {
