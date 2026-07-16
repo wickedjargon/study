@@ -227,11 +227,9 @@ type App struct {
 	// Text input buffer (type mode).
 	inputBuf string
 
-	// choiceSel is the arrow/vim-keys highlight on the choice screen: -1 for
-	// none (number keys need no highlight), 0..N-1 an option, N the no-idea
-	// row. Reset to -1 for every served card, so enter is inert until the
-	// user moves the highlight — mashing enter through a result screen must
-	// not answer the next card's first option by accident.
+	// choiceSel is the arrow/vim-keys highlight on the choice screen:
+	// 0..N-1 an option, N the no-idea row. Every served card starts back on
+	// the first option, marker visible.
 	choiceSel int
 
 	// reverse is set when the session runs a flipped deck (--reverse): the prompt
@@ -490,7 +488,7 @@ func (a *App) main() error {
 // and the countdown stays disarmed — the timer belongs to recall, which only
 // begins once the reveal is confirmed.
 func (a *App) presentCard() {
-	a.choiceSel = -1
+	a.choiceSel = 0
 	a.loadQuestionImage()
 	a.playQuestionAudio()
 	if a.engine.State() == quiz.ShowPreview {
@@ -815,38 +813,24 @@ func (a *App) handleChoiceKey(key string) {
 	case "k", "Up":
 		a.moveChoiceSel(-1)
 	case "Return":
-		// Answer the highlighted row. With no highlight, enter is inert (see
-		// choiceSel) — the number keys remain the direct path.
-		opts := a.engine.Options()
-		switch {
-		case a.choiceSel < 0:
-		case a.choiceSel < len(opts):
+		// Answer the highlighted row; the number keys remain the direct path.
+		if a.choiceSel < len(a.engine.Options()) {
 			a.setResult(a.engine.Answer(a.choiceSel))
-			a.saveProgress()
-			a.render()
-		default: // the no-idea row
+		} else { // the no-idea row
 			a.setResult(a.engine.AnswerNoIdea())
-			a.saveProgress()
-			a.render()
 		}
+		a.saveProgress()
+		a.render()
 	case "Escape":
 		a.endSession()
 	}
 }
 
 // moveChoiceSel moves the choice highlight: the options first, the no-idea
-// row last, no wrapping. From nothing selected, the first press lands on the
-// first row (down) or the no-idea row (up).
+// row last, no wrapping.
 func (a *App) moveChoiceSel(dir int) {
-	last := len(a.engine.Options()) // the no-idea row
 	next := a.choiceSel + dir
-	if a.choiceSel < 0 {
-		next = 0
-		if dir < 0 {
-			next = last
-		}
-	}
-	if next < 0 || next > last {
+	if next < 0 || next > len(a.engine.Options()) {
 		return
 	}
 	a.choiceSel = next
@@ -1377,12 +1361,12 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 
 	y += a.scaled(10)
 
-	var action string
+	var actions []string
 	if a.engine.Mode() == deck.ModeType {
 		// Text input field.
 		prompt := "> " + a.inputBuf + "_"
 		a.drawText(canvas, prompt, padding+20, y, a.fontRegular, accentColor)
-		action = "enter: submit"
+		actions = []string{"enter: submit"}
 	} else {
 		// Choices, then the dim opt-out — for when every option would be a
 		// blind guess. Deliberately understated: an educated guess is still
@@ -1405,10 +1389,14 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 		}
 		a.drawText(canvas, "0)  no idea", padding+20, y, a.fontRegular, c)
 		y += lineHeight(a.fontRegular)
-		action = fmt.Sprintf("1-%d or j/k + enter: answer", len(opts))
+		actions = []string{
+			fmt.Sprintf("1-%d: answer", len(opts)),
+			"up/down + enter: answer",
+			"j/k + enter: answer",
+		}
 	}
 
-	lines := append([]string{action}, a.audioLines(card.Question)...)
+	lines := append(actions, a.audioLines(card.Question)...)
 	a.drawControlsBox(canvas, append(lines, "esc: end"))
 
 	// Status overlay: progress, tags, tally and audio badge left; countdown
