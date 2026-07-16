@@ -18,6 +18,7 @@
             {{.Cards}} cards
             {{if .Studied}}
               {{if .Due}}· <b class="due">{{.Due}} to review</b>{{end}}
+              {{if and (not .Due) .Fresh}}· <b class="done">nothing due</b>{{end}}
               {{if .Fresh}}· {{.Fresh}} unseen{{end}}
               {{if and (not .Due) (not .Fresh)}}· <b class="done">caught up ✓</b>{{end}}
             {{end}}

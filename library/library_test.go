@@ -140,8 +140,8 @@ func TestDirParts(t *testing.T) {
 		due, fresh, cards int
 		want              string
 	}{
-		{0, 91, 91, ""},                        // never studied: the row says so elsewhere
-		{0, 79, 91, "79 unseen"},               // started, nothing due
+		{0, 91, 91, ""},                          // never studied: the row says so elsewhere
+		{0, 79, 91, "nothing due · 79 unseen"},   // started, day's work done
 		{12, 79, 91, "12 to review · 79 unseen"},
 		{3, 0, 91, "3 to review"},
 		{0, 0, 91, "caught up ✓"},

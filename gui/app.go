@@ -1570,7 +1570,17 @@ func (a *App) renderPreview(canvas *image.RGBA) {
 // the rest day.
 func (a *App) renderCaughtUp(canvas *image.RGBA) {
 	y := a.height / 3
-	a.drawTextCentered(canvas, "All caught up", y, a.fontLarge, greenColor)
+
+	// Two ways to land here, titled in the library rows' language: a same-day
+	// relaunch with a batch of new cards queued is merely "nothing due" (the
+	// deck still holds unseen material), a truly empty session is all caught
+	// up. Continue serves the queued batch, or re-seeds an ahead-of-schedule
+	// pass, respectively.
+	title := "All caught up"
+	if a.engine.Remaining() > 0 {
+		title = "Nothing due today"
+	}
+	a.drawTextCentered(canvas, title, y, a.fontLarge, greenColor)
 	y += lineHeight(a.fontLarge) + a.scaled(20)
 	a.drawTextCentered(canvas, "nothing due in "+a.engine.Name(), y, a.fontRegular, textColor)
 	y += lineHeight(a.fontRegular)
@@ -1580,9 +1590,6 @@ func (a *App) renderCaughtUp(canvas *image.RGBA) {
 	}
 	y += a.scaled(16)
 
-	// Two ways to land here: a same-day relaunch with a batch of new cards
-	// queued (deliberate second helping), or a truly empty session (continue
-	// re-seeds an ahead-of-schedule pass).
 	if n := a.engine.Remaining(); n > 0 {
 		msg := fmt.Sprintf("already studied today — %d new cards are waiting for tomorrow's batch", n)
 		a.drawTextCentered(canvas, msg, y, a.fontSmall, dimColor)

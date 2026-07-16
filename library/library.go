@@ -221,7 +221,8 @@ const (
 )
 
 // DirParts describes one direction's state the way the web app badges it:
-// "N to review" when reviews are due, "N unseen" while new material remains,
+// "N to review" when reviews are due; "nothing due" — the day's scheduled
+// work is done — while new material still waits, alongside its "N unseen";
 // and "caught up ✓" only when the direction is truly exhausted for now. A
 // direction never studied at all reports nothing — the row says "never
 // studied" elsewhere, and its unseen count would just repeat the deck size.
@@ -232,6 +233,8 @@ func DirParts(due, fresh, cards int) []Part {
 	var parts []Part
 	if due > 0 {
 		parts = append(parts, Part{fmt.Sprintf("%d to review", due), KindDue})
+	} else if fresh > 0 {
+		parts = append(parts, Part{"nothing due", KindDone})
 	}
 	if fresh > 0 {
 		parts = append(parts, Part{fmt.Sprintf("%d unseen", fresh), KindUnseen})
