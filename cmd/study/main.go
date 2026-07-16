@@ -10,8 +10,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -21,7 +19,6 @@ import (
 	"study/library"
 	"study/media"
 	"study/progress"
-	"study/quiz"
 	"study/session"
 )
 
@@ -413,119 +410,39 @@ func parseAhead(s string) (days int, all bool, ok bool) {
 	return n, false, true
 }
 
-// printStats writes a plain-text progress summary for the deck to stdout.
-// Only cards that have actually been answered count as "studied"; aggregate
-// numbers are computed over the deck's current cards (orphaned progress from
-// removed cards is ignored).
+// printStats writes a plain-text progress summary for the deck to stdout —
+// the same numbers the library's stats screen shows (library.StatsOf).
 func printStats(d *deck.Deck, store *progress.Store) {
-	type row struct {
-		label    string
-		accuracy float64
-		conf     float64
-	}
-
-	var studied []row
-	totalCorrect, totalWrong, mastered := 0, 0, 0
-	for i := range d.Cards {
-		c := &d.Cards[i]
-		cp := store.Get(c.ID)
-		if cp.TimesCorrect+cp.TimesWrong == 0 {
-			continue
-		}
-		totalCorrect += cp.TimesCorrect
-		totalWrong += cp.TimesWrong
-		if cp.IsMastered() {
-			mastered++
-		}
-		studied = append(studied, row{
-			label:    cardLabel(c),
-			accuracy: cp.Accuracy(),
-			conf:     cp.Confidence(),
-		})
-	}
+	info := library.StatsOf(d, store, time.Now())
 
 	fmt.Printf("study — %s\n\n", d.Name)
-	fmt.Printf("  Cards in deck    %d\n", len(d.Cards))
+	fmt.Printf("  Cards in deck    %d\n", info.Cards)
 
-	// Review schedule: what an adaptive session would serve right now.
-	reviews, fresh, _, nextDue := quiz.SplitDue(d.Cards, store, time.Now())
-	dueLine := fmt.Sprintf("  Due now          %d reviews + %d new\n", len(reviews), len(fresh))
+	dueLine := fmt.Sprintf("  Due now          %d reviews + %d new\n", info.DueReviews, info.DueNew)
 
-	if len(studied) == 0 {
+	if info.Studied == 0 {
 		fmt.Println("  Studied          0")
 		fmt.Print(dueLine)
 		fmt.Println("\n  No progress recorded yet for this deck.")
 		return
 	}
 
-	pct := float64(len(studied)) / float64(len(d.Cards)) * 100
-	fmt.Printf("  Studied          %d  (%.0f%%)\n", len(studied), pct)
-	fmt.Printf("  Mastered         %d\n", mastered)
+	pct := float64(info.Studied) / float64(info.Cards) * 100
+	fmt.Printf("  Studied          %d  (%.0f%%)\n", info.Studied, pct)
+	fmt.Printf("  Mastered         %d\n", info.Mastered)
 	fmt.Print(dueLine)
-	if !nextDue.IsZero() {
-		fmt.Printf("  Next review      %s\n", nextDue.Local().Format("Mon Jan 2 15:04"))
+	if !info.NextDue.IsZero() {
+		fmt.Printf("  Next review      %s\n", info.NextDue.Local().Format("Mon Jan 2 15:04"))
 	}
 
-	acc := 0.0
-	if totalCorrect+totalWrong > 0 {
-		acc = float64(totalCorrect) / float64(totalCorrect+totalWrong) * 100
-	}
 	fmt.Printf("\n  All-time\n")
-	fmt.Printf("    Correct        %d\n", totalCorrect)
-	fmt.Printf("    Wrong          %d\n", totalWrong)
-	fmt.Printf("    Accuracy       %.0f%%\n", acc)
+	fmt.Printf("    Correct        %d\n", info.Correct)
+	fmt.Printf("    Wrong          %d\n", info.Wrong)
+	fmt.Printf("    Accuracy       %.0f%%\n", info.Accuracy())
 
 	// Weakest cards first, so the things worth reviewing are at the top.
-	sort.SliceStable(studied, func(i, j int) bool {
-		return studied[i].conf < studied[j].conf
-	})
-	n := len(studied)
-	if n > 10 {
-		n = 10
-	}
 	fmt.Printf("\n  Weakest cards\n")
-	for _, r := range studied[:n] {
-		fmt.Printf("    %3.0f%% acc  conf %3.0f   %s\n", r.accuracy, r.conf, r.label)
+	for _, r := range info.Weakest {
+		fmt.Printf("    %3.0f%% acc  conf %3.0f   %s\n", r.Accuracy, r.Confidence, r.Label)
 	}
-}
-
-// cardLabel returns a short, single-line identifier for a card, used in the
-// stats listing so the user can tell cards apart. It tries, in order: the
-// question text (what the user authored and sees while studying); the answer
-// text, marked with "→" so it's clear the label is the answer side (this is
-// what makes media-only question cards — e.g. an image flashcard whose answer
-// is a word — distinguishable); the file name of the card's first media
-// element; and finally "(media card)" only when a card carries no text or
-// media name at all.
-func cardLabel(c *deck.Card) string {
-	if s := deck.JoinText(c.Question); s != "" {
-		return clipLabel(s)
-	}
-	if s := deck.JoinText(c.Answer); s != "" {
-		return clipLabel("→ " + s)
-	}
-	if s := firstMediaName(c.Question); s != "" {
-		return clipLabel("[" + s + "]")
-	}
-	return "(media card)"
-}
-
-// firstMediaName returns the base file name of the first image or audio
-// element on a card side, or "" if there is none.
-func firstMediaName(media []deck.Media) string {
-	for _, m := range media {
-		if m.Type == deck.Image || m.Type == deck.Audio {
-			return filepath.Base(m.Content)
-		}
-	}
-	return ""
-}
-
-// clipLabel truncates a label to a fixed width for the listing.
-func clipLabel(s string) string {
-	const max = 48
-	if r := []rune(s); len(r) > max {
-		return string(r[:max-1]) + "…"
-	}
-	return s
 }

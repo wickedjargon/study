@@ -262,6 +262,11 @@ type App struct {
 	// expanded tracks which packs are unfolded (tab) so their member decks
 	// show as launchable rows; keyed by pack path, survives rescans.
 	expanded map[string]bool
+	// stats non-nil shows the stats screen for statsPath/statsReverse (see
+	// stats.go) in place of the library list.
+	stats        *library.StatsInfo
+	statsPath    string
+	statsReverse bool
 	// forgetPending arms the forget prompt: the next key picks a direction to
 	// clear (or cancels), so a stray keystroke can't wipe a deck's history.
 	forgetPending bool
@@ -606,9 +611,13 @@ func (a *App) handleKey(ev xevent.KeyPressEvent) {
 		}
 	}
 
-	// No engine means the library screen is up.
+	// No engine means the library (or its stats close-up) is up.
 	if a.engine == nil {
-		a.handleLibraryKey(key)
+		if a.stats != nil {
+			a.handleStatsKey(key)
+		} else {
+			a.handleLibraryKey(key)
+		}
 		return
 	}
 
@@ -1256,7 +1265,11 @@ func (a *App) render() {
 	draw.Draw(canvas, canvas.Bounds(), image.NewUniform(bgColor), image.Point{}, draw.Src)
 
 	if a.engine == nil {
-		a.renderLibrary(canvas)
+		if a.stats != nil {
+			a.renderStats(canvas)
+		} else {
+			a.renderLibrary(canvas)
+		}
 	} else {
 		switch a.engine.State() {
 		case quiz.ShowQuestion:

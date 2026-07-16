@@ -150,6 +150,11 @@ func (a *App) handleLibraryKey(key string) {
 			a.refreshLibrary()
 			a.render()
 		}
+	case "s":
+		if row := a.selectedRow(); row != nil {
+			a.libMsg = ""
+			a.openStats(row.entry.Path, false)
+		}
 	case "x":
 		if row := a.selectedRow(); row != nil {
 			a.forgetPending = true
@@ -377,6 +382,7 @@ func (a *App) renderLibrary(canvas *image.RGBA) {
 		"w: weak only",
 		"t: typed",
 		"c: choice",
+		"s: stats",
 		"x: forget",
 		"q: quit",
 	})

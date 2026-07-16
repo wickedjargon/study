@@ -150,9 +150,11 @@ it so one of its decks can be picked instead, like the web version's
 group page. `r` studies the selection reversed. `f` flips through it
 without recording.
 `w` crams its weak cards. `t` and `c` force every card to typed or
-multiple choice for the session, like `--answer-mode`. `x` forgets the
-deck: all its saved progress is cleared (after a confirm), the deck
-itself stays shelved. `j`/`k` or arrows move, `q` quits.
+multiple choice for the session, like `--answer-mode`. `s` opens the
+deck's statistics, the same report as `--stats`, with `r` there
+flipping to the reversed direction. `x` forgets the deck: all its saved
+progress is cleared (after a confirm), the deck itself stays shelved.
+`j`/`k` or arrows move, `q` quits.
 
 ## Card order
 
