@@ -145,7 +145,10 @@ subdirectory containing `*.deck` files is a library pack. To shelve a
 deck for good, move it into a watched directory.
 
 Library screen keys: `enter` studies the selected deck as a direct run
-would. `r` studies it reversed. `f` flips through it without recording.
+would. On a pack, `enter` studies everything merged and `tab` unfolds
+it so one of its decks can be picked instead, like the web version's
+group page. `r` studies the selection reversed. `f` flips through it
+without recording.
 `w` crams its weak cards. `t` and `c` force every card to typed or
 multiple choice for the session, like `--answer-mode`. `x` forgets the
 deck: all its saved progress is cleared (after a confirm), the deck

@@ -31,6 +31,7 @@ type libRow struct {
 	err     error
 	entry   library.Entry
 	info    library.Info
+	child   bool // a member deck of an expanded pack, drawn indented
 }
 
 // refreshLibrary rescans the watched directories and re-reads every deck's
@@ -49,6 +50,14 @@ func (a *App) refreshLibrary() {
 		a.rows = append(a.rows, libRow{heading: g.Dir, err: g.Err})
 		for _, e := range g.Entries {
 			a.rows = append(a.rows, libRow{entry: e, info: library.Describe(e.Path, now)})
+			// An expanded pack unfolds into its member decks, each its own
+			// launchable row — the pack row above stays the "study it all"
+			// unit, like the web group page's All.
+			if e.Pack && a.expanded[e.Path] {
+				for _, c := range library.PackEntries(e.Path) {
+					a.rows = append(a.rows, libRow{entry: c, child: true, info: library.Describe(c.Path, now)})
+				}
+			}
 		}
 	}
 
@@ -132,6 +141,15 @@ func (a *App) handleLibraryKey(key string) {
 		a.launchSelected(launchOpts{mode: deck.ModeType, modeSet: true})
 	case "c":
 		a.launchSelected(launchOpts{mode: deck.ModeChoice, modeSet: true})
+	case "Tab":
+		if row := a.selectedRow(); row != nil && row.entry.Pack {
+			if a.expanded == nil {
+				a.expanded = make(map[string]bool)
+			}
+			a.expanded[row.entry.Path] = !a.expanded[row.entry.Path]
+			a.refreshLibrary()
+			a.render()
+		}
 	case "x":
 		if row := a.selectedRow(); row != nil {
 			a.forgetPending = true
@@ -263,15 +281,21 @@ func (a *App) renderLibrary(canvas *image.RGBA) {
 	lhDeck := lineHeight(a.fontRegular) + a.scaled(4)
 	bottom := a.height - padding - lineHeight(a.fontSmall) // room for the notice line
 
-	// Name column: wide enough for the longest name, capped so the counts
-	// always keep room. Selected names render bold, so measure bold.
+	// Name column: wide enough for the longest name (children measure with
+	// their indent), capped so the counts always keep room. Selected names
+	// render bold, so measure bold.
 	nameX := x + a.scaled(20)
+	childIndent := a.scaled(18)
 	nameW := 0
 	for _, r := range a.rows {
 		if r.heading != "" {
 			continue
 		}
-		if w := font.MeasureString(a.fontBold, rowName(r.entry)).Round(); w > nameW {
+		w := font.MeasureString(a.fontBold, rowName(r.entry)).Round()
+		if r.child {
+			w += childIndent
+		}
+		if w > nameW {
 			nameW = w
 		}
 	}
@@ -327,7 +351,11 @@ func (a *App) renderLibrary(canvas *image.RGBA) {
 			nameFace, nameColor = a.fontBold, accentColor
 			a.drawText(canvas, "›", x+a.scaled(4), yy, a.fontBold, accentColor)
 		}
-		a.drawText(canvas, rowName(r.entry), nameX, yy, nameFace, nameColor)
+		nx := nameX
+		if r.child {
+			nx += childIndent
+		}
+		a.drawText(canvas, rowName(r.entry), nx, yy, nameFace, nameColor)
 
 		if r.info.Err != nil {
 			a.drawText(canvas, "✗ unreadable deck", detailX, yy, a.fontSmall, redColor)
@@ -343,6 +371,7 @@ func (a *App) renderLibrary(canvas *image.RGBA) {
 	}
 	a.drawControlsBox(canvas, []string{
 		"enter: study",
+		"tab: open pack",
 		"r: reversed",
 		"f: flip through",
 		"w: weak only",

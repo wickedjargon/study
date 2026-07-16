@@ -160,6 +160,22 @@ func (r *Registry) Scan() []Group {
 	return groups
 }
 
+// PackEntries lists the individual decks inside a pack directory — the units
+// `study <pack>/<file>.deck` would take. The library screen shows them when a
+// pack is expanded, the way the web's group page lists its topics. Sorted by
+// file name, the order a merged pack session concatenates them in.
+func PackEntries(dir string) []Entry {
+	matches, _ := filepath.Glob(filepath.Join(dir, "*.deck"))
+	sort.Strings(matches)
+	var entries []Entry
+	for _, m := range matches {
+		if info, err := os.Stat(m); err == nil && !info.IsDir() {
+			entries = append(entries, Entry{Path: m, Name: entryName(m)})
+		}
+	}
+	return entries
+}
+
 // isPack reports whether a directory holds at least one *.deck file, i.e.
 // whether deck.Parse would accept it.
 func isPack(dir string) bool {

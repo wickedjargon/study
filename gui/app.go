@@ -259,6 +259,9 @@ type App struct {
 	sel    int
 	libTop int
 	libMsg string
+	// expanded tracks which packs are unfolded (tab) so their member decks
+	// show as launchable rows; keyed by pack path, survives rescans.
+	expanded map[string]bool
 	// forgetPending arms the forget prompt: the next key picks a direction to
 	// clear (or cancels), so a stray keystroke can't wipe a deck's history.
 	forgetPending bool
