@@ -58,13 +58,10 @@ flags (each overrides the deck header's setting for this session):
   --help                show this help
 
 library (the decks shelved for long-term study — studying a file never
-shelves it; membership is explicit):
+shelves it; membership is the watched directories):
   --watch <dir>         add a directory to the library: every *.deck file
                         and pack subdirectory inside is a library deck
   --unwatch <dir>       remove a watched directory
-  --pin <path>          shelve a single deck file or pack directory that
-                        lives outside every watched directory
-  --unpin <path>        remove a pinned deck
   --library             print the library with due counts and exit
 
 deck format:
@@ -108,8 +105,6 @@ func main() {
 	forget := flag.Bool("forget", false, "clear saved progress for this deck")
 	watch := flag.String("watch", "", "add a directory of decks to the library")
 	unwatch := flag.String("unwatch", "", "remove a watched directory from the library")
-	pin := flag.String("pin", "", "shelve a single deck (file or pack directory) in the library")
-	unpin := flag.String("unpin", "", "remove a pinned deck from the library")
 	libraryFlag := flag.Bool("library", false, "print the library with due counts and exit")
 	help := flag.Bool("help", false, "show help")
 
@@ -120,8 +115,8 @@ func main() {
 
 	// Library maintenance runs without a deck argument and exits, like --stats
 	// and --forget do with one.
-	if *watch != "" || *unwatch != "" || *pin != "" || *unpin != "" {
-		editRegistry(*watch, *unwatch, *pin, *unpin)
+	if *watch != "" || *unwatch != "" {
+		editRegistry(*watch, *unwatch)
 		os.Exit(0)
 	}
 	if *libraryFlag {
@@ -312,10 +307,10 @@ func openRegistry() *library.Registry {
 	return reg
 }
 
-// editRegistry applies the library-membership flags (--watch/--unwatch/
-// --pin/--unpin), saves, and prints the resulting registry so the state just
-// changed is visible without a second command.
-func editRegistry(watch, unwatch, pin, unpin string) {
+// editRegistry applies the library-membership flags (--watch/--unwatch),
+// saves, and prints the resulting registry so the state just changed is
+// visible without a second command.
+func editRegistry(watch, unwatch string) {
 	reg := openRegistry()
 	apply := func(arg string, op func(string) error) {
 		if arg == "" {
@@ -328,21 +323,16 @@ func editRegistry(watch, unwatch, pin, unpin string) {
 	}
 	apply(watch, reg.Watch)
 	apply(unwatch, reg.Unwatch)
-	apply(pin, reg.Pin)
-	apply(unpin, reg.Unpin)
 	if err := reg.Save(); err != nil {
 		fmt.Fprintf(os.Stderr, "✗ %v\n", err)
 		os.Exit(1)
 	}
 	if reg.Empty() {
-		fmt.Println("library is empty — add decks with --watch <dir> or --pin <path>")
+		fmt.Println("library is empty — add a deck directory with --watch <dir>")
 		return
 	}
 	for _, d := range reg.Dirs {
 		fmt.Printf("watching  %s\n", d)
-	}
-	for _, p := range reg.Pins {
-		fmt.Printf("pinned    %s\n", p)
 	}
 }
 
@@ -352,7 +342,7 @@ func editRegistry(watch, unwatch, pin, unpin string) {
 func printLibrary() {
 	reg := openRegistry()
 	if reg.Empty() {
-		fmt.Println("library is empty — add decks with --watch <dir> or --pin <path>")
+		fmt.Println("library is empty — add a deck directory with --watch <dir>")
 		return
 	}
 	now := time.Now()
@@ -360,11 +350,7 @@ func printLibrary() {
 		if i > 0 {
 			fmt.Println()
 		}
-		if g.Dir == "" {
-			fmt.Println("pinned:")
-		} else {
-			fmt.Printf("%s:\n", g.Dir)
-		}
+		fmt.Printf("%s:\n", g.Dir)
 		if g.Err != nil {
 			fmt.Printf("  ✗ %v\n", g.Err)
 			continue
@@ -384,9 +370,6 @@ func libraryRow(e library.Entry, now time.Time) string {
 	name := e.Name
 	if e.Pack {
 		name += "/"
-	}
-	if e.Missing {
-		return fmt.Sprintf("%-24s (missing)", name)
 	}
 	info := library.Describe(e.Path, now)
 	if info.Err != nil {

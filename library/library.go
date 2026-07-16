@@ -3,10 +3,9 @@
 //
 // Membership is explicit, never inferred from having studied something — a
 // one-off `study /tmp/test.deck` run must not shelve the file. The user
-// watches directories (their real deck collections) and can pin individual
-// paths that live elsewhere; the library is whatever a scan of those finds.
-// The registry itself is one JSON file in the study data directory, beside
-// the progress files.
+// watches directories (their real deck collections); the library is whatever
+// a scan of those finds. The registry itself is one JSON file in the study
+// data directory, beside the progress files.
 package library
 
 import (
@@ -26,11 +25,10 @@ import (
 
 const registryName = "library.json"
 
-// Registry is the persistent membership list: watched directories scanned for
-// decks, and individually pinned deck paths.
+// Registry is the persistent membership list: the watched directories scanned
+// for decks.
 type Registry struct {
 	Dirs []string `json:"dirs"`
-	Pins []string `json:"pins"`
 
 	path string // where Save writes; set by Open
 }
@@ -67,9 +65,9 @@ func (r *Registry) Save() error {
 	return nil
 }
 
-// Empty reports whether nothing is watched or pinned.
+// Empty reports whether nothing is watched.
 func (r *Registry) Empty() bool {
-	return len(r.Dirs) == 0 && len(r.Pins) == 0
+	return len(r.Dirs) == 0
 }
 
 // Watch adds a directory to the scan list. The path must be an existing
@@ -85,7 +83,7 @@ func (r *Registry) Watch(dir string) error {
 		return err
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("%s is not a directory (use --pin for a single deck)", abs)
+		return fmt.Errorf("%s is not a directory", abs)
 	}
 	for _, d := range r.Dirs {
 		if d == abs {
@@ -111,68 +109,29 @@ func (r *Registry) Unwatch(dir string) error {
 	return fmt.Errorf("not watching %s", abs)
 }
 
-// Pin shelves a single deck that lives outside every watched directory: a
-// .deck file, or a pack directory studied as one unit.
-func (r *Registry) Pin(path string) error {
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return err
-	}
-	if _, err := os.Stat(abs); err != nil {
-		return err
-	}
-	for _, p := range r.Pins {
-		if p == abs {
-			return fmt.Errorf("already pinned %s", abs)
-		}
-	}
-	r.Pins = append(r.Pins, abs)
-	return nil
-}
-
-// Unpin removes a pinned deck.
-func (r *Registry) Unpin(path string) error {
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return err
-	}
-	for i, p := range r.Pins {
-		if p == abs {
-			r.Pins = append(r.Pins[:i], r.Pins[i+1:]...)
-			return nil
-		}
-	}
-	return fmt.Errorf("not pinned: %s", abs)
-}
-
 // Entry is one launchable deck the scan found: exactly what `study <path>`
 // would take, a .deck file or a pack directory.
 type Entry struct {
-	Path    string
-	Name    string // display name: the base name without the .deck suffix
-	Pack    bool   // Path is a pack directory, studied as one merged deck
-	Missing bool   // a pinned path that no longer exists (watched files can't go missing — they just stop being found)
+	Path string
+	Name string // display name: the base name without the .deck suffix
+	Pack bool   // Path is a pack directory, studied as one merged deck
 }
 
-// Group is the scan result for one watched directory (or, with Dir empty, the
-// pinned decks). A directory that can't be read reports Err instead of
-// silently vanishing from the library.
+// Group is the scan result for one watched directory. A directory that can't
+// be read reports Err instead of silently vanishing from the library.
 type Group struct {
 	Dir     string
 	Err     error
 	Entries []Entry
 }
 
-// Scan walks the watched directories and resolves the pins into launchable
-// entries. Inside a watched directory, *.deck files are individual decks and
-// each immediate subdirectory containing *.deck files is a pack; anything
-// else is ignored. Groups come back in registry order (the order the user
-// watched them), entries sorted by name, pins last. A pin already found under
-// a watched directory is dropped rather than listed twice.
+// Scan walks the watched directories for launchable entries. Inside a watched
+// directory, *.deck files are individual decks and each immediate
+// subdirectory containing *.deck files is a pack; anything else is ignored.
+// Groups come back in registry order (the order the user watched them),
+// entries sorted by name.
 func (r *Registry) Scan() []Group {
-	seen := make(map[string]bool)
 	var groups []Group
-
 	for _, dir := range r.Dirs {
 		g := Group{Dir: dir}
 		entries, err := os.ReadDir(dir)
@@ -193,33 +152,11 @@ func (r *Registry) Scan() []Group {
 				g.Entries = append(g.Entries, Entry{Path: path, Name: entryName(path), Pack: true})
 			case !info.IsDir() && strings.HasSuffix(e.Name(), ".deck"):
 				g.Entries = append(g.Entries, Entry{Path: path, Name: entryName(path)})
-			default:
-				continue
 			}
-			seen[path] = true
 		}
 		sort.Slice(g.Entries, func(i, j int) bool { return g.Entries[i].Name < g.Entries[j].Name })
 		groups = append(groups, g)
 	}
-
-	var pinned Group
-	for _, p := range r.Pins {
-		if seen[p] {
-			continue
-		}
-		e := Entry{Path: p, Name: entryName(p)}
-		if info, err := os.Stat(p); err != nil {
-			e.Missing = true
-		} else if info.IsDir() {
-			e.Pack = true
-		}
-		pinned.Entries = append(pinned.Entries, e)
-	}
-	sort.Slice(pinned.Entries, func(i, j int) bool { return pinned.Entries[i].Name < pinned.Entries[j].Name })
-	if len(pinned.Entries) > 0 {
-		groups = append(groups, pinned)
-	}
-
 	return groups
 }
 

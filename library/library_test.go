@@ -33,11 +33,6 @@ func TestRegistryRoundTrip(t *testing.T) {
 	if err := r.Watch(decks); err != nil {
 		t.Fatal(err)
 	}
-	pin := filepath.Join(data, "solo.deck")
-	writeDeck(t, pin)
-	if err := r.Pin(pin); err != nil {
-		t.Fatal(err)
-	}
 	if err := r.Save(); err != nil {
 		t.Fatal(err)
 	}
@@ -49,18 +44,12 @@ func TestRegistryRoundTrip(t *testing.T) {
 	if len(r2.Dirs) != 1 || r2.Dirs[0] != decks {
 		t.Errorf("Dirs = %v, want [%s]", r2.Dirs, decks)
 	}
-	if len(r2.Pins) != 1 || r2.Pins[0] != pin {
-		t.Errorf("Pins = %v, want [%s]", r2.Pins, pin)
-	}
 
 	if err := r2.Unwatch(decks); err != nil {
 		t.Fatal(err)
 	}
-	if err := r2.Unpin(pin); err != nil {
-		t.Fatal(err)
-	}
 	if !r2.Empty() {
-		t.Error("registry should be empty after unwatch+unpin")
+		t.Error("registry should be empty after unwatch")
 	}
 }
 
@@ -106,29 +95,14 @@ func TestScan(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// A pin outside the watched dir, a pin inside it (deduped), and a pin
-	// whose file has since been deleted (missing).
-	solo := filepath.Join(data, "solo.deck")
-	writeDeck(t, solo)
-	gone := filepath.Join(data, "gone.deck")
-	writeDeck(t, gone)
-	for _, p := range []string{solo, gone, filepath.Join(decks, "a.deck")} {
-		if err := r.Pin(p); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := os.Remove(gone); err != nil {
-		t.Fatal(err)
-	}
-
 	groups := r.Scan()
-	if len(groups) != 2 {
-		t.Fatalf("got %d groups, want 2 (watched + pins): %+v", len(groups), groups)
+	if len(groups) != 1 {
+		t.Fatalf("got %d groups, want 1: %+v", len(groups), groups)
 	}
 
 	g := groups[0]
 	if g.Dir != decks || g.Err != nil {
-		t.Fatalf("group 0 = {%s %v}, want the watched dir", g.Dir, g.Err)
+		t.Fatalf("group = {%s %v}, want the watched dir", g.Dir, g.Err)
 	}
 	var got []string
 	for _, e := range g.Entries {
@@ -145,17 +119,6 @@ func TestScan(t *testing.T) {
 	}
 	if !g.Entries[2].Pack {
 		t.Error("farsi.deck/ should be a pack")
-	}
-
-	pins := groups[1]
-	if pins.Dir != "" || len(pins.Entries) != 2 {
-		t.Fatalf("pins group = %+v, want 2 entries (in-watched-dir pin deduped)", pins)
-	}
-	if pins.Entries[0].Name != "gone" || !pins.Entries[0].Missing {
-		t.Errorf("deleted pin should be flagged missing: %+v", pins.Entries[0])
-	}
-	if pins.Entries[1].Name != "solo" || pins.Entries[1].Missing {
-		t.Errorf("solo pin = %+v", pins.Entries[1])
 	}
 }
 
