@@ -200,6 +200,20 @@ func (d *Deck) warn(format string, args ...any) {
 	d.Warnings = append(d.Warnings, fmt.Sprintf(format, args...))
 }
 
+// ForceAnswerMode makes every card in the deck answer as m for this session,
+// outranking the deck's "# answer-mode:", per-card directives, and the
+// distractor-implied choice inference. The --answer-mode flag and the library
+// screen's typed/choice launches both apply it — so a recognition deck can be
+// drilled as production and vice versa. The card's history is shared between
+// modes (recognition successes are easier evidence than production ones),
+// which is the price of forcing.
+func (d *Deck) ForceAnswerMode(m QuizMode) {
+	d.Mode = m
+	for i := range d.Cards {
+		d.Cards[i].Mode = m
+	}
+}
+
 // maxTimeLimit caps a per-question time limit (in seconds). A value above this
 // is almost certainly a typo (a question timer measured in hours makes no
 // sense), so it's rejected with a warning rather than honored.

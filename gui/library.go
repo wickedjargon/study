@@ -88,6 +88,17 @@ func (a *App) moveSel(dir int) {
 	}
 }
 
+// launchOpts is one library launch variant: each key below sets at most one
+// knob, everything else stays the deck's own. The zero value is a plain
+// `study <path>` run.
+type launchOpts struct {
+	reverse  bool
+	order    deck.OrderMode
+	orderSet bool
+	mode     deck.QuizMode // forced answer mode (typed / choice)
+	modeSet  bool
+}
+
 func (a *App) handleLibraryKey(key string) {
 	switch key {
 	case "j", "Down":
@@ -96,38 +107,46 @@ func (a *App) handleLibraryKey(key string) {
 		a.moveSel(-1)
 	case "Return":
 		// The deck exactly as `study <path>` runs it: its own order, forward.
-		a.launchSelected(false, 0, false)
+		a.launchSelected(launchOpts{})
 	case "r":
-		a.launchSelected(true, 0, false)
+		a.launchSelected(launchOpts{reverse: true})
 	case "f":
-		a.launchSelected(false, deck.OrderFlipThrough, true)
+		a.launchSelected(launchOpts{order: deck.OrderFlipThrough, orderSet: true})
 	case "w":
-		a.launchSelected(false, deck.OrderWeakOnly, true)
+		a.launchSelected(launchOpts{order: deck.OrderWeakOnly, orderSet: true})
+	case "t":
+		a.launchSelected(launchOpts{mode: deck.ModeType, modeSet: true})
+	case "c":
+		a.launchSelected(launchOpts{mode: deck.ModeChoice, modeSet: true})
 	case "q", "Escape":
 		a.exit()
 	}
 }
 
-// launchSelected starts a session on the selected deck: reversed if asked,
-// under the given order when override is set (flip-through and weak-only are
-// launch variants, not deck edits), the deck's own settings otherwise. A
-// launch with nothing to serve (unparsable deck, no reversible cards, nothing
-// weak) stays on the library and says why in the notice line.
-func (a *App) launchSelected(reverse bool, order deck.OrderMode, override bool) {
+// launchSelected starts a session on the selected deck: reversed, under a
+// forced order (flip-through, weak-only) or answer mode (typed, choice) when
+// the variant asks — launch settings, not deck edits — and the deck's own
+// settings otherwise. A launch with nothing to serve (unparsable deck, no
+// reversible cards, nothing weak) stays on the library and says why in the
+// notice line.
+func (a *App) launchSelected(opts launchOpts) {
 	row := a.selectedRow()
 	if row == nil {
 		return
 	}
 	a.libMsg = ""
 
-	d, store, err := session.Load(row.entry.Path, reverse, os.Stderr)
+	d, store, err := session.Load(row.entry.Path, opts.reverse, os.Stderr)
 	if err != nil {
 		a.libMsg = err.Error()
 		a.render()
 		return
 	}
-	if override {
-		d.Order = order
+	if opts.orderSet {
+		d.Order = opts.order
+	}
+	if opts.modeSet {
+		d.ForceAnswerMode(opts.mode)
 	}
 	engine, err := session.Start(d, store, session.Ahead{}, time.Now())
 	if err != nil {
@@ -138,7 +157,7 @@ func (a *App) launchSelected(reverse bool, order deck.OrderMode, override bool) 
 
 	a.engine = engine
 	a.store = store
-	a.reverse = reverse
+	a.reverse = opts.reverse
 	a.start = time.Now()
 
 	// The deck's own presentation settings, exactly as a direct run applies
@@ -282,6 +301,8 @@ func (a *App) renderLibrary(canvas *image.RGBA) {
 		"r: reversed",
 		"f: flip through",
 		"w: weak only",
+		"t: typed",
+		"c: choice",
 		"q: quit",
 	})
 }

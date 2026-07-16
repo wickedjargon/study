@@ -187,12 +187,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "✗ --answer-mode: need type or choice (got %q)\n", *answerModeFlag)
 			os.Exit(1)
 		}
-		// Every card follows, outranking per-card directives and the
-		// distractor-implied choice inference.
-		d.Mode = m
-		for i := range d.Cards {
-			d.Cards[i].Mode = m
-		}
+		d.ForceAnswerMode(m)
 	}
 	if *timeLimitFlag != "" {
 		n, ok := deck.ParseTimeLimit(*timeLimitFlag)

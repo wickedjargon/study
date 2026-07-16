@@ -146,7 +146,9 @@ deck for good, move it into a watched directory.
 
 Library screen keys: `enter` studies the selected deck as a direct run
 would. `r` studies it reversed. `f` flips through it without recording.
-`w` crams its weak cards. `j`/`k` or arrows move, `q` quits.
+`w` crams its weak cards. `t` and `c` force every card to typed or
+multiple choice for the session, like `--answer-mode`. `j`/`k` or
+arrows move, `q` quits.
 
 ## Card order
 
