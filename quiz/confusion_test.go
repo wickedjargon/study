@@ -116,6 +116,49 @@ func TestConfusedCardPulledForward(t *testing.T) {
 	t.Fatalf("confused card not served within %d serves of the miss", gapConfused+3)
 }
 
+// TestNoIdeaIsAMissWithoutConfusion: declining to answer (choice mode's
+// opt-out for a blind guess) scores as a plain miss on the current card —
+// lapsed, requeued — but names no other card and pulls nothing forward.
+func TestNoIdeaIsAMissWithoutConfusion(t *testing.T) {
+	d := confusableDeck(4)
+	e := NewEngine(d, nil, nil)
+
+	cur := e.Current().ID
+	r := e.AnswerNoIdea()
+	if r == nil {
+		t.Fatal("AnswerNoIdea returned nil at a question")
+	}
+	if r.Correct || !r.NoIdea || r.Chosen != -1 {
+		t.Errorf("result = {Correct:%v NoIdea:%v Chosen:%d}, want a wrong no-idea result", r.Correct, r.NoIdea, r.Chosen)
+	}
+	if r.ConfusedWith != nil {
+		t.Errorf("ConfusedWith = %q, want nil — declining names no other card", r.ConfusedWith.ID)
+	}
+	if e.TotalSeen != 1 || e.TotalWrong != 1 {
+		t.Errorf("TotalSeen/TotalWrong = %d/%d, want 1/1", e.TotalSeen, e.TotalWrong)
+	}
+	if !e.lapsed[cur] {
+		t.Error("card not marked lapsed — no idea must count as a miss")
+	}
+	if e.AnswerNoIdea() != nil {
+		t.Error("AnswerNoIdea at ShowResult returned a result, want nil")
+	}
+
+	// The missed card comes back like any other miss: soon, but not massed.
+	e.Next()
+	for i := 1; i <= gapAfterMiss+3; i++ {
+		if e.Current().ID == cur {
+			if i == 1 {
+				t.Fatal("missed card returned immediately — massed, not spaced")
+			}
+			return
+		}
+		answerCurrent(e, true)
+		e.Next()
+	}
+	t.Fatalf("missed card not served within %d serves", gapAfterMiss+3)
+}
+
 // TestConfusionDetectedOutsideSession: the confused-with card may be excluded
 // from the session entirely (not due, not weak) — it is still named on the
 // result screen, but never pulled in: its review schedule is not the session's

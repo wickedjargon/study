@@ -44,11 +44,12 @@ const (
 // Result records the outcome of answering a single card.
 type Result struct {
 	Card     *deck.Card
-	Chosen   int // index of chosen answer (0-based, -1 for type mode/timeout)
+	Chosen   int // index of chosen answer (0-based, -1 for type mode/timeout/no idea)
 	Correct  bool
 	Answer   string // the correct answer text
 	Typed    string // what the user typed (type mode only)
 	TimedOut bool   // true if the card's time limit expired before answering
+	NoIdea   bool   // true if the user declined to answer (choice mode)
 	// ConfusedWith is set on a wrong answer that is itself the answer to
 	// another card in the deck — the user confused the two cards, not merely
 	// forgot this one. The GUI names that card so the pair can be told apart.
@@ -555,6 +556,33 @@ func (e *Engine) Answer(choice int) *Result {
 		}
 		e.handleWrong()
 	}
+
+	e.state = ShowResult
+	return result
+}
+
+// AnswerNoIdea records that the user declined to answer rather than pick a
+// choice blind. It scores as a plain miss on the current card, but unlike a
+// picked distractor it carries no confusion signal — a blind guess landing on
+// another card's answer would pull that card forward for a mix-up that never
+// happened. Transitions to ShowResult.
+func (e *Engine) AnswerNoIdea() *Result {
+	if e.state != ShowQuestion || e.current == nil {
+		return nil
+	}
+
+	result := &Result{
+		Card:    e.current,
+		Chosen:  -1,
+		Correct: false,
+		Answer:  e.current.AnswerText,
+		NoIdea:  true,
+	}
+
+	e.TotalSeen++
+	e.recordAnswer(false)
+	e.TotalWrong++
+	e.handleWrong()
 
 	e.state = ShowResult
 	return result
