@@ -126,22 +126,20 @@ study [flags] [deck-file | pack-directory]
 
 ## Library
 
-`study` with no deck argument opens the library: every deck under the
-watched directories, each direction's state ("12 to review", "79
-unseen", "caught up ✓"), and when it was last studied. A session
-started here returns to the library when it ends.
-
-Membership is the watched directories, nothing else. Studying a file
-never shelves it. Loose `*.deck` files are decks, subdirectories
-holding `*.deck` files are packs:
+Watch a directory of decks:
 
 ```bash
 study --watch ~/decks
 ```
 
-A pack row studies everything merged. `tab` unfolds it so one deck can
-be picked instead. The other keys (reversed, flip-through, weak-only,
-stats, forget) are listed on the screen itself.
+Open the library:
+
+```bash
+study
+```
+
+Loose `*.deck` files are decks. Subdirectories of decks are packs.
+Each row shows what's due. The keys are on the screen.
 
 ## Card order
 
