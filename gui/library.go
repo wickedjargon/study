@@ -18,6 +18,7 @@ import (
 
 	"study/deck"
 	"study/library"
+	"study/progress"
 	"study/session"
 )
 
@@ -100,6 +101,19 @@ type launchOpts struct {
 }
 
 func (a *App) handleLibraryKey(key string) {
+	// An armed forget prompt owns the next key: y clears, anything else
+	// cancels. Nothing is deleted on the keystroke that asked.
+	if a.forgetPending {
+		a.forgetPending = false
+		if key == "y" {
+			a.forgetSelected()
+		} else {
+			a.libMsg = ""
+		}
+		a.render()
+		return
+	}
+
 	switch key {
 	case "j", "Down":
 		a.moveSel(+1)
@@ -118,9 +132,40 @@ func (a *App) handleLibraryKey(key string) {
 		a.launchSelected(launchOpts{mode: deck.ModeType, modeSet: true})
 	case "c":
 		a.launchSelected(launchOpts{mode: deck.ModeChoice, modeSet: true})
+	case "x":
+		if row := a.selectedRow(); row != nil {
+			a.forgetPending = true
+			a.libMsg = fmt.Sprintf("forget %s — clear all its saved progress? y: yes · any other key: cancel", row.entry.Name)
+			a.render()
+		}
 	case "q", "Escape":
 		a.exit()
 	}
+}
+
+// forgetSelected clears every trace of studying the selected deck — both
+// directions, orphaned entries included — the GUI counterpart of running
+// --forget for each direction. The deck itself stays shelved: forgetting is
+// about the history, membership is the watched directory.
+func (a *App) forgetSelected() {
+	row := a.selectedRow()
+	if row == nil {
+		return
+	}
+	name := row.entry.Name
+
+	store, err := progress.NewStore(row.entry.Path)
+	if err == nil {
+		store.Reset()
+		err = store.Save()
+	}
+	if err != nil {
+		a.libMsg = fmt.Sprintf("✗ forgetting %s: %v", name, err)
+		return
+	}
+
+	a.refreshLibrary()
+	a.libMsg = "progress cleared for " + name
 }
 
 // launchSelected starts a session on the selected deck: reversed, under a
@@ -303,6 +348,7 @@ func (a *App) renderLibrary(canvas *image.RGBA) {
 		"w: weak only",
 		"t: typed",
 		"c: choice",
+		"x: forget",
 		"q: quit",
 	})
 }
