@@ -236,5 +236,5 @@ What is 1 + 1?
 | `# font-size:` | `--font-size` | `8`–`48`, or `small`/`medium`/`large`/`x-large` | `10` |
 | `# audio-speed:` | `--audio-speed` | `0.25`–`4.0` | `1.0` |
 
-- A flag overrides the deck-header setting of the same name for that session.
+- A flag overrides its deck-header setting equivalent
 
