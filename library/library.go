@@ -198,19 +198,48 @@ type Info struct {
 	DueReviews  int // studied cards due now
 	DueNew      int // never-studied cards
 	Reversible  bool
+	RevCards    int // cards that survive reversal
 	RevReviews  int // reverse direction, as above
 	RevNew      int
 	LastStudied time.Time // zero when never studied (either direction)
 	Err         error     // the deck or its progress couldn't be loaded
 }
 
-// DueLabel formats one direction's due counts for a library row, shared by
-// the CLI listing and the library screen.
-func DueLabel(reviews, fresh int) string {
-	if reviews == 0 && fresh == 0 {
-		return "caught up"
+// Part is one piece of a direction's status on a library row; Kind tells the
+// GUI how to color it. The states mirror the web app's deck rows.
+type Part struct {
+	Text string
+	Kind PartKind
+}
+
+type PartKind int
+
+const (
+	KindUnseen PartKind = iota // quiet: new material waiting
+	KindDue                    // demands attention: reviews due now
+	KindDone                   // green check: nothing due, nothing unseen
+)
+
+// DirParts describes one direction's state the way the web app badges it:
+// "N to review" when reviews are due, "N unseen" while new material remains,
+// and "caught up ✓" only when the direction is truly exhausted for now. A
+// direction never studied at all reports nothing — the row says "never
+// studied" elsewhere, and its unseen count would just repeat the deck size.
+func DirParts(due, fresh, cards int) []Part {
+	if cards == 0 || fresh >= cards {
+		return nil
 	}
-	return fmt.Sprintf("due %d + %d new", reviews, fresh)
+	var parts []Part
+	if due > 0 {
+		parts = append(parts, Part{fmt.Sprintf("%d to review", due), KindDue})
+	}
+	if fresh > 0 {
+		parts = append(parts, Part{fmt.Sprintf("%d unseen", fresh), KindUnseen})
+	}
+	if len(parts) == 0 {
+		parts = append(parts, Part{"caught up ✓", KindDone})
+	}
+	return parts
 }
 
 // AgoLabel formats when a deck was last studied, for a library row.
@@ -248,6 +277,7 @@ func Describe(path string, now time.Time) Info {
 
 	if rd := d.Reversed(); len(rd.Cards) > 0 {
 		info.Reversible = true
+		info.RevCards = len(rd.Cards)
 		reviews, fresh, _, _ = quiz.SplitDue(rd.Cards, store, now)
 		info.RevReviews, info.RevNew = len(reviews), len(fresh)
 	}

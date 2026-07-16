@@ -9,6 +9,7 @@ package gui
 import (
 	"fmt"
 	"image"
+	"image/color"
 	"os"
 	"path/filepath"
 	"strings"
@@ -365,7 +366,15 @@ func (a *App) renderLibrary(canvas *image.RGBA) {
 		if r.info.Err != nil {
 			a.drawText(canvas, "✗ unreadable deck", detailX, yy, a.fontSmall, redColor)
 		} else {
-			a.drawText(canvas, rowDetail(r.info), detailX, yy, a.fontSmall, dimColor)
+			dx := detailX
+			for i, s := range rowSegments(r.info) {
+				if i > 0 {
+					a.drawText(canvas, " · ", dx, yy, a.fontSmall, dimColor)
+					dx += font.MeasureString(a.fontSmall, " · ").Round()
+				}
+				a.drawText(canvas, s.text, dx, yy, a.fontSmall, s.color)
+				dx += font.MeasureString(a.fontSmall, s.text).Round()
+			}
 			a.drawTextRight(canvas, library.AgoLabel(r.info.LastStudied, time.Now()), a.width-padding, yy, a.fontSmall, dimColor)
 		}
 		yy += lhDeck
@@ -398,20 +407,48 @@ func rowName(e library.Entry) string {
 	return name
 }
 
-// rowDetail is the counts part of a deck row: size, what's due forward, and
-// what's due reversed when the deck can be flipped.
-func rowDetail(info library.Info) string {
-	parts := []string{
-		fmt.Sprintf("%d cards", info.Cards),
-		library.DueLabel(info.DueReviews, info.DueNew),
-	}
+// rowSeg is one colored piece of a deck row's counts.
+type rowSeg struct {
+	text  string
+	color color.RGBA
+}
+
+// rowSegments is the counts part of a deck row, colored the way the web app
+// badges the same states: due reviews demand attention, a caught-up direction
+// gets its green check, unseen material stays quiet. A never-studied
+// direction contributes nothing (the row's right side says so).
+func rowSegments(info library.Info) []rowSeg {
+	cards := "cards"
 	if info.Cards == 1 {
-		parts[0] = "1 card"
+		cards = "card"
 	}
+	segs := []rowSeg{{fmt.Sprintf("%d %s", info.Cards, cards), dimColor}}
+	segs = append(segs, dirSegs("", library.DirParts(info.DueReviews, info.DueNew, info.Cards))...)
 	if info.Reversible {
-		parts = append(parts, "reversed "+library.DueLabel(info.RevReviews, info.RevNew))
+		segs = append(segs, dirSegs("reversed ", library.DirParts(info.RevReviews, info.RevNew, info.RevCards))...)
 	}
-	return strings.Join(parts, "  ·  ")
+	return segs
+}
+
+// dirSegs colors one direction's parts, prefixing the first so the reversed
+// direction reads as its own clause.
+func dirSegs(prefix string, parts []library.Part) []rowSeg {
+	var out []rowSeg
+	for i, p := range parts {
+		c := dimColor
+		switch p.Kind {
+		case library.KindDue:
+			c = yellowColor
+		case library.KindDone:
+			c = greenColor
+		}
+		text := p.Text
+		if i == 0 && prefix != "" {
+			text = prefix + text
+		}
+		out = append(out, rowSeg{text, c})
+	}
+	return out
 }
 
 // displayPath abbreviates the home directory to ~ for the heading lines.

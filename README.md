@@ -127,9 +127,10 @@ study [flags] [deck-file | pack-directory]
 ## Library
 
 Running `study` with no deck argument opens the library: every deck you
-keep for long-term study, with due counts for both directions and when
-each was last studied. Pick a deck and a session starts. When it ends
-you land back in the library with fresh counts, ready for the next
+keep for long-term study, with each direction's state the way the web
+version badges it ("N to review", "N unseen", or "caught up ✓") and
+when each was last studied. Pick a deck and a session starts. When it
+ends you land back in the library with fresh counts, ready for the next
 deck.
 
 Membership is explicit. Studying a file never shelves it, so trying out

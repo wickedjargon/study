@@ -386,16 +386,23 @@ func libraryRow(e library.Entry, now time.Time) string {
 	if info.Err != nil {
 		return fmt.Sprintf("%-24s ✗ %v", name, info.Err)
 	}
-	due := library.DueLabel(info.DueReviews, info.DueNew)
-	if info.Reversible {
-		due += "  ·  reverse " + library.DueLabel(info.RevReviews, info.RevNew)
+	var bits []string
+	for _, p := range library.DirParts(info.DueReviews, info.DueNew, info.Cards) {
+		bits = append(bits, p.Text)
+	}
+	for i, p := range library.DirParts(info.RevReviews, info.RevNew, info.RevCards) {
+		text := p.Text
+		if i == 0 {
+			text = "reversed " + text
+		}
+		bits = append(bits, text)
 	}
 	cards := "cards"
 	if info.Cards == 1 {
 		cards = "card"
 	}
 	return fmt.Sprintf("%-24s %4d %-6s  %-42s %s",
-		name, info.Cards, cards, due, library.AgoLabel(info.LastStudied, now))
+		name, info.Cards, cards, strings.Join(bits, " · "), library.AgoLabel(info.LastStudied, now))
 }
 
 // parseAhead parses an --ahead value: a whole number of days >= 1, or "all".

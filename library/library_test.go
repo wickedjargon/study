@@ -122,6 +122,44 @@ func TestScan(t *testing.T) {
 	}
 }
 
+// TestDirParts: the row states mirror the web app's badges — nothing for a
+// never-studied direction, review/unseen counts while work remains, and the
+// caught-up check only when the direction is exhausted.
+func TestDirParts(t *testing.T) {
+	join := func(parts []Part) string {
+		s := ""
+		for i, p := range parts {
+			if i > 0 {
+				s += " · "
+			}
+			s += p.Text
+		}
+		return s
+	}
+	cases := []struct {
+		due, fresh, cards int
+		want              string
+	}{
+		{0, 91, 91, ""},                        // never studied: the row says so elsewhere
+		{0, 79, 91, "79 unseen"},               // started, nothing due
+		{12, 79, 91, "12 to review · 79 unseen"},
+		{3, 0, 91, "3 to review"},
+		{0, 0, 91, "caught up ✓"},
+		{0, 0, 0, ""}, // no cards, no claims
+	}
+	for _, c := range cases {
+		if got := join(DirParts(c.due, c.fresh, c.cards)); got != c.want {
+			t.Errorf("DirParts(%d, %d, %d) = %q, want %q", c.due, c.fresh, c.cards, got, c.want)
+		}
+	}
+	if p := DirParts(5, 0, 91); p[0].Kind != KindDue {
+		t.Errorf("to-review part kind = %v, want KindDue", p[0].Kind)
+	}
+	if p := DirParts(0, 0, 91); p[0].Kind != KindDone {
+		t.Errorf("caught-up part kind = %v, want KindDone", p[0].Kind)
+	}
+}
+
 func TestScanUnreadableDir(t *testing.T) {
 	data := t.TempDir()
 	r, _ := Open(data)
