@@ -154,10 +154,30 @@ func (a *App) drawArabicCentered(canvas *image.RGBA, text string, y int, mul flo
 	r.PixScale = float32(a.dpi / 72.0)
 	r.Color = c
 
-	width := r.DrawStringAt(text, a.measureImg, 0, 0, a.arabicFace)
+	width := a.measureArabic(text, mul)
 	x := (a.width - width) / 2
 	if x < padding {
 		x = padding
 	}
 	r.DrawStringAt(text, canvas, x, y, a.arabicFace)
+}
+
+// measureArabic returns the shaped pixel width of text at the given size
+// multiplier: the advance DrawStringAt reports against the 1×1 scratch
+// target. It's how shaped lines are centered, and how they're wrapped.
+func (a *App) measureArabic(text string, mul float64) int {
+	r := a.arabicRenderer
+	r.FontSize = float32(a.baseFontPt * mul * a.windowScale())
+	r.PixScale = float32(a.dpi / 72.0)
+	return r.DrawStringAt(text, a.measureImg, 0, 0, a.arabicFace)
+}
+
+// wrapCardText soft-wraps one authored line of card content to fit maxW,
+// measuring with whichever pipeline will draw it — the shaped Arabic renderer
+// or the plain large face — so the wrap points match what lands on screen.
+func (a *App) wrapCardText(text string, maxW int) []string {
+	if hasArabic(text) && a.arabicFace != nil {
+		return wrapLines(text, maxW, func(s string) int { return a.measureArabic(s, fontMulLarge) })
+	}
+	return wrapLines(text, maxW, func(s string) int { return font.MeasureString(a.fontLarge, s).Round() })
 }

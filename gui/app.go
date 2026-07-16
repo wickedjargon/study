@@ -1419,8 +1419,14 @@ func (a *App) renderResult(canvas *image.RGBA) {
 			}
 			y = a.renderTextMedia(canvas, a.result.Card.Answer, y, greenColor)
 		} else if !a.result.Correct {
-			a.drawText(canvas, "= "+a.result.Answer, padding+20, y, a.fontRegular, greenColor)
-			y += lineHeight(a.fontRegular)
+			// The correct answer, soft-wrapped like the question: a long
+			// sentence answer must not run off the window either.
+			maxW := a.width - padding*3 - 20
+			measure := func(s string) int { return font.MeasureString(a.fontRegular, s).Round() }
+			for _, line := range wrapLines("= "+a.result.Answer, maxW, measure) {
+				a.drawText(canvas, line, padding+20, y, a.fontRegular, greenColor)
+				y += lineHeight(a.fontRegular)
+			}
 		}
 	} else {
 		// Choices with highlighting: the correct option gets the ✔, a wrongly
@@ -1779,10 +1785,13 @@ func (a *App) renderQuestionText(canvas *image.RGBA, card *deck.Card, y int) int
 }
 
 // renderTextMedia draws the text elements of a card side (skipping image/audio),
-// one per line and script-shaped, in the given color. It's shared by the
-// question prompt and — in reverse mode — the answer reveal.
+// script-shaped and soft-wrapped to the window, in the given color. Each
+// authored line starts fresh; a line wider than the window continues on the
+// next, broken at spaces. It's shared by the question prompt and — in reverse
+// mode — the answer reveal.
 func (a *App) renderTextMedia(canvas *image.RGBA, media []deck.Media, y int, c color.RGBA) int {
 	first := true
+	maxW := a.width - 2*padding
 	for _, m := range media {
 		if m.Type != deck.Text {
 			continue
@@ -1791,8 +1800,10 @@ func (a *App) renderTextMedia(canvas *image.RGBA, media []deck.Media, y int, c c
 			y += a.fontLarge.Metrics().Ascent.Ceil()
 			first = false
 		}
-		a.drawCardText(canvas, m.Content, y, c)
-		y += lineHeight(a.fontLarge)
+		for _, line := range a.wrapCardText(m.Content, maxW) {
+			a.drawCardText(canvas, line, y, c)
+			y += lineHeight(a.fontLarge)
+		}
 	}
 	return y
 }
