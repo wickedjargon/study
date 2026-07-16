@@ -27,9 +27,11 @@ import (
 
 const helpText = `study — A flashcard quiz tool
 
-usage: study [flags] <deck-file | pack-directory>
+usage: study [flags] [deck-file | pack-directory]
 
 a directory is a pack: every *.deck file inside is merged into one session.
+with no deck argument, study opens the library: every deck under the
+watched directories, each a keystroke from a session.
 
 flags (each overrides the deck header's setting for this session):
   --reverse             flip the deck: see English, produce the target language
@@ -124,8 +126,25 @@ func main() {
 		os.Exit(0)
 	}
 
-	if *help || flag.NArg() == 0 {
+	if *help {
 		fmt.Println(helpText)
+		os.Exit(0)
+	}
+
+	// Bare `study` opens the library screen — the whole shelf, each deck a
+	// keystroke from a session. With nothing watched yet there is no library
+	// to show; print the help with a pointer at --watch instead.
+	if flag.NArg() == 0 {
+		reg := openRegistry()
+		if reg.Empty() {
+			fmt.Println(helpText)
+			fmt.Println("\nno deck given and the library is empty — add a deck directory with --watch <dir>")
+			os.Exit(0)
+		}
+		if err := gui.RunLibrary(reg, media.NewViewer()); err != nil {
+			fmt.Fprintf(os.Stderr, "✗ %v\n", err)
+			os.Exit(1)
+		}
 		os.Exit(0)
 	}
 

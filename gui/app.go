@@ -38,6 +38,7 @@ import (
 	imgdraw "golang.org/x/image/draw"
 
 	"study/deck"
+	"study/library"
 	"study/media"
 	"study/progress"
 	"study/quiz"
@@ -245,6 +246,19 @@ type App struct {
 	clipboardAtom xproto.Atom // CLIPBOARD selection (Ctrl+V source)
 	utf8Atom      xproto.Atom // UTF8_STRING conversion target
 	selPropAtom   xproto.Atom // scratch property the selection is delivered to
+
+	// Library screen state (see library.go). reg is non-nil when the app was
+	// started as the library (RunLibrary): with no engine loaded the library
+	// screen is what's shown, and a session that ends returns to it instead of
+	// exiting. rows are the screen's lines in display order (headings and
+	// decks), sel the selected row, libTop the first visible one (scrolling).
+	// libMsg is a one-line notice under the list — a launch that had nothing
+	// to serve, a deck that didn't parse.
+	reg    *library.Registry
+	rows   []libRow
+	sel    int
+	libTop int
+	libMsg string
 }
 
 const (
@@ -283,10 +297,35 @@ const (
 	speedStep    = 0.25
 )
 
-// Run launches the X11 quiz window. reverse is true when the deck was flipped
-// for production practice (--reverse), which changes how the result screen
-// reveals the answer (native script + audio) rather than the quiz mechanics.
+// Run launches the X11 quiz window for a single session. reverse is true when
+// the deck was flipped for production practice (--reverse), which changes how
+// the result screen reveals the answer (native script + audio) rather than
+// the quiz mechanics.
 func Run(engine *quiz.Engine, viewer *media.Viewer, store *progress.Store, reverse bool) error {
+	app := &App{
+		engine:  engine,
+		viewer:  viewer,
+		store:   store,
+		reverse: reverse,
+	}
+	return app.main()
+}
+
+// RunLibrary launches the X11 window on the library screen: every shelved
+// deck with its due counts, each launchable into a session that comes back
+// here when it ends.
+func RunLibrary(reg *library.Registry, viewer *media.Viewer) error {
+	app := &App{
+		viewer: viewer,
+		reg:    reg,
+	}
+	return app.main()
+}
+
+// main opens the window and runs the event loop until the app exits: the
+// shared body of Run (one session) and RunLibrary (the library screen,
+// sessions launched and shed as the user picks decks).
+func (a *App) main() error {
 	// Detect and apply theme.
 	if detectTheme() == "light" {
 		applyScheme(lightScheme)
@@ -300,49 +339,49 @@ func Run(engine *quiz.Engine, viewer *media.Viewer, store *progress.Store, rever
 	}
 	defer xu.Conn().Close()
 
-	app := &App{
-		xu:      xu,
-		engine:  engine,
-		viewer:  viewer,
-		store:   store,
-		start:   time.Now(),
-		width:   defaultWidth,
-		height:  defaultHeight,
-		reverse: reverse,
+	a.xu = xu
+	a.start = time.Now()
+	a.width = defaultWidth
+	a.height = defaultHeight
+
+	// Base font size and audio speed: the deck's "# font-size:" and
+	// "# audio-speed:" directives if set, else defaults. The library screen
+	// always opens at the defaults; launching a deck re-applies its own.
+	a.baseFontPt = defaultFontPt
+	a.audioSpeed = defaultSpeed
+	if a.engine != nil {
+		if pt := a.engine.FontSize(); pt > 0 {
+			a.baseFontPt = clampFontPt(float64(pt))
+		}
+		if x := a.engine.Speed(); x > 0 {
+			a.audioSpeed = clampSpeed(x)
+		}
+	}
+	a.initialFontPt = a.baseFontPt // Ctrl+0 returns here
+
+	if a.reg != nil {
+		a.refreshLibrary()
 	}
 
-	// Base font size: the deck's "# font-size:" directive if set, else default.
-	app.baseFontPt = defaultFontPt
-	if pt := engine.FontSize(); pt > 0 {
-		app.baseFontPt = clampFontPt(float64(pt))
-	}
-	app.initialFontPt = app.baseFontPt // Ctrl+0 returns here
-
-	// Audio speed: the deck's "# audio-speed:" directive if set, else default.
-	app.audioSpeed = defaultSpeed
-	if x := engine.Speed(); x > 0 {
-		app.audioSpeed = clampSpeed(x)
-	}
-
-	if err := app.loadFonts(); err != nil {
+	if err := a.loadFonts(); err != nil {
 		return fmt.Errorf("loading fonts: %w", err)
 	}
 
 	// Load an Arabic-capable font for shaping RTL scripts (best-effort; decks
 	// without Arabic text are unaffected if none is found).
-	app.loadArabicFont()
+	a.loadArabicFont()
 
 	// Create window.
 	win, err := xwindow.Generate(xu)
 	if err != nil {
 		return fmt.Errorf("creating window: %w", err)
 	}
-	app.win = win
+	a.win = win
 
 	// Convert bgColor to X11 pixel value.
 	bgPixel := uint32(bgColor.R)<<16 | uint32(bgColor.G)<<8 | uint32(bgColor.B)
 
-	win.Create(xu.RootWin(), 0, 0, app.width, app.height,
+	win.Create(xu.RootWin(), 0, 0, a.width, a.height,
 		xproto.CwBackPixel|xproto.CwEventMask,
 		bgPixel,
 		xproto.EventMaskExposure|
@@ -358,52 +397,56 @@ func Run(engine *quiz.Engine, viewer *media.Viewer, store *progress.Store, rever
 		return fmt.Errorf("setting title: %w", err)
 	}
 
-	// Handle graceful close.
+	// Handle graceful close. The window closing always exits the app — even
+	// mid-session with a library to return to, dismissing the window means go.
 	win.WMGracefulClose(func(w *xwindow.Window) {
-		app.quit()
+		a.exit()
 	})
 
 	win.Map()
 
 	// Load the first card's media, play its audio, and arm its countdown (or,
-	// on a first-viewing preview, reveal the answer side instead).
-	app.presentCard()
+	// on a first-viewing preview, reveal the answer side instead). The library
+	// screen has no card yet — its first session starts on launch.
+	if a.engine != nil {
+		a.presentCard()
+	}
 
 	// Set up event handlers.
 	keybind.Initialize(xu)
-	app.setupAtoms()
+	a.setupAtoms()
 
 	xevent.KeyPressFun(func(xu *xgbutil.XUtil, ev xevent.KeyPressEvent) {
-		app.handleKey(ev)
+		a.handleKey(ev)
 	}).Connect(xu, win.Id)
 
 	xevent.ButtonPressFun(func(xu *xgbutil.XUtil, ev xevent.ButtonPressEvent) {
-		app.handleButton(ev)
+		a.handleButton(ev)
 	}).Connect(xu, win.Id)
 
 	xevent.SelectionNotifyFun(func(xu *xgbutil.XUtil, ev xevent.SelectionNotifyEvent) {
-		app.handleSelectionNotify(ev)
+		a.handleSelectionNotify(ev)
 	}).Connect(xu, win.Id)
 
 	xevent.ExposeFun(func(xu *xgbutil.XUtil, ev xevent.ExposeEvent) {
-		app.render()
+		a.render()
 	}).Connect(xu, win.Id)
 
 	xevent.ConfigureNotifyFun(func(xu *xgbutil.XUtil, ev xevent.ConfigureNotifyEvent) {
-		if int(ev.Width) == app.width && int(ev.Height) == app.height {
+		if int(ev.Width) == a.width && int(ev.Height) == a.height {
 			return // position-only change; nothing to redraw
 		}
-		app.width = int(ev.Width)
-		app.height = int(ev.Height)
+		a.width = int(ev.Width)
+		a.height = int(ev.Height)
 		// Rescale fonts to the new window size. Keep the old faces on error.
-		if err := app.buildFonts(); err != nil {
+		if err := a.buildFonts(); err != nil {
 			fmt.Fprintf(os.Stderr, "rescaling fonts: %v\n", err)
 		}
-		app.render()
+		a.render()
 	}).Connect(xu, win.Id)
 
 	// Initial render.
-	app.render()
+	a.render()
 
 	// Main event loop. We use MainPing instead of the simpler xevent.Main so
 	// we can interleave a periodic timer tick that drives the per-question
@@ -417,7 +460,7 @@ func Run(engine *quiz.Engine, viewer *media.Viewer, store *progress.Store, rever
 		case <-pingBefore:
 			<-pingAfter
 		case <-ticker.C:
-			app.tick()
+			a.tick()
 		case <-pingQuit:
 			return nil
 		}
@@ -454,6 +497,10 @@ func (a *App) startTimer() {
 // time limit is showing, it re-renders the countdown and, once the deadline
 // passes, records the card as wrong.
 func (a *App) tick() {
+	if a.engine == nil {
+		return // library screen: nothing counts down
+	}
+
 	// Wrong-answer pause: keep the result screen's countdown moving, and
 	// redraw once more when it expires so it disappears.
 	if a.engine.State() == quiz.ShowResult && !a.resultLock.IsZero() {
@@ -551,6 +598,12 @@ func (a *App) handleKey(ev xevent.KeyPressEvent) {
 			a.setFontSize(a.initialFontPt)
 			return
 		}
+	}
+
+	// No engine means the library screen is up.
+	if a.engine == nil {
+		a.handleLibraryKey(key)
+		return
 	}
 
 	switch a.engine.State() {
@@ -854,7 +907,7 @@ func (a *App) handleButton(ev xevent.ButtonPressEvent) {
 	if ev.Detail != middleButton {
 		return
 	}
-	if a.engine.State() != quiz.ShowQuestion || a.engine.Mode() != deck.ModeType {
+	if a.engine == nil || a.engine.State() != quiz.ShowQuestion || a.engine.Mode() != deck.ModeType {
 		return
 	}
 	a.requestPaste(xproto.AtomPrimary, ev.Time)
@@ -882,7 +935,7 @@ func (a *App) handleSelectionNotify(ev xevent.SelectionNotifyEvent) {
 	if ev.Property == 0 {
 		return
 	}
-	if a.engine.State() != quiz.ShowQuestion || a.engine.Mode() != deck.ModeType {
+	if a.engine == nil || a.engine.State() != quiz.ShowQuestion || a.engine.Mode() != deck.ModeType {
 		return
 	}
 
@@ -906,13 +959,32 @@ func (a *App) handleSelectionNotify(ev xevent.SelectionNotifyEvent) {
 	a.render()
 }
 
+// quit ends the current session: back to the library when the session was
+// launched from it, out of the app otherwise (including quitting the library
+// screen itself, which has no session).
 func (a *App) quit() {
+	if a.reg != nil && a.engine != nil {
+		a.viewer.CloseAll()
+		a.saveProgress()
+		a.returnToLibrary()
+		return
+	}
+	a.exit()
+}
+
+// exit leaves the app unconditionally — the window being closed means go,
+// even mid-session with a library to return to.
+func (a *App) exit() {
 	a.viewer.CloseAll()
 	a.saveProgress()
 	xevent.Quit(a.xu)
 }
 
 func (a *App) saveProgress() {
+	// The library screen has no session, so nothing to save.
+	if a.store == nil {
+		return
+	}
 	// Progress is flushed after every answer (not just at session end) — an
 	// ungraceful kill then loses at most nothing. Most save failures are transient (a brief
 	// filesystem hiccup), so retry once before giving up. A persistent failure
@@ -1178,17 +1250,21 @@ func (a *App) render() {
 	// Fill background.
 	draw.Draw(canvas, canvas.Bounds(), image.NewUniform(bgColor), image.Point{}, draw.Src)
 
-	switch a.engine.State() {
-	case quiz.ShowQuestion:
-		a.renderQuestion(canvas)
-	case quiz.ShowResult:
-		a.renderResult(canvas)
-	case quiz.ShowPreview:
-		a.renderPreview(canvas)
-	case quiz.Done:
-		a.renderSummary(canvas)
-	case quiz.CaughtUp:
-		a.renderCaughtUp(canvas)
+	if a.engine == nil {
+		a.renderLibrary(canvas)
+	} else {
+		switch a.engine.State() {
+		case quiz.ShowQuestion:
+			a.renderQuestion(canvas)
+		case quiz.ShowResult:
+			a.renderResult(canvas)
+		case quiz.ShowPreview:
+			a.renderPreview(canvas)
+		case quiz.Done:
+			a.renderSummary(canvas)
+		case quiz.CaughtUp:
+			a.renderCaughtUp(canvas)
+		}
 	}
 
 	// Persistent warning when progress isn't being saved. Pinned to the very
