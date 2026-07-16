@@ -4,7 +4,7 @@ A flashcard quiz tool. Decks are plain text files. Available for Linux and web. 
 
 [study.fftp.io](https://study.fftp.io/)
 
-The default study mode, `adaptive`, is a [spaced-repetition](https://en.wikipedia.org/wiki/Spaced_repetition) scheduler based on evidence gathered from these papers:
+study uses a [spaced-repetition](https://en.wikipedia.org/wiki/Spaced_repetition) scheduler based on evidence gathered from these papers:
 
 | Paper | Takeaway |
 |-------|----------|
@@ -84,7 +84,7 @@ study example.deck
 
 For more, [examples/basic.deck](examples/basic.deck) is a small beginner deck,
 and the [language packs](https://github.com/wickedjargon/study-language-packages)
-are full-size decks with audio, native script, and pack directories.
+are full-size decks. 
 
 # Web version
 
@@ -93,15 +93,7 @@ make study-web
 ./study-web [flags] <deck-or-dir>...
 ```
 
-Each argument is a deck (a `*.deck` file or pack directory), or a directory of
-decks. `group=path` nests a pack as a topic of an existing group;
-`path@Display Name` overrides the name shown. `make run` starts the server
-with this machine's decks — see [RUNNING.md](RUNNING.md).
-
-The web version follows the same scheduler as the desktop, with two guest
-conveniences: unseen cards introduce themselves once before being quizzed
-("skip intros" turns that off), and every deck offers a review mode that flips
-through cards, answers visible, without recording anything.
+See [RUNNING.md](RUNNING.md) for more information.
 
 # Desktop usage
 
