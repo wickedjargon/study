@@ -1,4 +1,4 @@
-// study — a suckless quiz tool for flashcard-style learning.
+// study — a flashcard quiz tool.
 //
 // Usage: study [flags] <deck-file | pack-directory>
 //
@@ -24,7 +24,7 @@ import (
 	"study/session"
 )
 
-const helpText = `study — suckless quiz tool
+const helpText = `study — A flashcard quiz tool
 
 usage: study [flags] <deck-file | pack-directory>
 
