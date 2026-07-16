@@ -36,6 +36,10 @@ The default study mode, `adaptive`, is a [spaced-repetition](https://en.wikipedi
 
 ![wrong answer provided](screenshot-wrong-answer.png)
 
+## Desktop: Library
+
+![the library: watched decks with due counts](screenshot-library.png)
+
 ## Web
 
 ![a multiple choice image card in study-web](screenshot-web.png)
@@ -137,10 +141,6 @@ Open the library:
 ```bash
 study
 ```
-
-### Screenshot of Library
-
-![the library: watched decks with due counts](screenshot-library.png)
 
 ## Card order
 
