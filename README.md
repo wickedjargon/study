@@ -102,7 +102,7 @@ through cards, answers visible, without recording anything.
 # Desktop usage
 
 ```
-study [flags] <deck-file | pack-directory>
+study [flags] [deck-file | pack-directory]
 ```
 
 | Flag | Description |
@@ -119,7 +119,34 @@ study [flags] <deck-file | pack-directory>
 | `--audio-speed <X>` | Override audio playback speed (0.25–4.0) |
 | `--stats` | Print progress summary (incl. what's due) and exit |
 | `--forget` | Clear saved progress for the studied direction only (combine with `--reverse`) |
+| `--watch <dir>` | Add a directory to the [library](#library) |
+| `--unwatch <dir>` | Remove a watched directory |
+| `--library` | Print the library with due counts and exit |
 | `--help` | Show help |
+
+## Library
+
+Running `study` with no deck argument opens the library: every deck you
+keep for long-term study, with due counts for both directions and when
+each was last studied. Pick a deck and a session starts. When it ends
+you land back in the library with fresh counts, ready for the next
+deck.
+
+Membership is explicit. Studying a file never shelves it, so trying out
+a downloaded deck with `study test.deck` leaves your library untouched.
+The library is the directories you watch:
+
+```bash
+study --watch ~/decks
+```
+
+Every `*.deck` file in a watched directory is a library deck, and every
+subdirectory containing `*.deck` files is a library pack. To shelve a
+deck for good, move it into a watched directory.
+
+Library screen keys: `enter` studies the selected deck as a direct run
+would. `r` studies it reversed. `f` flips through it without recording.
+`w` crams its weak cards. `j`/`k` or arrows move, `q` quits.
 
 ## Card order
 
