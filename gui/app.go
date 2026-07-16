@@ -729,6 +729,12 @@ func (a *App) handleChoiceKey(key string) {
 		// exit can't lose this answer.
 		a.saveProgress()
 		a.render()
+	case "0":
+		// Declining beats guessing blind: a random pick that happens to be
+		// another card's answer would fake a confusion signal.
+		a.setResult(a.engine.AnswerNoIdea())
+		a.saveProgress()
+		a.render()
 	case "Escape":
 		a.endSession()
 	}
@@ -1235,13 +1241,17 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 		a.drawText(canvas, prompt, padding+20, y, a.fontRegular, accentColor)
 		action = "enter: submit"
 	} else {
-		// Choices.
+		// Choices, then the dim opt-out — for when every option would be a
+		// blind guess. Deliberately understated: an educated guess is still
+		// wanted, this is only the honest exit from picking at random.
 		opts := a.engine.Options()
 		for i, opt := range opts {
 			line := fmt.Sprintf("%d)  %s", i+1, opt)
 			a.drawText(canvas, line, padding+20, y, a.fontRegular, textColor)
 			y += lineHeight(a.fontRegular)
 		}
+		a.drawText(canvas, "0)  no idea", padding+20, y, a.fontRegular, dimColor)
+		y += lineHeight(a.fontRegular)
 		action = fmt.Sprintf("1-%d: answer", len(opts))
 	}
 
@@ -1336,6 +1346,18 @@ func (a *App) renderResult(canvas *image.RGBA) {
 			}
 			y += lineHeight(a.fontRegular)
 		}
+		// The opt-out row keeps its place from the question screen; it takes
+		// the ✘ when it was the pick.
+		noIdea := "0)  no idea"
+		c := dimColor
+		if a.result.NoIdea {
+			c = redColor
+		}
+		a.drawText(canvas, noIdea, padding+20, y, a.fontRegular, c)
+		if a.result.NoIdea {
+			a.drawMarkAfter(canvas, noIdea, padding+20, y, false, c)
+		}
+		y += lineHeight(a.fontRegular)
 	}
 
 	y += a.scaled(16)
