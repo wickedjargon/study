@@ -18,6 +18,7 @@ import (
 
 	"study/deck"
 	"study/gui"
+	"study/library"
 	"study/media"
 	"study/progress"
 	"study/quiz"
@@ -55,6 +56,16 @@ flags (each overrides the deck header's setting for this session):
   --forget              clear saved progress for this deck (this direction
                         only; combine with --reverse to clear reverse progress)
   --help                show this help
+
+library (the decks shelved for long-term study — studying a file never
+shelves it; membership is explicit):
+  --watch <dir>         add a directory to the library: every *.deck file
+                        and pack subdirectory inside is a library deck
+  --unwatch <dir>       remove a watched directory
+  --pin <path>          shelve a single deck file or pack directory that
+                        lives outside every watched directory
+  --unpin <path>        remove a pinned deck
+  --library             print the library with due counts and exit
 
 deck format:
   plain text, blank lines separate cards.
@@ -95,12 +106,28 @@ func main() {
 	audioSpeedFlag := flag.String("audio-speed", "", "override audio playback speed (0.25-4.0)")
 	stats := flag.Bool("stats", false, "print saved progress summary for the deck and exit")
 	forget := flag.Bool("forget", false, "clear saved progress for this deck")
+	watch := flag.String("watch", "", "add a directory of decks to the library")
+	unwatch := flag.String("unwatch", "", "remove a watched directory from the library")
+	pin := flag.String("pin", "", "shelve a single deck (file or pack directory) in the library")
+	unpin := flag.String("unpin", "", "remove a pinned deck from the library")
+	libraryFlag := flag.Bool("library", false, "print the library with due counts and exit")
 	help := flag.Bool("help", false, "show help")
 
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, helpText)
 	}
 	flag.Parse()
+
+	// Library maintenance runs without a deck argument and exits, like --stats
+	// and --forget do with one.
+	if *watch != "" || *unwatch != "" || *pin != "" || *unpin != "" {
+		editRegistry(*watch, *unwatch, *pin, *unpin)
+		os.Exit(0)
+	}
+	if *libraryFlag {
+		printLibrary()
+		os.Exit(0)
+	}
 
 	if *help || flag.NArg() == 0 {
 		fmt.Println(helpText)
@@ -266,6 +293,115 @@ func main() {
 		fmt.Fprintf(os.Stderr, "✗ %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// openRegistry loads the library registry from the study data directory,
+// exiting on failure (a corrupt registry file should be seen, not silently
+// replaced by an empty library).
+func openRegistry() *library.Registry {
+	dir, err := progress.Dir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "✗ %v\n", err)
+		os.Exit(1)
+	}
+	reg, err := library.Open(dir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "✗ %v\n", err)
+		os.Exit(1)
+	}
+	return reg
+}
+
+// editRegistry applies the library-membership flags (--watch/--unwatch/
+// --pin/--unpin), saves, and prints the resulting registry so the state just
+// changed is visible without a second command.
+func editRegistry(watch, unwatch, pin, unpin string) {
+	reg := openRegistry()
+	apply := func(arg string, op func(string) error) {
+		if arg == "" {
+			return
+		}
+		if err := op(arg); err != nil {
+			fmt.Fprintf(os.Stderr, "✗ %v\n", err)
+			os.Exit(1)
+		}
+	}
+	apply(watch, reg.Watch)
+	apply(unwatch, reg.Unwatch)
+	apply(pin, reg.Pin)
+	apply(unpin, reg.Unpin)
+	if err := reg.Save(); err != nil {
+		fmt.Fprintf(os.Stderr, "✗ %v\n", err)
+		os.Exit(1)
+	}
+	if reg.Empty() {
+		fmt.Println("library is empty — add decks with --watch <dir> or --pin <path>")
+		return
+	}
+	for _, d := range reg.Dirs {
+		fmt.Printf("watching  %s\n", d)
+	}
+	for _, p := range reg.Pins {
+		fmt.Printf("pinned    %s\n", p)
+	}
+}
+
+// printLibrary writes the library table to stdout: every shelved deck with
+// its due counts and when it was last studied. The CLI twin of the library
+// screen, the way --stats mirrors the summary screen.
+func printLibrary() {
+	reg := openRegistry()
+	if reg.Empty() {
+		fmt.Println("library is empty — add decks with --watch <dir> or --pin <path>")
+		return
+	}
+	now := time.Now()
+	for i, g := range reg.Scan() {
+		if i > 0 {
+			fmt.Println()
+		}
+		if g.Dir == "" {
+			fmt.Println("pinned:")
+		} else {
+			fmt.Printf("%s:\n", g.Dir)
+		}
+		if g.Err != nil {
+			fmt.Printf("  ✗ %v\n", g.Err)
+			continue
+		}
+		if len(g.Entries) == 0 {
+			fmt.Println("  (no decks)")
+			continue
+		}
+		for _, e := range g.Entries {
+			fmt.Printf("  %s\n", libraryRow(e, now))
+		}
+	}
+}
+
+// libraryRow renders one deck's line in the --library listing.
+func libraryRow(e library.Entry, now time.Time) string {
+	name := e.Name
+	if e.Pack {
+		name += "/"
+	}
+	if e.Missing {
+		return fmt.Sprintf("%-24s (missing)", name)
+	}
+	info := library.Describe(e.Path, now)
+	if info.Err != nil {
+		return fmt.Sprintf("%-24s ✗ %v", name, info.Err)
+	}
+	due := library.DueLabel(info.DueReviews, info.DueNew)
+	if info.Reversible {
+		due += "  ·  reverse " + library.DueLabel(info.RevReviews, info.RevNew)
+	}
+	cards := "cards"
+	if info.Cards == 1 {
+		cards = "card"
+	}
+	return fmt.Sprintf("%-24s %4d %-6s  %-42s %s",
+		name, info.Cards, cards, due, library.AgoLabel(info.LastStudied, now))
 }
 
 // parseAhead parses an --ahead value: a whole number of days >= 1, or "all".

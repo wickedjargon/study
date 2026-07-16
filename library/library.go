@@ -251,6 +251,31 @@ type Info struct {
 	Err         error     // the deck or its progress couldn't be loaded
 }
 
+// DueLabel formats one direction's due counts for a library row, shared by
+// the CLI listing and the library screen.
+func DueLabel(reviews, fresh int) string {
+	if reviews == 0 && fresh == 0 {
+		return "caught up"
+	}
+	return fmt.Sprintf("due %d + %d new", reviews, fresh)
+}
+
+// AgoLabel formats when a deck was last studied, for a library row.
+func AgoLabel(last, now time.Time) string {
+	if last.IsZero() {
+		return "never studied"
+	}
+	days := int(now.Sub(last).Hours() / 24)
+	switch {
+	case days < 1:
+		return "studied today"
+	case days == 1:
+		return "studied yesterday"
+	default:
+		return fmt.Sprintf("studied %dd ago", days)
+	}
+}
+
 // Describe parses the deck at path and joins it with its saved progress.
 // Errors come back inside the Info — one unparsable deck grays out its row,
 // it doesn't take down the library.
