@@ -86,3 +86,53 @@ func TestDueReviewsLaunchQuizzes(t *testing.T) {
 	}
 }
 
+// TestProgressFillsAsCardsComplete: the session bar is criterion completions
+// over session cards — it stalls on a miss, never dips, and hits 100 exactly
+// when the summary appears.
+func TestProgressFillsAsCardsComplete(t *testing.T) {
+	d := testDeck(2)
+	d.Order = deck.OrderAdaptive
+	e := NewEngine(d, nil, newTestStore(t))
+
+	if p := e.Progress(); p != 0 {
+		t.Fatalf("Progress at start = %d, want 0", p)
+	}
+
+	// Drive the session to completion, checking the bar only moves forward.
+	prev := 0
+	for i := 0; e.State() != Done && i < 100; i++ {
+		switch e.State() {
+		case ShowQuestion:
+			answer := e.Current().AnswerText
+			if i == 0 {
+				answer = "wrong" // one miss: the bar must stall, not dip
+			}
+			e.AnswerTyped(answer)
+			if p := e.Progress(); p < prev {
+				t.Fatalf("Progress dipped %d -> %d after an answer", prev, p)
+			} else {
+				prev = p
+			}
+		case ShowResult:
+			e.Next()
+		}
+	}
+	if e.State() != Done {
+		t.Fatal("session did not complete")
+	}
+	if p := e.Progress(); p != 100 {
+		t.Errorf("Progress at Done = %d, want 100", p)
+	}
+}
+
+// TestProgressZeroForLapModes: sequential wraps forever; there is no
+// completion to report.
+func TestProgressZeroForLapModes(t *testing.T) {
+	d := testDeck(2)
+	d.Order = deck.OrderSequential
+	e := NewEngine(d, nil, nil)
+	e.AnswerTyped(e.Current().AnswerText)
+	if p := e.Progress(); p != 0 {
+		t.Errorf("sequential Progress = %d, want 0", p)
+	}
+}

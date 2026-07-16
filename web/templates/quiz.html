@@ -171,6 +171,7 @@
     <p class="bigmark">✓</p>
     <p class="lede">You're all caught up</p>
     <p class="dim">Nothing is due for review{{if .NextDue}}: next review {{.NextDue}}{{end}}.</p>
+    {{if .Remaining}}<p class="dim">Already studied today — {{.Remaining}} new cards are waiting for tomorrow's batch.</p>{{end}}
   </section>
   <div class="actions" id="primaryform">
     <form method="post" action="{{.Base}}/continue"><button>keep studying anyway</button></form>

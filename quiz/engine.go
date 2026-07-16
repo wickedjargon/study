@@ -572,6 +572,24 @@ func (e *Engine) Remaining() int {
 	return n
 }
 
+// Progress returns the session's completion percentage: cards that have met
+// their criterion over the session's cards. Both frontends draw it as a bar —
+// it stalls on a miss (the card owes more recalls) but never dips, and full
+// coincides with the session summary. The lap modes (sequential,
+// flip-through) never complete and always report 0.
+func (e *Engine) Progress() int {
+	if len(e.need) == 0 {
+		return 0
+	}
+	done := 0
+	for _, n := range e.need {
+		if n <= 0 {
+			done++
+		}
+	}
+	return done * 100 / len(e.need)
+}
+
 // Answer submits an answer (0-based index) and returns the result.
 // Transitions state from ShowQuestion to ShowResult.
 func (e *Engine) Answer(choice int) *Result {

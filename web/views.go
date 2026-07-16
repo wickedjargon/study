@@ -254,12 +254,11 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		view.GroupName = ""
 		view.DeckName = g.Name
 	}
-	if size := e.DeckSize(); size > 0 {
-		// On a result screen the just-requeued card is momentarily counted
-		// both as current and in the queue, pushing Remaining past size —
-		// clamp, or the bar's width goes negative (which CSS renders full).
-		view.Progress = max((size-view.Remaining)*100/size, 0)
-	}
+	// Criterion completions over session cards — the engine's number, shared
+	// with the desktop hairline. Counting completions (rather than deriving
+	// from Remaining) keeps the bar from dipping on a result screen, where
+	// the just-requeued card was momentarily counted twice.
+	view.Progress = e.Progress()
 	speed := sess.deck.Speed
 	if speed == 0 {
 		speed = 1.0

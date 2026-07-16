@@ -1261,10 +1261,13 @@ func (a *App) render() {
 		switch a.engine.State() {
 		case quiz.ShowQuestion:
 			a.renderQuestion(canvas)
+			a.drawProgressBar(canvas)
 		case quiz.ShowResult:
 			a.renderResult(canvas)
+			a.drawProgressBar(canvas)
 		case quiz.ShowPreview:
 			a.renderPreview(canvas)
+			a.drawProgressBar(canvas)
 		case quiz.Done:
 			a.renderSummary(canvas)
 		case quiz.CaughtUp:
@@ -2210,6 +2213,25 @@ func (a *App) drawControlsBox(canvas *image.RGBA, lines []string) {
 		a.drawText(canvas, l, box.Min.X+pad, y, a.fontSmall, dimColor)
 		y += lh
 	}
+}
+
+// drawProgressBar draws the session-completion hairline across the very top
+// of the quiz screens — the desktop twin of the web header's bar. The filled
+// width is engine.Progress (cards past their criterion over cards in
+// session): it stalls after a miss, never dips, and spans the window exactly
+// when the summary appears. The lap modes wrap forever, so no bar.
+func (a *App) drawProgressBar(canvas *image.RGBA) {
+	switch a.engine.Order() {
+	case deck.OrderAdaptive, deck.OrderWeakOnly:
+	default:
+		return
+	}
+	w := a.width * a.engine.Progress() / 100
+	if w <= 0 {
+		return
+	}
+	bar := image.Rect(0, 0, w, 2)
+	draw.Draw(canvas, bar, image.NewUniform(accentColor), image.Point{}, draw.Src)
 }
 
 // strokeRect draws a 1px border just inside r.
