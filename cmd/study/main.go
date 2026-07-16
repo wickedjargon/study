@@ -440,8 +440,13 @@ func printStats(d *deck.Deck, store *progress.Store) {
 	fmt.Printf("    Wrong          %d\n", info.Wrong)
 	fmt.Printf("    Accuracy       %.0f%%\n", info.Accuracy())
 
-	// Weakest cards first, so the things worth reviewing are at the top.
-	fmt.Printf("\n  Weakest cards\n")
+	// Weakest first, so the things worth reviewing are at the top; only cards
+	// below the weak threshold qualify at all.
+	if len(info.Weakest) == 0 {
+		fmt.Println("\n  No weak cards — everything studied is above the weak threshold.")
+		return
+	}
+	fmt.Printf("\n  Weak cards\n")
 	for _, r := range info.Weakest {
 		fmt.Printf("    %3.0f%% acc  conf %3.0f   %s\n", r.Accuracy, r.Confidence, r.Label)
 	}

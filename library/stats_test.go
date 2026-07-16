@@ -29,8 +29,9 @@ func TestStats(t *testing.T) {
 		t.Errorf("fresh deck has weakest list: %+v", fresh.Weakest)
 	}
 
-	// Record one answered card and re-read: studied and the weakest listing
-	// follow, and the numbers stay direction-scoped (reverse still fresh).
+	// One card missed (weak), one answered correctly (confidence above the
+	// weak threshold): only the weak one may appear in the listing, and the
+	// numbers stay direction-scoped (reverse still fresh).
 	d, err := deck.Parse(path)
 	if err != nil {
 		t.Fatal(err)
@@ -39,7 +40,8 @@ func TestStats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store.RecordCorrect(d.Cards[0].ID)
+	store.RecordWrong(d.Cards[0].ID)
+	store.RecordCorrect(d.Cards[1].ID)
 	if err := store.Save(); err != nil {
 		t.Fatal(err)
 	}
@@ -48,14 +50,14 @@ func TestStats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Studied != 1 || info.Correct != 1 || info.Wrong != 0 {
-		t.Errorf("after one correct: %+v, want 1 studied, 1 correct", info)
+	if info.Studied != 2 || info.Correct != 1 || info.Wrong != 1 {
+		t.Errorf("after one wrong + one correct: %+v", info)
 	}
-	if len(info.Weakest) != 1 || info.Weakest[0].Accuracy != 100 {
-		t.Errorf("weakest = %+v, want the one studied card at 100%%", info.Weakest)
+	if len(info.Weakest) != 1 || info.Weakest[0].Accuracy != 0 {
+		t.Errorf("weak list = %+v, want only the missed card — a strong card must not parade as weakest", info.Weakest)
 	}
-	if acc := info.Accuracy(); acc != 100 {
-		t.Errorf("Accuracy = %.0f, want 100", acc)
+	if acc := info.Accuracy(); acc != 50 {
+		t.Errorf("Accuracy = %.0f, want 50", acc)
 	}
 
 	rev, err := Stats(path, true, time.Now())

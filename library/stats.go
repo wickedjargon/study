@@ -26,7 +26,7 @@ type StatsInfo struct {
 	Correct    int       // all-time, this direction
 	Wrong      int
 	Reversible bool       // the deck has a reversed direction to report on
-	Weakest    []WeakCard // studied cards, lowest confidence first, capped
+	Weakest    []WeakCard // studied cards below the weak threshold, weakest first, capped
 }
 
 // WeakCard is one line of the weakest-cards listing.
@@ -64,11 +64,16 @@ func StatsOf(d *deck.Deck, store *progress.Store, now time.Time) StatsInfo {
 		if cp.IsMastered() {
 			info.Mastered++
 		}
-		info.Weakest = append(info.Weakest, WeakCard{
-			Label:      deck.CardLabel(c),
-			Accuracy:   cp.Accuracy(),
-			Confidence: cp.Confidence(),
-		})
+		// Only genuinely weak cards make the list — the same absolute cutoff
+		// weak-only cram uses. Without it, a deck in good shape would parade
+		// its strongest-but-bottom cards as "weakest".
+		if cp.Confidence() < progress.WeakThreshold {
+			info.Weakest = append(info.Weakest, WeakCard{
+				Label:      deck.CardLabel(c),
+				Accuracy:   cp.Accuracy(),
+				Confidence: cp.Confidence(),
+			})
+		}
 	}
 
 	reviews, fresh, _, nextDue := quiz.SplitDue(d.Cards, store, now)

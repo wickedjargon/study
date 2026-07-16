@@ -91,9 +91,12 @@ func (a *App) renderStats(canvas *image.RGBA) {
 	if info.Studied == 0 {
 		y += a.scaled(16)
 		a.drawText(canvas, "no progress recorded yet for this direction", x, y, a.fontSmall, dimColor)
-	} else if len(info.Weakest) > 0 {
+	} else if len(info.Weakest) == 0 {
+		y += a.scaled(16)
+		a.drawText(canvas, "no weak cards — everything studied is above the weak threshold", x, y, a.fontSmall, dimColor)
+	} else {
 		y += a.scaled(20)
-		a.drawText(canvas, "── Weakest cards ──", x, y, a.fontSmall, dimColor)
+		a.drawText(canvas, "── Weak cards ──", x, y, a.fontSmall, dimColor)
 		y += lineHeight(a.fontSmall) + a.scaled(6)
 
 		// Number columns right-aligned so the labels line up in a
