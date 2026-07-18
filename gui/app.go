@@ -1349,6 +1349,8 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 		cardTag = "retry"
 	} else if a.engine.CurrentIsNew() {
 		cardTag, tagColor = "new", accentColor
+	} else if a.engine.CurrentIsLearning() {
+		cardTag = "learning"
 	} else if a.engine.CurrentIsAhead() {
 		cardTag = "ahead"
 	}

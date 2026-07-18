@@ -114,9 +114,16 @@ type Engine struct {
 	lapsed map[string]bool
 
 	// newCards marks cards that entered this session never studied, decided
-	// once at session start (a card answered mid-session stays "new" for the
-	// session even though the store now has history for it).
+	// once at session start. It drives the introduction mechanics (window
+	// slots, first-viewing reveals) for the whole session; the user-facing
+	// "new" label additionally requires the card to still be unanswered —
+	// after its first graded answer it reads "learning" instead.
 	newCards map[string]bool
+
+	// answered marks cards graded at least once this session, whatever the
+	// outcome. It splits the label timeline: "new" until the first graded
+	// answer, "learning" on the serves after it.
+	answered map[string]bool
 
 	// ahead marks studied cards that entered this session before their review
 	// date (--ahead, or a weak-only cram of a not-yet-due card). Early
@@ -226,6 +233,7 @@ func NewEngine(d *deck.Deck, pool []deck.Card, store *progress.Store) *Engine {
 		preview:       d.Preview,
 		previewed:     make(map[string]bool),
 		newCards:      make(map[string]bool),
+		answered:      make(map[string]bool),
 	}
 	for i := range d.Cards {
 		id := d.Cards[i].ID
@@ -413,6 +421,7 @@ func (e *Engine) ContinueAll() {
 	e.current = nil
 	e.lapsed = make(map[string]bool)
 	e.ahead = make(map[string]bool)
+	e.answered = make(map[string]bool)
 	for i, c := range ordered {
 		e.main = append(e.main, queuedCard{card: c, due: e.step + i})
 	}
@@ -549,11 +558,21 @@ func (e *Engine) IsRetry() bool {
 	return e.fromRetry
 }
 
-// CurrentIsNew reports whether the current card entered this session never
-// studied. Decided at session start: a new card keeps the label for the whole
-// session, even after its first answers are recorded.
+// CurrentIsNew reports whether the current card has never been graded, this
+// session or any before it. True only for a brand-new card's preview and its
+// first quiz ask — the label's message is "you can't know this yet". From the
+// first graded answer on, CurrentIsLearning takes over.
 func (e *Engine) CurrentIsNew() bool {
-	return e.current != nil && e.newCards[e.current.ID]
+	return e.current != nil && e.newCards[e.current.ID] && !e.answered[e.current.ID]
+}
+
+// CurrentIsLearning reports whether the current card was graded at least once
+// today and still owes correct recalls before it can leave the session: the
+// follow-up serves of a new card, and any card missed today being
+// re-established. Evidence scheduler only — sequential mode's massed drill
+// wears the retry tag instead.
+func (e *Engine) CurrentIsLearning() bool {
+	return e.evidenceScheduled() && e.current != nil && e.answered[e.current.ID]
 }
 
 // CurrentIsAhead reports whether the current card is being reviewed ahead of
@@ -872,6 +891,7 @@ func (e *Engine) recordAnswer(correct bool) {
 
 // handleCorrect processes a correct answer.
 func (e *Engine) handleCorrect() {
+	e.answered[e.current.ID] = true
 	// Evidence scheduler: one recall down. A card that meets its session
 	// criterion is done — its next appearance is a matter of days, scheduled
 	// in the store — otherwise it returns later this session, spaced out.
@@ -919,6 +939,7 @@ func (e *Engine) handleCorrect() {
 
 // handleWrong processes a wrong answer.
 func (e *Engine) handleWrong() {
+	e.answered[e.current.ID] = true
 	// Evidence scheduler: no massed drill. The card returns after a short —
 	// but nonzero — gap (an immediate repeat would be answered from short-term
 	// memory and teach nothing durable) and owes at least two more spaced

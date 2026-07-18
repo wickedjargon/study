@@ -187,8 +187,9 @@ func TestConfusionDetectedOutsideSession(t *testing.T) {
 	}
 }
 
-// TestCurrentIsNew: the "new this session" label comes from history at session
-// start and sticks for the whole session, even after answers are recorded.
+// TestCurrentIsNew: "new" lasts only until a card's first graded answer —
+// its later serves this session read "learning" instead. A card with prior
+// history is neither on its first serve.
 func TestCurrentIsNew(t *testing.T) {
 	store, err := progress.NewStore(t.TempDir() + "/d.deck")
 	if err != nil {
@@ -197,13 +198,57 @@ func TestCurrentIsNew(t *testing.T) {
 	store.RecordCorrect("ans1") // ans1 has history, ans0/ans2 are new
 	e := NewEngine(confusableDeck(3), nil, store)
 
+	graded := make(map[string]bool)
 	for i := 0; i < 20 && e.State() != Done; i++ {
-		want := e.Current().ID != "ans1"
-		if got := e.CurrentIsNew(); got != want {
-			t.Fatalf("serve %d (%s): CurrentIsNew = %v, want %v", i, e.Current().ID, got, want)
+		id := e.Current().ID
+		wantNew := id != "ans1" && !graded[id]
+		if got := e.CurrentIsNew(); got != wantNew {
+			t.Fatalf("serve %d (%s): CurrentIsNew = %v, want %v", i, id, got, wantNew)
+		}
+		if got := e.CurrentIsLearning(); got != graded[id] {
+			t.Fatalf("serve %d (%s): CurrentIsLearning = %v, want %v", i, id, got, graded[id])
+		}
+		graded[id] = true
+		answerCurrent(e, true)
+		e.Next()
+	}
+	if e.State() != Done {
+		t.Fatal("session never completed")
+	}
+}
+
+// TestLearningAfterLapse: a previously learned card missed today owes more
+// recalls and its re-serves read "learning" — never "new", it has history.
+func TestLearningAfterLapse(t *testing.T) {
+	store, err := progress.NewStore(t.TempDir() + "/d.deck")
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	for i := 0; i < 3; i++ {
+		store.RecordCorrect(fmt.Sprintf("ans%d", i)) // whole deck has history
+	}
+	e := NewEngine(confusableDeck(3), nil, store)
+
+	missed := e.Current().ID
+	answerCurrent(e, false)
+	e.Next()
+
+	seenAgain := false
+	for i := 0; i < 20 && e.State() != Done; i++ {
+		if e.Current().ID == missed {
+			seenAgain = true
+			if e.CurrentIsNew() {
+				t.Fatal("a lapsed card must not read new")
+			}
+			if !e.CurrentIsLearning() {
+				t.Fatal("a lapsed card's re-serve should read learning")
+			}
 		}
 		answerCurrent(e, true)
 		e.Next()
+	}
+	if !seenAgain {
+		t.Fatalf("missed card %s never re-served", missed)
 	}
 	if e.State() != Done {
 		t.Fatal("session never completed")
