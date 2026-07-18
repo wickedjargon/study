@@ -219,6 +219,22 @@ A card with no separator and a `{{...}}` deletion blanks the braced text
 The capital of France is {{Paris}}.
 ```
 
+## Notes
+
+A second `---` adds an optional note: extra context shown only after you
+answer (and wherever the answer is already visible). Text and images only.
+Adding a note to an existing card keeps its progress. See
+[examples/notes.deck](examples/notes.deck):
+
+```
+Garlic: onion or not?
+---
+not onion
+~ onion
+---
+Garlic is Allium sativum. Same genus, different species.
+```
+
 ## Per-card overrides
 
 `# answer-mode:`, `# choice-count:`, and `# time-limit:` inside a card block

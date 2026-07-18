@@ -1,0 +1,54 @@
+# Notes Demo
+# A card's optional third section (question --- answer --- note) holds extra
+# context — text and images — shown only after you answer, and on
+# answer-visible screens (first-view reveal, flip-through). Never with an
+# unanswered question.
+
+Shallot: onion or not?
+---
+onion
+~ not onion
+---
+A shallot is Allium cepa var. aggregatum: a true onion, just a small
+clustering one.
+
+Garlic: onion or not?
+---
+not onion
+~ onion
+---
+Garlic is Allium sativum. Same genus, different species — close, but not an
+onion.
+
+@img images/rings.png
+What does an onion look like inside?
+---
+rings
+~ layers of seeds
+~ segments
+---
+@img images/rings.png
+Concentric rings: each ring is a leaf base wrapped around the bud. The note
+can repeat the question's image — or show a different one.
+
+Scallion: onion or not?
+---
+not onion
+~ onion
+---
+@img images/scallion.png
+No bulb, just stalks (pictured) — an allium, but not an onion. This note has
+an image the question didn't.
+
+# answer-mode: type
+The common onion is Allium ____ (type the species)
+---
+cepa
+---
+"Cepa" is Latin for onion. It survives in English via French: cive gave us
+"chives".
+
+Chive: onion or not?
+---
+not onion
+~ onion
