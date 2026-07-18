@@ -221,10 +221,7 @@ The capital of France is {{Paris}}.
 
 ## Notes
 
-A second `---` adds an optional note: extra context shown only after you
-answer (and wherever the answer is already visible). Text and images only.
-Adding a note to an existing card keeps its progress. See
-[examples/notes.deck](examples/notes.deck):
+A second `---` adds a note, revealed only after you answer:
 
 ```
 Garlic: onion or not?
@@ -234,6 +231,10 @@ not onion
 ---
 Garlic is Allium sativum. Same genus, different species.
 ```
+
+You're asked the first section, graded against the second, and shown the
+third with the result. Text and images only. Adding a note to an existing
+card keeps its progress. Try it: `study examples/notes.deck`
 
 ## Per-card overrides
 
