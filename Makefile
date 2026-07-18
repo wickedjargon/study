@@ -54,13 +54,18 @@ test-run:
 
 # install also rebuilds study-web so a `make clean install` doesn't leave
 # `make run` without its binary.
+COMPLETIONS = $(HOME)/.local/share/bash-completion/completions
+
 install: study study-web
 	mkdir -p $(PREFIX)/bin
 	cp -f study $(PREFIX)/bin/
-	@echo "installed to $(PREFIX)/bin/study"
+	mkdir -p $(COMPLETIONS)
+	cp -f completions/study.bash $(COMPLETIONS)/study
+	@echo "installed to $(PREFIX)/bin/study (+ bash completion)"
 
 uninstall:
 	rm -f $(PREFIX)/bin/study
+	rm -f $(COMPLETIONS)/study
 
 clean:
 	rm -f study study-web
