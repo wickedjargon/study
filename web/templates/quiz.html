@@ -135,6 +135,7 @@
     {{template "media" .Question}}
     <hr class="divider">
     <div class="answerside">{{template "media" .AnswerSide}}</div>
+    {{if .Note}}<div class="cardnote">{{template "media" .Note}}</div>{{end}}
   </section>
   <div class="actions" id="primaryform">
     <form method="post" action="{{.Base}}/preview"><button class="primary">{{if .FlipMode}}next →{{else}}got it: quiz me{{end}}</button></form>
@@ -158,6 +159,7 @@
     <hr class="divider">
     {{if and (not .ResultCorrect) .ResultTyped}}<p class="typedanswer">you answered <s dir="auto">{{.ResultTyped}}</s></p>{{end}}
     <div class="answerside">{{template "media" .AnswerSide}}</div>
+    {{if .Note}}<div class="cardnote">{{template "media" .Note}}</div>{{end}}
     {{if .Confused}}
     <div class="confused">
       <p class="confused-note">that's the answer to this card:</p>

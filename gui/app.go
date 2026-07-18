@@ -233,6 +233,11 @@ type App struct {
 	// prompted. Cleared on the next card.
 	confusedImg image.Image
 
+	// noteImg is the current card's note image, loaded whenever the answer
+	// becomes visible (reveal or result) — the note never shows with an
+	// unanswered question. Cleared on the next card.
+	noteImg image.Image
+
 	// One-shot warning guards so a degraded-feature notice is printed to stderr
 	// once rather than on every use: pasteWarned when clipboard atoms are
 	// unavailable, arabicWarned when Arabic text is shown without an Arabic font.
@@ -599,6 +604,7 @@ func secondsUntil(t time.Time) int {
 func (a *App) setResult(r *quiz.Result) {
 	a.result = r
 	a.loadConfusedImage()
+	a.loadNoteImage(r.Card)
 	a.lockResult()
 }
 
@@ -710,6 +716,7 @@ func (a *App) handleKey(ev xevent.KeyPressEvent) {
 			a.result = nil
 			a.revealImg = nil
 			a.confusedImg = nil
+			a.noteImg = nil
 			a.inputBuf = ""
 
 			if s := a.engine.State(); s == quiz.ShowQuestion || s == quiz.ShowPreview {
@@ -788,6 +795,7 @@ func (a *App) continueStudying() {
 	a.result = nil
 	a.revealImg = nil
 	a.confusedImg = nil
+	a.noteImg = nil
 	a.inputBuf = ""
 	if s := a.engine.State(); s == quiz.ShowQuestion || s == quiz.ShowPreview {
 		a.presentCard()
@@ -805,6 +813,7 @@ func (a *App) endSession() {
 	a.result = nil
 	a.revealImg = nil
 	a.confusedImg = nil
+	a.noteImg = nil
 	a.engine.End()
 	a.render()
 }
@@ -1558,6 +1567,17 @@ func (a *App) renderResult(canvas *image.RGBA) {
 		y += lineHeight(a.fontBold)
 	}
 
+	// The card's note: its authored explanation, dim — secondary to the
+	// verdict and the reveal, and distinct from the yellow confusion
+	// contrast below, which reproduces another card.
+	if len(card.Note) > 0 {
+		if a.noteImg != nil {
+			y += a.renderImage(canvas, a.noteImg, y, noteImageHFrac) + a.scaled(20)
+		}
+		y = a.renderTextMedia(canvas, card.Note, y, dimColor)
+		y += a.scaled(8)
+	}
+
 	// Confusion contrast: the wrong answer belongs to another card — reproduce
 	// that card as it appears when prompted (its image and question lines at
 	// card size, via the same script-shaped rendering), closed by the usual
@@ -1634,6 +1654,16 @@ func (a *App) renderPreview(canvas *image.RGBA) {
 		y += a.renderImage(canvas, a.revealImg, y, imageHFrac) + a.scaled(20)
 	}
 	y = a.renderTextMedia(canvas, card.Answer, y, greenColor)
+
+	// The card's note rides along with the reveal — this screen is a
+	// reading moment, and the answer is already visible.
+	if len(card.Note) > 0 {
+		y += a.scaled(10)
+		if a.noteImg != nil {
+			y += a.renderImage(canvas, a.noteImg, y, noteImageHFrac) + a.scaled(20)
+		}
+		y = a.renderTextMedia(canvas, card.Note, y, dimColor)
+	}
 
 	y += a.scaled(16)
 
@@ -1906,6 +1936,27 @@ func (a *App) renderTextMedia(canvas *image.RGBA, media []deck.Media, y int, c c
 func (a *App) showReveal() {
 	a.playRevealAudio()
 	a.loadRevealImage()
+	a.loadNoteImage(a.engine.Current())
+}
+
+// loadNoteImage caches the note image of the card whose answer just became
+// visible. Nil when the card has no note image or it fails to decode.
+func (a *App) loadNoteImage(card *deck.Card) {
+	a.noteImg = nil
+	if card == nil {
+		return
+	}
+	for _, m := range card.Note {
+		if m.Type == deck.Image {
+			img, err := loadImage(m.Content)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "study: could not load image %s: %v\n", m.Content, err)
+				return
+			}
+			a.noteImg = a.tinted(img)
+			return
+		}
+	}
 }
 
 // loadRevealImage caches the current card's answer-side image (reverse mode:

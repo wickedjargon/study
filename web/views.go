@@ -92,6 +92,10 @@ type quizView struct {
 	// Question / preview.
 	Question   []mediaView
 	AnswerSide []mediaView
+	// Note is the card's optional explanation, rendered only where the
+	// answer is visible (result, preview, flip-through) — never with an
+	// unanswered question.
+	Note []mediaView
 	Choice     bool
 	Options    []string
 	TimeLimit  int
@@ -288,6 +292,7 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		view.Screen = "preview"
 		view.Question = mediaViews(mediaBase, sess.deck.ImgTint, card.Question)
 		view.AnswerSide = mediaViews(mediaBase, sess.deck.ImgTint, card.Answer)
+		view.Note = mediaViews(mediaBase, sess.deck.ImgTint, card.Note)
 		view.FlipMode = e.Order() == deck.OrderFlipThrough
 		view.IsNew = e.CurrentIsNew()
 		if view.FlipMode {
@@ -309,6 +314,7 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		}
 		view.Question = mediaViews(mediaBase, sess.deck.ImgTint, res.Card.Question)
 		view.AnswerSide = mediaViews(mediaBase, sess.deck.ImgTint, res.Card.Answer)
+		view.Note = mediaViews(mediaBase, sess.deck.ImgTint, res.Card.Note)
 		view.ResultCorrect = res.Correct
 		view.ResultTimedOut = res.TimedOut
 		view.ResultNoIdea = res.NoIdea
