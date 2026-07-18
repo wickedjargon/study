@@ -1359,7 +1359,7 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 	prog := fmt.Sprintf("[%d/%d]", seen+1, seen+remaining)
 	cardTag, tagColor := "", dimColor
 	if a.engine.IsRetry() {
-		cardTag = "retry"
+		cardTag, tagColor = "retry", redColor
 	} else if a.engine.CurrentIsNew() {
 		cardTag, tagColor = "new", accentColor
 	} else if a.engine.CurrentIsLearning() {
@@ -1420,7 +1420,8 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 	if secs := a.secondsLeft(); secs >= 0 {
 		right = fmt.Sprintf("%ds", secs)
 		rightColor = yellowColor
-		if secs <= 3 {
+		// The red warning matches the web's threshold: early enough to react.
+		if secs <= 5 {
 			rightColor = redColor
 		}
 	}
@@ -1582,13 +1583,15 @@ func (a *App) renderPreview(canvas *image.RGBA) {
 	}
 
 	// Progress indicator, drawn last as an overlay — content flows from the
-	// window top. Flip-through shows the position within the wrapping lap (its
-	// mode is named by the order tag); the first-viewing reveal shows the usual
-	// session counter with the "new" tag.
+	// window top. Flip-through shows the position within the wrapping lap and
+	// a "reviewing" tag (matching the web's badge); the first-viewing reveal
+	// shows the usual session counter with the "new" tag.
 	var prog, cardTag string
+	tagColor := accentColor
 	if flip {
 		size := a.engine.DeckSize()
 		prog = fmt.Sprintf("[%d/%d]", a.engine.TotalSeen%size+1, size)
+		cardTag, tagColor = "reviewing", dimColor
 	} else {
 		seen := a.engine.TotalSeen
 		remaining := a.engine.Remaining()
@@ -1619,7 +1622,7 @@ func (a *App) renderPreview(canvas *image.RGBA) {
 	lines := append([]string{action}, a.audioLines(audioSide)...)
 	a.drawControlsBox(canvas, append(lines, "esc: end"))
 
-	a.drawTopStatus(canvas, a.leftStatusItems(prog, dimColor, audioSide), a.tallyItems(), tagItems(cardTag, accentColor), "", dimColor)
+	a.drawTopStatus(canvas, a.leftStatusItems(prog, dimColor, audioSide), a.tallyItems(), tagItems(cardTag, tagColor), "", dimColor)
 }
 
 // renderCaughtUp draws the launch screen for an adaptive session with nothing
