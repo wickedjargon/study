@@ -94,9 +94,12 @@
 {{if eq .Screen "question"}}
   <section class="card">
     <div class="badges">
-      {{if .IsNew}}<span class="badge new">new</span>{{end}}
-      {{if .IsRetry}}<span class="badge retry">again</span>{{end}}
-      {{if .IsAhead}}<span class="badge ahead">ahead</span>{{end}}
+      {{/* One state badge, matching the GUI's priority: retry beats new
+           beats learning beats ahead. */}}
+      {{if .IsRetry}}<span class="badge retry">retry</span>
+      {{else if .IsNew}}<span class="badge new">new</span>
+      {{else if .IsLearning}}<span class="badge learning">learning</span>
+      {{else if .IsAhead}}<span class="badge ahead">ahead</span>{{end}}
       {{if .TimeLimit}}<span class="badge timer" id="timer" data-limit="{{.TimeLimit}}">{{.TimeLimit}}s</span>{{end}}
     </div>
     {{template "media" .Question}}
@@ -127,7 +130,7 @@
   <section class="card">
     <div class="badges">
       {{if .FlipMode}}<span class="badge ahead">reviewing</span>
-      {{else if .IsNew}}<span class="badge new">new card: take it in first</span>{{end}}
+      {{else if .IsNew}}<span class="badge new">new</span>{{end}}
     </div>
     {{template "media" .Question}}
     <hr class="divider">

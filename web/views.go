@@ -96,6 +96,7 @@ type quizView struct {
 	TimeLimit  int
 	AudioSpeed float64
 	IsNew      bool
+	IsLearning bool
 	IsRetry    bool
 	IsAhead    bool
 	FlipMode   bool
@@ -277,6 +278,7 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		view.Options = e.Options()
 		view.TimeLimit = e.TimeLimit()
 		view.IsNew = e.CurrentIsNew()
+		view.IsLearning = e.CurrentIsLearning()
 		view.IsRetry = e.IsRetry()
 		view.IsAhead = e.CurrentIsAhead()
 

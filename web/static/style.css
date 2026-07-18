@@ -336,6 +336,7 @@ main.list { padding-top: 2.5rem; }
   border-radius: 99px;
 }
 .badge.new { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.badge.learning { color: var(--dim); background: color-mix(in srgb, var(--dim) 14%, transparent); }
 .badge.retry { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
 .badge.ahead { color: var(--dim); background: color-mix(in srgb, var(--dim) 14%, transparent); }
 .badge.timer {
