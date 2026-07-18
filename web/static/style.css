@@ -330,6 +330,9 @@ main.list { padding-top: 2.5rem; }
 
 /* ---- badges ---- */
 .badges { min-height: 1.3rem; margin-bottom: 0.2rem; display: flex; gap: 0.45rem; }
+/* Status badges share one treatment (accent): one class of information, the
+   word carries the meaning, color must not rank or judge. Red stays reserved
+   for verdicts and the timer's last seconds — events, not states. */
 .badge {
   font-size: 0.7rem;
   font-weight: 650;
@@ -337,11 +340,9 @@ main.list { padding-top: 2.5rem; }
   text-transform: uppercase;
   padding: 0.14rem 0.55rem;
   border-radius: 99px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
-.badge.new { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
-.badge.learning { color: var(--dim); background: color-mix(in srgb, var(--dim) 14%, transparent); }
-.badge.retry { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); }
-.badge.ahead { color: var(--dim); background: color-mix(in srgb, var(--dim) 14%, transparent); }
 .badge.timer {
   color: var(--fg);
   background: color-mix(in srgb, var(--fg) 8%, transparent);

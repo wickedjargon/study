@@ -129,7 +129,7 @@
 {{else if eq .Screen "preview"}}
   <section class="card">
     <div class="badges">
-      {{if .FlipMode}}<span class="badge ahead">reviewing</span>
+      {{if .FlipMode}}<span class="badge reviewing">reviewing</span>
       {{else if .IsNew}}<span class="badge new">new</span>{{end}}
     </div>
     {{template "media" .Question}}

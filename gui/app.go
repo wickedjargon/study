@@ -1357,11 +1357,15 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 	seen := a.engine.TotalSeen
 	remaining := a.engine.Remaining()
 	prog := fmt.Sprintf("[%d/%d]", seen+1, seen+remaining)
-	cardTag, tagColor := "", dimColor
+	// Status badges share one treatment (accent): they are one class of
+	// information — the word answers "what's being asked of me?" — and color
+	// must not rank or judge them. Red stays reserved for verdicts and the
+	// timer's last seconds, where it means an event, not a state.
+	cardTag := ""
 	if a.engine.IsRetry() {
-		cardTag, tagColor = "retry", redColor
+		cardTag = "retry"
 	} else if a.engine.CurrentIsNew() {
-		cardTag, tagColor = "new", accentColor
+		cardTag = "new"
 	} else if a.engine.CurrentIsLearning() {
 		cardTag = "learning"
 	} else if a.engine.CurrentIsAhead() {
@@ -1425,7 +1429,7 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 			rightColor = redColor
 		}
 	}
-	a.drawTopStatus(canvas, a.leftStatusItems(prog, dimColor, card.Question), a.tallyItems(), tagItems(cardTag, tagColor), right, rightColor)
+	a.drawTopStatus(canvas, a.leftStatusItems(prog, dimColor, card.Question), a.tallyItems(), tagItems(cardTag, accentColor), right, rightColor)
 }
 
 func (a *App) renderResult(canvas *image.RGBA) {
@@ -1587,11 +1591,10 @@ func (a *App) renderPreview(canvas *image.RGBA) {
 	// a "reviewing" tag (matching the web's badge); the first-viewing reveal
 	// shows the usual session counter with the "new" tag.
 	var prog, cardTag string
-	tagColor := accentColor
 	if flip {
 		size := a.engine.DeckSize()
 		prog = fmt.Sprintf("[%d/%d]", a.engine.TotalSeen%size+1, size)
-		cardTag, tagColor = "reviewing", dimColor
+		cardTag = "reviewing"
 	} else {
 		seen := a.engine.TotalSeen
 		remaining := a.engine.Remaining()
@@ -1622,7 +1625,7 @@ func (a *App) renderPreview(canvas *image.RGBA) {
 	lines := append([]string{action}, a.audioLines(audioSide)...)
 	a.drawControlsBox(canvas, append(lines, "esc: end"))
 
-	a.drawTopStatus(canvas, a.leftStatusItems(prog, dimColor, audioSide), a.tallyItems(), tagItems(cardTag, tagColor), "", dimColor)
+	a.drawTopStatus(canvas, a.leftStatusItems(prog, dimColor, audioSide), a.tallyItems(), tagItems(cardTag, accentColor), "", dimColor)
 }
 
 // renderCaughtUp draws the launch screen for an adaptive session with nothing
