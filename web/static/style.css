@@ -1,5 +1,16 @@
 /* study — warm, minimal, sans throughout. One accent for actions; each deck gets
-   its own identity hue (--h, set inline) for the roundel and progress bar. */
+   its own identity hue (--h, set inline) for the roundel and progress bar.
+
+   The color contract, shared in spirit with the desktop GUI (gui/app.go):
+     --fg     content: question, answers, options
+     --dim    secondary information: position, tally, hints, notes
+     --accent informational status and primary affordances: badges, buttons
+     --ok     the correct answer: verdict marks, reveals
+     --bad    events demanding attention now: wrong verdicts, the timer's
+              last seconds
+   A color outside its row is a bug. The GUI's yellow confusion note has no
+   color here — this frontend distinguishes that block by scale, a
+   deliberate per-platform difference. */
 
 :root {
   color-scheme: light dark;

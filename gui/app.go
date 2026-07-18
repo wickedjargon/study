@@ -56,6 +56,26 @@ type colorScheme struct {
 	accent color.RGBA
 }
 
+// The voice contract, shared with the web frontend: on the quiz surface,
+// badges, hints, buttons, and verdicts are lowercase, terse, and
+// unpunctuated ("time's up", "retry", "esc: end"). Chrome (menu items),
+// standalone-screen ledes, and body sentences get ordinary sentence case.
+// No exclamation marks anywhere — the app doesn't cheerlead.
+//
+// The color contract, shared in spirit with the web frontend (style.css):
+//
+//	text   — content: question, answers, options
+//	dim    — secondary information: position, tally, order tags, hints
+//	accent — informational status and primary affordances: badges, the
+//	         selection cursor, the typed-input prompt
+//	green  — the correct answer: verdict marks, reveals
+//	red    — events demanding attention now: wrong verdicts, the timer's
+//	         last seconds, the enforced wrong-answer pause
+//	yellow — the confusion-contrast note only (the web distinguishes that
+//	         block by scale instead; a deliberate per-platform difference)
+//
+// A color outside its row is a bug. Red on a state (rather than an event)
+// was one; see the badge history.
 var darkScheme = colorScheme{
 	bg:     color.RGBA{0x11, 0x18, 0x27, 0xff},
 	text:   color.RGBA{0xf9, 0xfa, 0xfb, 0xff},
@@ -1423,8 +1443,8 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 	right, rightColor := "", dimColor
 	if secs := a.secondsLeft(); secs >= 0 {
 		right = fmt.Sprintf("%ds", secs)
-		rightColor = yellowColor
-		// The red warning matches the web's threshold: early enough to react.
+		// A running timer is secondary information until it nearly expires;
+		// the red warning matches the web's threshold: early enough to react.
 		if secs <= 5 {
 			rightColor = redColor
 		}
@@ -1534,7 +1554,7 @@ func (a *App) renderResult(canvas *image.RGBA) {
 	// them. A timeout is the exception: nothing was answered, so the reason is
 	// worth a line.
 	if a.result.TimedOut {
-		a.drawTextCentered(canvas, "Time's up!", y, a.fontBold, redColor)
+		a.drawTextCentered(canvas, "time's up", y, a.fontBold, redColor)
 		y += lineHeight(a.fontBold)
 	}
 
@@ -1669,7 +1689,7 @@ func (a *App) renderSummary(canvas *image.RGBA) {
 	elapsed := time.Since(a.start).Round(time.Second)
 	y := a.height / 4
 
-	a.drawTextCentered(canvas, "Session Complete", y, a.fontLarge, accentColor)
+	a.drawTextCentered(canvas, "Session complete", y, a.fontLarge, accentColor)
 	y += lineHeight(a.fontLarge) + a.scaled(20)
 
 	type statRow struct {
