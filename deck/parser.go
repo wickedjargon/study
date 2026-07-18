@@ -60,6 +60,13 @@ type Card struct {
 	// any authored variant.
 	QuestionAccept []string
 	Distractors    []string // optional custom wrong answers
+	// Note is the card's optional third section (question --- answer ---
+	// note): explanation shown only where the answer is visible — the result
+	// screen, the first-viewing reveal, and flip-through — never the question
+	// screen, so it can't help with the answer. Text and images only; audio
+	// is rejected at parse until its playback ordering is designed. Excluded
+	// from the card ID, so annotating a card never orphans its progress.
+	Note           []Media
 	Mode           QuizMode // per-card mode (choice or type)
 	Choices        int      // per-card choice count (0 = use deck default)
 	TimeLimit      int      // per-card time limit in seconds
@@ -579,12 +586,29 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, deckModeSet
 		return nil, nil
 	}
 
-	// Split on the question/answer separator (--- or ===).
+	// Split on the separators (--- or ===): question, answer, and an
+	// optional third section — the card's note.
 	sepIdx := -1
+	var noteLines []string
 	for i, line := range filtered {
 		if isSeparator(line) {
 			sepIdx = i
 			break
+		}
+	}
+	if sepIdx != -1 {
+		rest := filtered[sepIdx+1:]
+		for i, line := range rest {
+			if isSeparator(line) {
+				for _, l := range rest[i+1:] {
+					if isSeparator(l) {
+						return nil, fmt.Errorf("card has too many sections (at most question --- answer --- note): %q", strings.Join(filtered, " / "))
+					}
+				}
+				noteLines = rest[i+1:]
+				filtered = filtered[:sepIdx+1+i]
+				break
+			}
 		}
 	}
 
@@ -685,12 +709,30 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, deckModeSet
 		return nil, fmt.Errorf("card answer must be a single line: %q", strings.Join(filtered, " / "))
 	}
 
+	// The optional note: text and images only. Audio is rejected — the
+	// result screen already auto-plays the card's clip, and a second
+	// autoplaying source needs an ordering design that doesn't exist yet.
+	var note []Media
+	if len(noteLines) > 0 {
+		for _, m := range parseMediaLines(noteLines, baseDir, warn) {
+			if m.Type == Audio {
+				warn("ignoring note audio %q (audio in notes is not supported)", filepath.Base(m.Content))
+				continue
+			}
+			note = append(note, m)
+		}
+		if note == nil {
+			warn("card note section is empty: %q", strings.Join(questionLines, " / "))
+		}
+	}
+
 	id, legacyID := stableCardID(questionLines)
 	card := &Card{
 		ID:             id,
 		LegacyID:       legacyID,
 		Question:       question,
 		Answer:         answer,
+		Note:           note,
 		AnswerText:     answerText,
 		Accept:         accepts,
 		QuestionAccept: qAccepts,

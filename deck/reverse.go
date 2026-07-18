@@ -101,8 +101,11 @@ func reverseCard(c *Card) (Card, bool) {
 		Answer:     reveal,
 		AnswerText: primary,
 		Accept:     accept,
-		Mode:       ModeType,
-		TimeLimit:  c.TimeLimit,
+		// The note explains the pairing, not one side — it rides along
+		// unchanged in either direction.
+		Note:      c.Note,
+		Mode:      ModeType,
+		TimeLimit: c.TimeLimit,
 	}
 	if c.LegacyID != "" {
 		rc.LegacyID = "r:" + c.LegacyID

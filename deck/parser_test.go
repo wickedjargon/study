@@ -1061,3 +1061,101 @@ func TestDeckModeBeatsDistractorInference(t *testing.T) {
 		t.Errorf("per-card choice under typed deck: card mode = %v, want ModeChoice", got)
 	}
 }
+
+// TestNoteSection: a third --- section is the card's note. It parses into
+// Note, leaves the answer intact, and — critically — does not change the
+// card ID, so annotating an existing card keeps its progress.
+func TestNoteSection(t *testing.T) {
+	plain, err := Parse(writeTempDeck(t, "hello\n---\nworld\n"))
+	if err != nil {
+		t.Fatalf("plain: %v", err)
+	}
+	noted, err := Parse(writeTempDeck(t, "hello\n---\nworld\n---\nA note line.\nAnother note line.\n"))
+	if err != nil {
+		t.Fatalf("noted: %v", err)
+	}
+	c := noted.Cards[0]
+	if c.AnswerText != "world" {
+		t.Errorf("answer = %q, want world", c.AnswerText)
+	}
+	if len(c.Note) != 2 || c.Note[0].Content != "A note line." {
+		t.Errorf("note = %+v, want two text lines", c.Note)
+	}
+	if c.ID != plain.Cards[0].ID {
+		t.Error("adding a note must not change the card ID")
+	}
+	if len(noted.Warnings) != 0 {
+		t.Errorf("unexpected warnings: %v", noted.Warnings)
+	}
+}
+
+// TestNoteSectionImage: notes carry images.
+func TestNoteSectionImage(t *testing.T) {
+	dir := t.TempDir()
+	img := filepath.Join(dir, "pic.png")
+	if err := os.WriteFile(img, []byte("not-really-png"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "test.deck")
+	content := "q\n---\na\n---\nSee:\n@img pic.png\n"
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	d, err := Parse(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	note := d.Cards[0].Note
+	if len(note) != 2 || note[1].Type != Image {
+		t.Fatalf("note = %+v, want text + image", note)
+	}
+}
+
+// TestNoteSectionRejectsAudio: audio in a note is dropped with a warning —
+// its playback ordering against the card's own clip isn't designed yet.
+func TestNoteSectionRejectsAudio(t *testing.T) {
+	dir := t.TempDir()
+	clip := filepath.Join(dir, "clip.mp3")
+	if err := os.WriteFile(clip, []byte("mp3"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "test.deck")
+	if err := os.WriteFile(path, []byte("q\n---\na\n---\nWhy:\n@audio clip.mp3\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	d, err := Parse(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	note := d.Cards[0].Note
+	if len(note) != 1 || note[0].Type != Text {
+		t.Fatalf("note = %+v, want the text line only", note)
+	}
+	if len(d.Warnings) != 1 || !strings.Contains(d.Warnings[0], "note audio") {
+		t.Errorf("expected one note-audio warning, got %v", d.Warnings)
+	}
+}
+
+// TestNoteSectionTooManySections: a fourth section is malformed.
+func TestNoteSectionTooManySections(t *testing.T) {
+	_, err := Parse(writeTempDeck(t, "q\n---\na\n---\nnote\n---\nwhat\n"))
+	if err == nil || !strings.Contains(err.Error(), "too many sections") {
+		t.Fatalf("expected too-many-sections error, got %v", err)
+	}
+}
+
+// TestNoteSurvivesReverse: the note explains the pairing, so the reversed
+// card carries it unchanged.
+func TestNoteSurvivesReverse(t *testing.T) {
+	d, err := Parse(writeTempDeck(t, "chien\n---\ndog\n---\nFrom Latin canis.\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	rev := d.Reversed()
+	if len(rev.Cards) != 1 {
+		t.Fatalf("expected 1 reversed card, got %d", len(rev.Cards))
+	}
+	if len(rev.Cards[0].Note) != 1 || rev.Cards[0].Note[0].Content != "From Latin canis." {
+		t.Errorf("reversed note = %+v, want the original note", rev.Cards[0].Note)
+	}
+}
