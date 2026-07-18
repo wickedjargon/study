@@ -80,9 +80,56 @@ type DeckProgress struct {
 
 // Store manages loading and saving progress data.
 type Store struct {
-	dir  string // directory for progress files
-	data *DeckProgress
-	path string // path to the progress file
+	dir     string // directory for progress files
+	data    *DeckProgress
+	path    string // path to the progress file
+	logPath string // path to the review log (JSONL beside the progress file)
+}
+
+// ReviewEvent is one line of the review log: a single graded answer with the
+// scheduler's view of the card at that moment. The log is the instrument for
+// judging the algorithm — per-rung recall rates, lapse concentration,
+// session shape — and the training data any future per-card memory model
+// will need. Append-only, one JSON object per line.
+type ReviewEvent struct {
+	TS      time.Time `json:"ts"`
+	Card    string    `json:"card"`
+	Mode    string    `json:"mode,omitempty"` // how it was answered: type or choice
+	Correct bool      `json:"correct"`
+	State   string    `json:"state,omitempty"`   // badge at ask time: new, learning, retry, ahead
+	Owed    int       `json:"owed,omitempty"`    // criterion recalls owed before this answer
+	Level   int       `json:"level,omitempty"`   // review-ladder rung when asked
+	Overdue float64   `json:"overdue,omitempty"` // days past due when asked (negative = early)
+	Sched   string    `json:"sched,omitempty"`   // ladder outcome on a completing answer: advance, hold, lapse
+	Drill   bool      `json:"drill,omitempty"`   // sequential mode's massed repetition (kept out of stats)
+	// Secs is capped wall-clock seconds from serve to answer. Diagnostic
+	// only: the user goes AFK mid-question, so time cannot distinguish
+	// struggle from absence and must never feed the scheduler.
+	Secs int `json:"secs,omitempty"`
+}
+
+// LogReview appends one event to the deck's review log. Best-effort: the log
+// is an instrument, not the record of truth, so a write failure is reported
+// and studying continues.
+func (s *Store) LogReview(e ReviewEvent) {
+	if err := os.MkdirAll(s.dir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "study: review log: %v\n", err)
+		return
+	}
+	line, err := json.Marshal(e)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "study: review log: %v\n", err)
+		return
+	}
+	f, err := os.OpenFile(s.logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "study: review log: %v\n", err)
+		return
+	}
+	defer f.Close()
+	if _, err := f.Write(append(line, '\n')); err != nil {
+		fmt.Fprintf(os.Stderr, "study: review log: %v\n", err)
+	}
 }
 
 // NewStore creates a progress store for a given deck in the default
@@ -103,8 +150,9 @@ func NewStoreIn(dir, deckPath string) (*Store, error) {
 	path := filepath.Join(dir, hash+".json")
 
 	s := &Store{
-		dir:  dir,
-		path: path,
+		dir:     dir,
+		path:    path,
+		logPath: filepath.Join(dir, hash+".log"),
 	}
 
 	// Try to load existing progress.

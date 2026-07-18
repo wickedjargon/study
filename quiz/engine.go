@@ -143,6 +143,11 @@ type Engine struct {
 	// strong evidence the interval was too long — so lapses count normally.
 	ahead map[string]bool
 
+	// servedAt is when the current card's question appeared, feeding the
+	// review log's diagnostic seconds field. Never read by scheduling: time
+	// can't distinguish struggle from an empty chair.
+	servedAt time.Time
+
 	// Session stats.
 	TotalSeen    int
 	TotalCorrect int
@@ -918,7 +923,11 @@ func (e *Engine) Next() {
 // cold recall, so they stay out of persisted stats; only the original
 // main-queue showing counts there.
 func (e *Engine) recordAnswer(correct bool) {
-	if e.store == nil || e.fromRetry {
+	if e.store == nil {
+		return
+	}
+	e.logReview(correct)
+	if e.fromRetry {
 		return
 	}
 	if correct {
@@ -926,6 +935,66 @@ func (e *Engine) recordAnswer(correct bool) {
 	} else {
 		e.store.RecordWrong(e.current.ID)
 	}
+}
+
+// logReview appends this graded answer to the review log, capturing the
+// scheduler's view of the card before handleCorrect/handleWrong mutate it.
+// Runs for every graded answer, including sequential drill reps (flagged, so
+// analysis can separate massed practice from cold evidence).
+func (e *Engine) logReview(correct bool) {
+	id := e.current.ID
+	ev := progress.ReviewEvent{
+		TS:      time.Now(),
+		Card:    id,
+		Correct: correct,
+		Drill:   e.fromRetry,
+	}
+	if e.Mode() == deck.ModeChoice {
+		ev.Mode = "choice"
+	} else {
+		ev.Mode = "type"
+	}
+	switch {
+	case e.IsRetry():
+		ev.State = "retry"
+	case e.CurrentIsNew():
+		ev.State = "new"
+	case e.CurrentIsLearning():
+		ev.State = "learning"
+	case e.CurrentIsAhead():
+		ev.State = "ahead"
+	}
+	if e.evidenceScheduled() {
+		ev.Owed = e.need[id]
+		// Predict the ladder outcome of a completing answer, mirroring
+		// handleCorrect: a clean ahead completion holds the rung, a lapsed
+		// card reschedules down, anything else advances.
+		if correct && e.need[id] == 1 {
+			switch {
+			case e.ahead[id] && !e.lapsed[id]:
+				ev.Sched = "hold"
+			case e.lapsed[id]:
+				ev.Sched = "lapse"
+			default:
+				ev.Sched = "advance"
+			}
+		}
+	}
+	cp := e.store.Get(id)
+	ev.Level = cp.Level
+	if !cp.Due.IsZero() {
+		ev.Overdue = time.Since(cp.Due).Hours() / 24
+	}
+	// Capped, diagnostic only — never read by scheduling (AFK time is
+	// indistinguishable from struggle).
+	if !e.servedAt.IsZero() {
+		secs := int(time.Since(e.servedAt).Seconds())
+		if secs > 60 {
+			secs = 60
+		}
+		ev.Secs = secs
+	}
+	e.store.LogReview(ev)
 }
 
 // handleCorrect processes a correct answer.
@@ -1022,6 +1091,7 @@ func (e *Engine) advance() {
 			e.currentOpts, e.correctIdx = e.generateChoices(e.current)
 		}
 		e.state = ShowQuestion
+		e.servedAt = time.Now()
 		return
 	}
 
@@ -1073,6 +1143,7 @@ func (e *Engine) advance() {
 		return
 	}
 	e.state = ShowQuestion
+	e.servedAt = time.Now()
 }
 
 // shouldPreview reports whether the card gets the first-viewing reveal: the
@@ -1106,6 +1177,7 @@ func (e *Engine) ConfirmPreview() {
 		return
 	}
 	e.state = ShowQuestion
+	e.servedAt = time.Now()
 }
 
 // requeueGap re-inserts a card so it comes due after roughly gap more serves.
