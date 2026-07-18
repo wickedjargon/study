@@ -120,16 +120,18 @@ type Engine struct {
 	// after its first graded answer it reads "learning" instead.
 	newCards map[string]bool
 
-	// answered marks cards graded at least once this session, whatever the
-	// outcome. It splits the label timeline: "new" until the first graded
-	// answer, "learning" on the serves after it.
+	// answered marks cards graded at least once but not yet graduated: the
+	// "learning" label. Updated live as answers land, and seeded from the
+	// store at composition (seedRecord) so the label survives a quit and
+	// relaunch — the badge is a function of the card's record, not of the
+	// process lifetime.
 	answered map[string]bool
 
-	// lastWrong marks cards whose most recent graded answer this session was
-	// a miss, cleared by the next correct one. A card's return while marked
-	// reads "retry" — the label promises "you missed this a moment ago", so
-	// it must track the last outcome, not membership in sequential mode's
-	// drill queue.
+	// lastWrong marks cards whose most recent graded answer — this session
+	// or a past one, via seedRecord — was a miss, cleared by the next
+	// correct one. A card's return while marked reads "retry": the label
+	// tracks the last outcome, not membership in sequential mode's drill
+	// queue.
 	lastWrong map[string]bool
 
 	// ahead marks studied cards that entered this session before their review
@@ -244,14 +246,7 @@ func NewEngine(d *deck.Deck, pool []deck.Card, store *progress.Store) *Engine {
 		lastWrong:     make(map[string]bool),
 	}
 	for i := range d.Cards {
-		id := d.Cards[i].ID
-		if store == nil {
-			e.newCards[id] = true
-			continue
-		}
-		if cp := store.Get(id); cp.TimesCorrect+cp.TimesWrong == 0 {
-			e.newCards[id] = true
-		}
+		e.seedRecord(d.Cards[i].ID)
 	}
 	if pool != nil {
 		e.pool = make([]*deck.Card, len(pool))
@@ -433,6 +428,7 @@ func (e *Engine) ContinueAll() {
 	e.lastWrong = make(map[string]bool)
 	for i, c := range ordered {
 		e.main = append(e.main, queuedCard{card: c, due: e.step + i})
+		e.seedRecord(c.ID)
 	}
 	for _, c := range fresh {
 		e.need[c.ID] = needNew
@@ -568,12 +564,36 @@ func (e *Engine) Options() []string {
 	return e.currentOpts
 }
 
-// IsRetry reports whether the current card's most recent graded answer this
-// session was a miss: "you missed this a moment ago, try again". Covers both
-// sequential mode's drill queue and the evidence scheduler's gap-requeued
-// misses; a correct answer clears it, dropping the card back to "learning".
+// IsRetry reports whether the current card's most recent graded answer — in
+// any session — was a miss: "your previous attempt was incorrect". Covers
+// sequential mode's drill queue, the evidence scheduler's gap-requeued
+// misses, and store-seeded misses from past sessions; a correct answer
+// clears it, dropping the card back to "learning".
 func (e *Engine) IsRetry() bool {
 	return e.fromRetry || (e.current != nil && e.lastWrong[e.current.ID])
+}
+
+// seedRecord primes a card's label state from its stored record, so badges
+// carry across sessions rather than resetting with the process: never graded
+// reads "new", a last answer that missed (whenever it happened) reads
+// "retry", graded but never graduated reads "learning". Known gap: a
+// graduated card whose re-establishment was interrupted right after a
+// correct answer opens unbadged — the store doesn't record the unmet
+// criterion remainder.
+func (e *Engine) seedRecord(id string) {
+	if e.store == nil {
+		e.newCards[id] = true
+		return
+	}
+	cp := e.store.Get(id)
+	switch {
+	case cp.TimesCorrect+cp.TimesWrong == 0:
+		e.newCards[id] = true
+	case cp.Streak == 0:
+		e.lastWrong[id] = true
+	case cp.Due.IsZero():
+		e.answered[id] = true
+	}
 }
 
 // CurrentIsNew reports whether the current card has never been graded, this
@@ -584,12 +604,12 @@ func (e *Engine) CurrentIsNew() bool {
 	return e.current != nil && e.newCards[e.current.ID] && !e.answered[e.current.ID]
 }
 
-// CurrentIsLearning reports whether the current card was graded at least once
-// today and still owes correct recalls before it can leave the session: the
-// follow-up serves of a new card, and any card missed today being
-// re-established. Evidence scheduler only. Display gives IsRetry priority, so
-// this reads "learning" on screen only while the card is on track — its last
-// answer correct.
+// CurrentIsLearning reports whether the current card has been graded — this
+// session or a past one — but hasn't graduated: the follow-up serves of a
+// new card, a card being re-established after a miss, and cards whose
+// earlier sessions ended before they earned their exit. Evidence scheduler
+// only. Display gives IsRetry priority, so this reads "learning" on screen
+// only while the card is on track — its last answer correct.
 func (e *Engine) CurrentIsLearning() bool {
 	return e.evidenceScheduled() && e.current != nil && e.answered[e.current.ID]
 }

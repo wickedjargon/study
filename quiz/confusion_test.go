@@ -205,8 +205,12 @@ func TestCurrentIsNew(t *testing.T) {
 		if got := e.CurrentIsNew(); got != wantNew {
 			t.Fatalf("serve %d (%s): CurrentIsNew = %v, want %v", i, id, got, wantNew)
 		}
-		if got := e.CurrentIsLearning(); got != graded[id] {
-			t.Fatalf("serve %d (%s): CurrentIsLearning = %v, want %v", i, id, got, graded[id])
+		// ans1 was graded in a past session but never graduated, so it opens
+		// as learning (seeded from the store); the others earn it on their
+		// first graded answer.
+		wantLearning := graded[id] || id == "ans1"
+		if got := e.CurrentIsLearning(); got != wantLearning {
+			t.Fatalf("serve %d (%s): CurrentIsLearning = %v, want %v", i, id, got, wantLearning)
 		}
 		graded[id] = true
 		answerCurrent(e, true)
@@ -214,6 +218,53 @@ func TestCurrentIsNew(t *testing.T) {
 	}
 	if e.State() != Done {
 		t.Fatal("session never completed")
+	}
+}
+
+// TestBadgesSeedFromPreviousSession: badges derive from the card's stored
+// record, not the process lifetime. A card whose last graded answer was a
+// miss opens as retry, one graded but never graduated opens as learning,
+// and an ungraded one opens as new.
+func TestBadgesSeedFromPreviousSession(t *testing.T) {
+	store, err := progress.NewStore(t.TempDir() + "/d.deck")
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	store.RecordWrong("ans0")   // last attempt missed
+	store.RecordCorrect("ans1") // on track, never graduated
+	e := NewEngine(confusableDeck(3), nil, store)
+
+	checked := make(map[string]bool)
+	for i := 0; i < 30 && e.State() != Done && len(checked) < 3; i++ {
+		id := e.Current().ID
+		if !checked[id] {
+			checked[id] = true
+			switch id {
+			case "ans0":
+				if !e.IsRetry() {
+					t.Error("a card last missed in a past session should open as retry")
+				}
+				if e.CurrentIsNew() {
+					t.Error("a card with history must not open as new")
+				}
+			case "ans1":
+				if e.IsRetry() {
+					t.Error("an on-track card must not open as retry")
+				}
+				if !e.CurrentIsLearning() {
+					t.Error("a graded, ungraduated card should open as learning")
+				}
+			case "ans2":
+				if !e.CurrentIsNew() {
+					t.Error("an ungraded card should open as new")
+				}
+			}
+		}
+		answerCurrent(e, true)
+		e.Next()
+	}
+	if len(checked) < 3 {
+		t.Fatalf("only %d of 3 cards were served", len(checked))
 	}
 }
 
