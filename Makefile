@@ -28,10 +28,14 @@ WEB_DECKS = \
 	'mandarin-chinese=$(HOME)/d/projects/study-chinese-mahjong-terms.deck@Mahjong (Vocab)' \
 	'[More]' \
 	$(HOME)/d/projects/study-dog-breeds.deck \
-	'$(HOME)/d/projects/study-bc-driving.deck@British Columbia Driving' \
-	$(HOME)/d/projects/study-world-flags.deck \
-	$(HOME)/d/projects/study-world-capitals.deck \
-	'$(HOME)/d/projects/study-bc-birds.deck@British Columbia Birds'
+	'$(HOME)/d/projects/study-decks/study-bc-driving.deck@British Columbia Driving' \
+	$(HOME)/d/projects/study-decks/study-world-flags.deck \
+	$(HOME)/d/projects/study-decks/study-country-silhouettes.deck \
+	$(HOME)/d/projects/study-decks/study-world-capitals.deck \
+	'$(HOME)/d/projects/study-decks/study-bc-birds.deck@British Columbia Birds' \
+	$(HOME)/d/projects/study-decks/study-animal-tracks.deck \
+	$(HOME)/d/projects/study-decks/study-speed-trivia.deck \
+	'$(HOME)/d/projects/study-decks/study-which-is-bigger.deck@Which Is Bigger?'
 
 # Bind localhost by default; `make run ADDR=0.0.0.0:8091` opens it to the
 # LAN (e.g. to try it from a phone).

@@ -24,7 +24,7 @@ distrobox enter archbox -- env CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 	go build -trimpath -ldflags "-s -w" -o study-web-linux ./cmd/study-web
 
 echo "== sync decks =="
-rsync -a --delete --exclude '__pycache__' --exclude '.git' \
+rsync -a --delete --exclude '__pycache__' --exclude '.git' --exclude '*.geojson' \
 	"$P/language-packs" \
 	"$P/study-mexican-spanish.deck" \
 	"$P/study-japanese-numbers.deck" \
@@ -34,10 +34,14 @@ rsync -a --delete --exclude '__pycache__' --exclude '.git' \
 	"$P/study-chinese-mahjong-terms.deck" \
 	"$P/study-chinese-mahjong-tiles.deck" \
 	"$P/study-dog-breeds.deck" \
-	"$P/study-bc-driving.deck" \
-	"$P/study-world-flags.deck" \
-	"$P/study-world-capitals.deck" \
-	"$P/study-bc-birds.deck" \
+	"$P/study-decks/study-bc-driving.deck" \
+	"$P/study-decks/study-world-flags.deck" \
+	"$P/study-decks/study-country-silhouettes.deck" \
+	"$P/study-decks/study-world-capitals.deck" \
+	"$P/study-decks/study-bc-birds.deck" \
+	"$P/study-decks/study-animal-tracks.deck" \
+	"$P/study-decks/study-speed-trivia.deck" \
+	"$P/study-decks/study-which-is-bigger.deck" \
 	"$SERVER:/opt/study-web/decks/"
 
 echo "== install binary & restart =="
