@@ -145,6 +145,17 @@ Set with the `--order` flag or the `# order:` deck header:
 | `flip-through` | **"Just show me."** Answers visible, enter advances, wraps at the end. Nothing recorded. |
 | `weak-only` | **"What am I bad at?"** Cram mode: only weak or never-studied cards, ignoring review dates. |
 
+## Card badges
+
+A card wears at most one badge, the same in both frontends. Each badge tells you where the card stands right now:
+
+- `new` says "you haven't seen this card before"
+- `learning` says "your last attempt was successful, but you haven't graduated this card yet"
+- `retry` says "your previous attempt on this card was incorrect"
+- `ahead` says "you're viewing this card before it's due". Appears when you continue studying the same deck despite being caught up
+- `reviewing` says "view both the question and the answer". Appears in `flip-through`
+- No badge says "you have already graduated this card and this is a scheduled recall"
+
 # Deck format
 
 ## Accepted answers
