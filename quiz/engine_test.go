@@ -2,6 +2,7 @@ package quiz
 
 import (
 	"study/deck"
+	"study/progress"
 	"testing"
 )
 
@@ -357,41 +358,49 @@ func TestEngineCustomDistractors(t *testing.T) {
 	}
 }
 
-// TestEngineIsRetryTimingInvariant locks in the contract the gui relies on to
-// keep drill repetitions invisible to persisted stats in sequential mode: right after an answer is submitted, IsRetry() must report whether
-// the card just answered came from the retry queue. The first (cold) miss
-// must read false so it is recorded; every subsequent drill rep must read
-// true so it is skipped. (The evidence scheduler records every attempt — its
-// repetitions are spaced retrievals, not drill — and never sets IsRetry.)
-func TestEngineIsRetryTimingInvariant(t *testing.T) {
+// TestEngineRetryStatsInvariant locks in sequential mode's stats contract
+// directly: the first (cold) miss is recorded to the store, every drill
+// repetition after it is massed practice and stays out of persisted stats
+// (recordAnswer skips fromRetry serves). IsRetry itself is a display label —
+// "your last attempt at this card was a miss" — so it reads true from the
+// moment a miss is graded and through the drill reps.
+func TestEngineRetryStatsInvariant(t *testing.T) {
+	store, err := progress.NewStore(t.TempDir() + "/d.deck")
+	if err != nil {
+		t.Fatalf("store: %v", err)
+	}
 	d := testDeck(4)
 	d.Order = deck.OrderSequential
-	e := NewEngine(d, nil, nil)
+	e := NewEngine(d, nil, store)
 
 	if e.IsRetry() {
 		t.Fatal("first card comes from the main queue; IsRetry must be false")
 	}
+	missed := e.Current().ID
 
-	// Answer the first card wrong. IsRetry must still be false immediately
-	// after Answer() returns — this is when the gui records the cold miss.
+	// The cold miss lands in persisted stats, and the card reads retry from
+	// this grading on.
 	for i, o := range e.Options() {
 		if o != e.Current().AnswerText {
 			e.Answer(i)
 			break
 		}
 	}
-	if e.IsRetry() {
-		t.Error("IsRetry must stay false right after the first cold miss")
+	if got := store.Get(missed).TimesWrong; got != 1 {
+		t.Fatalf("cold miss recorded %d times, want 1", got)
+	}
+	if !e.IsRetry() {
+		t.Error("a card whose last graded answer was a miss must read retry")
 	}
 
-	// Advancing replays the same card, now as a retry drill rep.
+	// Advancing replays the same card as a retry drill rep.
 	e.Next()
 	if !e.IsRetry() {
 		t.Error("the replayed card after a wrong answer must be a retry rep")
 	}
 
-	// A correct drill rep stays a retry rep (still invisible to stats) until
-	// the card graduates.
+	// A correct drill rep stays a retry rep and stays out of stats until the
+	// card graduates.
 	for i, o := range e.Options() {
 		if o == e.Current().AnswerText {
 			e.Answer(i)
@@ -400,6 +409,9 @@ func TestEngineIsRetryTimingInvariant(t *testing.T) {
 	}
 	if !e.IsRetry() {
 		t.Error("a correct drill rep must still report IsRetry true")
+	}
+	if cp := store.Get(missed); cp.TimesCorrect != 0 || cp.TimesWrong != 1 {
+		t.Errorf("drill reps must stay out of stats, got %d correct %d wrong, want 0 and 1", cp.TimesCorrect, cp.TimesWrong)
 	}
 }
 

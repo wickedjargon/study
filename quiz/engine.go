@@ -125,6 +125,13 @@ type Engine struct {
 	// answer, "learning" on the serves after it.
 	answered map[string]bool
 
+	// lastWrong marks cards whose most recent graded answer this session was
+	// a miss, cleared by the next correct one. A card's return while marked
+	// reads "retry" — the label promises "you missed this a moment ago", so
+	// it must track the last outcome, not membership in sequential mode's
+	// drill queue.
+	lastWrong map[string]bool
+
 	// ahead marks studied cards that entered this session before their review
 	// date (--ahead, or a weak-only cram of a not-yet-due card). Early
 	// retrieval practice is fine — it's merely lower-yield — but its easy
@@ -234,6 +241,7 @@ func NewEngine(d *deck.Deck, pool []deck.Card, store *progress.Store) *Engine {
 		previewed:     make(map[string]bool),
 		newCards:      make(map[string]bool),
 		answered:      make(map[string]bool),
+		lastWrong:     make(map[string]bool),
 	}
 	for i := range d.Cards {
 		id := d.Cards[i].ID
@@ -422,6 +430,7 @@ func (e *Engine) ContinueAll() {
 	e.lapsed = make(map[string]bool)
 	e.ahead = make(map[string]bool)
 	e.answered = make(map[string]bool)
+	e.lastWrong = make(map[string]bool)
 	for i, c := range ordered {
 		e.main = append(e.main, queuedCard{card: c, due: e.step + i})
 	}
@@ -559,9 +568,12 @@ func (e *Engine) Options() []string {
 	return e.currentOpts
 }
 
-// IsRetry returns true if the current card is from the retry queue.
+// IsRetry reports whether the current card's most recent graded answer this
+// session was a miss: "you missed this a moment ago, try again". Covers both
+// sequential mode's drill queue and the evidence scheduler's gap-requeued
+// misses; a correct answer clears it, dropping the card back to "learning".
 func (e *Engine) IsRetry() bool {
-	return e.fromRetry
+	return e.fromRetry || (e.current != nil && e.lastWrong[e.current.ID])
 }
 
 // CurrentIsNew reports whether the current card has never been graded, this
@@ -575,8 +587,9 @@ func (e *Engine) CurrentIsNew() bool {
 // CurrentIsLearning reports whether the current card was graded at least once
 // today and still owes correct recalls before it can leave the session: the
 // follow-up serves of a new card, and any card missed today being
-// re-established. Evidence scheduler only — sequential mode's massed drill
-// wears the retry tag instead.
+// re-established. Evidence scheduler only. Display gives IsRetry priority, so
+// this reads "learning" on screen only while the card is on track — its last
+// answer correct.
 func (e *Engine) CurrentIsLearning() bool {
 	return e.evidenceScheduled() && e.current != nil && e.answered[e.current.ID]
 }
@@ -898,6 +911,7 @@ func (e *Engine) recordAnswer(correct bool) {
 // handleCorrect processes a correct answer.
 func (e *Engine) handleCorrect() {
 	e.answered[e.current.ID] = true
+	delete(e.lastWrong, e.current.ID)
 	// Evidence scheduler: one recall down. A card that meets its session
 	// criterion is done — its next appearance is a matter of days, scheduled
 	// in the store — otherwise it returns later this session, spaced out.
@@ -946,6 +960,7 @@ func (e *Engine) handleCorrect() {
 // handleWrong processes a wrong answer.
 func (e *Engine) handleWrong() {
 	e.answered[e.current.ID] = true
+	e.lastWrong[e.current.ID] = true
 	// Evidence scheduler: no massed drill. The card returns after a short —
 	// but nonzero — gap (an immediate repeat would be answered from short-term
 	// memory and teach nothing durable) and owes at least two more spaced

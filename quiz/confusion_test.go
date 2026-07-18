@@ -217,9 +217,10 @@ func TestCurrentIsNew(t *testing.T) {
 	}
 }
 
-// TestLearningAfterLapse: a previously learned card missed today owes more
-// recalls and its re-serves read "learning" — never "new", it has history.
-func TestLearningAfterLapse(t *testing.T) {
+// TestRetryThenLearningAfterLapse: a card missed today returns as "retry"
+// (its last answer was a miss), drops to "learning" once answered correctly,
+// and never reads "new" — it has history.
+func TestRetryThenLearningAfterLapse(t *testing.T) {
 	store, err := progress.NewStore(t.TempDir() + "/d.deck")
 	if err != nil {
 		t.Fatalf("store: %v", err)
@@ -233,22 +234,31 @@ func TestLearningAfterLapse(t *testing.T) {
 	answerCurrent(e, false)
 	e.Next()
 
-	seenAgain := false
-	for i := 0; i < 20 && e.State() != Done; i++ {
+	serves := 0
+	for i := 0; i < 30 && e.State() != Done; i++ {
 		if e.Current().ID == missed {
-			seenAgain = true
+			serves++
 			if e.CurrentIsNew() {
 				t.Fatal("a lapsed card must not read new")
 			}
-			if !e.CurrentIsLearning() {
-				t.Fatal("a lapsed card's re-serve should read learning")
+			if serves == 1 && !e.IsRetry() {
+				t.Fatal("first re-serve after the miss should read retry")
+			}
+			if serves > 1 {
+				// The miss was answered away; on-track recalls read learning.
+				if e.IsRetry() {
+					t.Fatal("retry must clear after a correct answer")
+				}
+				if !e.CurrentIsLearning() {
+					t.Fatal("an on-track re-serve should read learning")
+				}
 			}
 		}
 		answerCurrent(e, true)
 		e.Next()
 	}
-	if !seenAgain {
-		t.Fatalf("missed card %s never re-served", missed)
+	if serves < 2 {
+		t.Fatalf("missed card %s re-served %d times, want at least 2 (owes two recalls after a miss)", missed, serves)
 	}
 	if e.State() != Done {
 		t.Fatal("session never completed")
