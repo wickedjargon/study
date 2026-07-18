@@ -112,6 +112,12 @@ type Deck struct {
 	Preview    bool    // reveal a never-studied card's answer once before quizzing it
 	FontSize   int     // base font size in points (0 = use the app default)
 	Speed      float64 // audio playback speed multiplier (0 = use the app default of 1.0)
+	// ImgTint marks the deck's images as monochrome alpha masks ("# img-tint:
+	// fg"): frontends recolor them to the theme's foreground so one image set
+	// works in both light and dark mode. Deck-level rather than per-card
+	// because image-only cards hash their @img lines into the card ID — a
+	// per-card flag there would orphan progress.
+	ImgTint bool
 	Cards      []Card
 
 	// Warnings collects non-fatal parse issues — directives whose value was
@@ -330,7 +336,7 @@ func parseDir(absDir string) (*Deck, error) {
 		if d.Mode != merged.Mode || d.CaseSensitive != merged.CaseSensitive ||
 			d.TimeLimit != merged.TimeLimit || d.Order != merged.Order ||
 			d.Preview != merged.Preview || d.NewPerSession != merged.NewPerSession ||
-			d.WrongPause != merged.WrongPause {
+			d.WrongPause != merged.WrongPause || d.ImgTint != merged.ImgTint {
 			merged.warn("%s: header settings differ from %s; using the first file's",
 				filepath.Base(path), filepath.Base(entries[0]))
 		}
@@ -463,6 +469,16 @@ func applyDeckMetadata(deck *Deck, block []string) {
 				deck.FontSize = n
 			} else {
 				deck.warn("ignoring %q (# font-size: needs 8-48, or small/medium/large/x-large)", trimmed)
+			}
+		}
+		if after, ok := strings.CutPrefix(trimmed, "# img-tint:"); ok {
+			switch strings.TrimSpace(after) {
+			case "fg":
+				deck.ImgTint = true
+			case "off":
+				deck.ImgTint = false
+			default:
+				deck.warn("ignoring %q (# img-tint: must be fg or off)", trimmed)
 			}
 		}
 		if after, ok := strings.CutPrefix(trimmed, "# audio-speed:"); ok {

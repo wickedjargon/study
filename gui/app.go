@@ -1058,7 +1058,7 @@ func (a *App) loadQuestionImage() {
 	for _, m := range card.Question {
 		if m.Type == deck.Image {
 			if img, err := loadImage(m.Content); err == nil {
-				a.questionImg = img
+				a.questionImg = a.tinted(img)
 			} else {
 				// The file existed at parse time (it's stat-checked then) but
 				// won't decode now — unsupported format or corrupt/removed. Flag
@@ -1283,6 +1283,19 @@ func loadImage(path string) (image.Image, error) {
 	defer f.Close()
 	img, _, err := image.Decode(f)
 	return img, err
+}
+
+// tinted recolors a deck image to the theme's foreground when the deck asks
+// for it (# img-tint: fg): the image's alpha masks a textColor fill, so one
+// near-black image set reads correctly on both the light and dark scheme.
+func (a *App) tinted(img image.Image) image.Image {
+	if a.engine == nil || !a.engine.ImgTint() {
+		return img
+	}
+	b := img.Bounds()
+	out := image.NewRGBA(b)
+	draw.DrawMask(out, b, image.NewUniform(textColor), image.Point{}, img, b.Min, draw.Src)
+	return out
 }
 
 // ── Rendering ───────────────────────────────────────────────────────
@@ -1885,7 +1898,7 @@ func (a *App) loadRevealImage() {
 				fmt.Fprintf(os.Stderr, "study: could not load image %s: %v\n", m.Content, err)
 				return
 			}
-			a.revealImg = img
+			a.revealImg = a.tinted(img)
 			return
 		}
 	}
@@ -1907,7 +1920,7 @@ func (a *App) loadConfusedImage() {
 				fmt.Fprintf(os.Stderr, "study: could not load image %s: %v\n", m.Content, err)
 				return
 			}
-			a.confusedImg = img
+			a.confusedImg = a.tinted(img)
 			return
 		}
 	}

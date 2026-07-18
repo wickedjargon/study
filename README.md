@@ -235,6 +235,10 @@ What is 1 + 1?
 | `# wrong-pause:` | `--wrong-pause` | seconds, or `none` | `5` |
 | `# font-size:` | `--font-size` | `8`–`48`, or `small`/`medium`/`large`/`x-large` | `10` |
 | `# audio-speed:` | `--audio-speed` | `0.25`–`4.0` | `1.0` |
+| `# img-tint:` | file-only | `fg`, `off` | `off` |
 
 - A flag overrides its deck-header setting equivalent
+- `# img-tint: fg` marks the deck's images as monochrome alpha masks. Both
+  frontends recolor them to the theme's foreground, so one image set works in
+  light and dark mode alike.
 

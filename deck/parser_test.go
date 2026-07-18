@@ -338,6 +338,38 @@ func TestParsePreviewMetadata(t *testing.T) {
 	}
 }
 
+func TestParseImgTintMetadata(t *testing.T) {
+	// Default (no header) is off.
+	d, err := Parse(writeTempDeck(t, "q1\n---\na1\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if d.ImgTint {
+		t.Errorf("expected ImgTint=false by default")
+	}
+
+	// # img-tint: fg marks the deck's images as recolorable alpha masks.
+	d, err = Parse(writeTempDeck(t, "# img-tint: fg\n\nq1\n---\na1\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !d.ImgTint {
+		t.Errorf("expected ImgTint=true with '# img-tint: fg'")
+	}
+
+	// A malformed value is ignored with a warning.
+	d, err = Parse(writeTempDeck(t, "# img-tint: white\n\nq1\n---\na1\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if d.ImgTint {
+		t.Errorf("expected ImgTint=false with malformed '# img-tint: white'")
+	}
+	if len(d.Warnings) != 1 {
+		t.Errorf("expected 1 warning for malformed value, got %v", d.Warnings)
+	}
+}
+
 func TestDistractorsImplyChoiceMode(t *testing.T) {
 	cases := []struct {
 		name    string

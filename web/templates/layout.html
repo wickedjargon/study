@@ -34,7 +34,7 @@
 {{define "media"}}
 {{range .}}
 {{if .Text}}<p class="cardtext{{if .Primary}} primary{{end}}" dir="auto">{{.Text}}</p>{{end}}
-{{if .ImageURL}}<img class="cardimg" src="{{.ImageURL}}" alt="">{{end}}
+{{if .ImageURL}}<img class="cardimg{{if .Tint}} tint{{end}}" src="{{.ImageURL}}" alt="">{{end}}
 {{if .AudioURL}}
 <div class="player">
   <button type="button" class="play" aria-label="play audio">

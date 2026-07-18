@@ -17,6 +17,7 @@ type mediaView struct {
 	Text     string
 	Primary  bool
 	ImageURL string
+	Tint     bool // recolor the image to the theme foreground (# img-tint: fg)
 	AudioURL string
 }
 
@@ -273,7 +274,7 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		card := e.Current()
 		view.Screen = "question"
 		view.Position = fmt.Sprintf("[%d/%d]", e.TotalSeen+1, e.TotalSeen+e.Remaining())
-		view.Question = mediaViews(mediaBase, card.Question)
+		view.Question = mediaViews(mediaBase, sess.deck.ImgTint, card.Question)
 		view.Choice = card.Mode == deck.ModeChoice
 		view.Options = e.Options()
 		view.TimeLimit = e.TimeLimit()
@@ -285,8 +286,8 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 	case quiz.ShowPreview:
 		card := e.Current()
 		view.Screen = "preview"
-		view.Question = mediaViews(mediaBase, card.Question)
-		view.AnswerSide = mediaViews(mediaBase, card.Answer)
+		view.Question = mediaViews(mediaBase, sess.deck.ImgTint, card.Question)
+		view.AnswerSide = mediaViews(mediaBase, sess.deck.ImgTint, card.Answer)
 		view.FlipMode = e.Order() == deck.OrderFlipThrough
 		view.IsNew = e.CurrentIsNew()
 		if view.FlipMode {
@@ -306,15 +307,15 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 			view.Screen = "question"
 			break
 		}
-		view.Question = mediaViews(mediaBase, res.Card.Question)
-		view.AnswerSide = mediaViews(mediaBase, res.Card.Answer)
+		view.Question = mediaViews(mediaBase, sess.deck.ImgTint, res.Card.Question)
+		view.AnswerSide = mediaViews(mediaBase, sess.deck.ImgTint, res.Card.Answer)
 		view.ResultCorrect = res.Correct
 		view.ResultTimedOut = res.TimedOut
 		view.ResultNoIdea = res.NoIdea
 		view.ResultTyped = res.Typed
 		view.ResultAnswer = res.Answer
 		if res.ConfusedWith != nil {
-			view.Confused = mediaViews(mediaBase, res.ConfusedWith.Question)
+			view.Confused = mediaViews(mediaBase, sess.deck.ImgTint, res.ConfusedWith.Question)
 		}
 		if !res.Correct {
 			view.WrongPause = e.WrongPause()
@@ -341,7 +342,7 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 
 // mediaViews converts a card side for the template, routing file media
 // through the /media handler by base name.
-func mediaViews(base string, side []deck.Media) []mediaView {
+func mediaViews(base string, tint bool, side []deck.Media) []mediaView {
 	var out []mediaView
 	first := true
 	for _, m := range side {
@@ -352,7 +353,7 @@ func mediaViews(base string, side []deck.Media) []mediaView {
 				first = false
 			}
 		case deck.Image:
-			out = append(out, mediaView{ImageURL: base + filepath.Base(m.Content)})
+			out = append(out, mediaView{ImageURL: base + filepath.Base(m.Content), Tint: tint})
 		case deck.Audio:
 			out = append(out, mediaView{AudioURL: base + filepath.Base(m.Content)})
 		}

@@ -524,6 +524,12 @@ func (e *Engine) Speed() float64 {
 	return e.deck.Speed
 }
 
+// ImgTint reports whether the deck's images are alpha masks to recolor with
+// the theme's foreground ("# img-tint: fg").
+func (e *Engine) ImgTint() bool {
+	return e.deck.ImgTint
+}
+
 // Current returns the current card being quizzed.
 func (e *Engine) Current() *deck.Card {
 	return e.current

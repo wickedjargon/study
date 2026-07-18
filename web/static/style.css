@@ -33,6 +33,9 @@
     --bad: #ef4444;
     --bars: #ffffff;
   }
+  /* img-tint decks ship near-black alpha masks drawn in the light --fg;
+     inverting lands within a hair of the dark --fg, alpha edges intact */
+  .cardimg.tint { filter: invert(1); }
 }
 
 * { box-sizing: border-box; }
