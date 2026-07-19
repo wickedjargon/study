@@ -898,16 +898,16 @@ func (a *App) handleTypeKey(key string, ev xevent.KeyPressEvent) {
 				a.setHintMark = 0
 				switch out.Verdict {
 				case quiz.SetHit:
-					// Echo the entry as it was typed, verdict-marked, right
-					// where it was typed — the result screen's "> x ✘" idiom.
-					a.setHint = "> " + a.inputBuf
+					// The item just joined the named list; the list line
+					// itself wears the ✔ — no separate echo line.
+					a.setHint = ""
 					a.setHintMark = 1
 				case quiz.SetDuplicate:
 					a.setHint = "already named"
 				case quiz.SetClose:
 					a.setHint = "close — check the spelling"
 				case quiz.SetMiss:
-					a.setHint = "> " + a.inputBuf
+					a.setHint = a.inputBuf
 					a.setHintMark = -1
 				}
 				if out.Result != nil {
@@ -1560,28 +1560,45 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 					got = append(got, it.Text)
 				}
 			}
+			// One status line, not a stack: the named list carries the last
+			// entry's verdict in place. A hit ends the list, so it just gets
+			// the ✔; a wrong guess appends in red with the ✘; the costless
+			// outcomes append dim. No separate echo line.
+			maxW := a.width - padding*3 - 20
+			measure := func(s string) int { return font.MeasureString(a.fontRegular, s).Round() }
+			lastLine := ""
 			if len(got) > 0 {
-				maxW := a.width - padding*3 - 20
-				measure := func(s string) int { return font.MeasureString(a.fontRegular, s).Round() }
-				for _, line := range wrapLines(strings.Join(got, ", "), maxW, measure) {
+				lines := wrapLines(strings.Join(got, ", "), maxW, measure)
+				for i, line := range lines {
 					a.drawText(canvas, line, padding+20, y, a.fontRegular, greenColor)
-					y += lineHeight(a.fontRegular)
+					if i < len(lines)-1 {
+						y += lineHeight(a.fontRegular)
+					} else {
+						lastLine = line
+					}
 				}
 			}
-			if a.setHint != "" {
-				// The entry verdict, marked like the tally: ✔ names, ✘
-				// wrong guesses, plain dim for the costless outcomes.
-				hc := dimColor
-				switch {
-				case a.setHintMark > 0:
-					hc = greenColor
-				case a.setHintMark < 0:
-					hc = redColor
+			drew := lastLine != ""
+			switch {
+			case a.setHintMark > 0 && drew:
+				a.drawMarkAfter(canvas, lastLine, padding+20, y, true, greenColor)
+			case a.setHintMark < 0:
+				txt := a.setHint
+				if drew {
+					txt = "  " + txt
 				}
-				a.drawText(canvas, a.setHint, padding+20, y, a.fontRegular, hc)
-				if a.setHintMark != 0 {
-					a.drawMarkAfter(canvas, a.setHint, padding+20, y, a.setHintMark > 0, hc)
+				a.drawText(canvas, txt, padding+20+measure(lastLine), y, a.fontRegular, redColor)
+				a.drawMarkAfter(canvas, lastLine+txt, padding+20, y, false, redColor)
+				drew = true
+			case a.setHint != "":
+				txt := a.setHint
+				if drew {
+					txt = " · " + txt
 				}
+				a.drawText(canvas, txt, padding+20+measure(lastLine), y, a.fontRegular, dimColor)
+				drew = true
+			}
+			if drew {
 				y += lineHeight(a.fontRegular)
 			}
 		}

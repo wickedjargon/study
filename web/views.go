@@ -319,24 +319,23 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 			}
 			view.SetCount = e.SetNamedCount()
 			view.SetTarget = card.SetTarget()
-			// Entry feedback, marked with the tally's ✓/✗ and echoing the
-			// entry as typed (?t=), the way the result screen echoes a
-			// typed answer. The costless outcomes stay dim, no mark.
+			// Entry feedback, appended to the named-list line: a hit's item
+			// already ends the list so the flash is just the ✓; a wrong
+			// guess appends as typed (?t=) with the ✗; the costless
+			// outcomes append dim, unmarked.
 			typed := r.URL.Query().Get("t")
 			if len(typed) > 80 {
 				typed = typed[:80]
 			}
 			switch r.URL.Query().Get("f") {
 			case "hit":
-				if typed != "" {
-					view.SetFlash = typed + " ✓"
-					view.SetFlashClass = "ok"
-				}
+				view.SetFlash = "✓"
+				view.SetFlashClass = "ok"
 			case "dup":
-				view.SetFlash = "already named"
+				view.SetFlash = "· already named"
 				view.SetFlashClass = "dim"
 			case "close":
-				view.SetFlash = "close — check the spelling"
+				view.SetFlash = "· close — check the spelling"
 				view.SetFlashClass = "dim"
 			case "miss":
 				if typed != "" {
