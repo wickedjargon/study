@@ -22,6 +22,7 @@ func main() {
 	addr := flag.String("addr", "127.0.0.1:8091", "listen address")
 	data := flag.String("data", "data", "directory for per-visitor progress and identity")
 	baseURL := flag.String("base-url", "", "public URL login links point at (default http://<addr>)")
+	local := flag.Bool("local", false, "single-user desktop mode: fixed identity, no login UI")
 	mailFrom := flag.String("mail-from", "study <login@study.fftp.io>", "sender for login emails")
 	flag.Parse()
 
@@ -47,6 +48,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "✗ %v\n", err)
 		os.Exit(1)
 	}
+	srv.Local = *local
 
 	log.Printf("study-web listening on http://%s", *addr)
 	if err := http.ListenAndServe(*addr, srv); err != nil {

@@ -8,6 +8,14 @@ study:
 study-web:
 	go build -o study-web ./cmd/study-web
 
+# The Windows desktop app: the web package in a WebView2 window, cross-
+# compiled (pure Go, no CGO). dist/study-windows/ is the folder to copy to a
+# Windows machine: study.exe beside its decks. See cmd/study-win/main.go.
+WIN_DIST = dist/study-windows
+study-win:
+	env CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
+		go build -trimpath -ldflags "-s -w -H windowsgui" -o $(WIN_DIST)/study.exe ./cmd/study-win
+
 
 # The local demo decks. `make run` needs the binary built first (go lives in
 # the archbox container; running the binary doesn't).

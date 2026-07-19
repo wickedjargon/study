@@ -57,6 +57,12 @@ type Server struct {
 	baseURL string
 	secure  bool // https base URL: session cookies get the Secure flag
 
+	// Local is single-user desktop mode (the Windows app wraps the server
+	// in a WebView2 window): one fixed identity instead of guest cookies,
+	// login UI hidden, auth routes redirect home. Set after New, before
+	// serving.
+	Local bool
+
 	tmpl *template.Template
 	mux  *http.ServeMux
 
@@ -218,6 +224,10 @@ func New(deckPaths []string, dataDir, baseURL string, mailer Mailer) (*Server, e
 	tmpl, err := template.New("").Funcs(template.FuncMap{
 		// keynum labels a choice with its 1-based keyboard shortcut.
 		"keynum": func(i int) int { return i + 1 },
+		// local reports single-user desktop mode (the Windows app): no
+		// guests, no login UI. Read at render time so New's caller can set
+		// s.Local after construction.
+		"local": func() bool { return s.Local },
 	}).ParseFS(templatesFS, "templates/*.html")
 	if err != nil {
 		return nil, fmt.Errorf("parsing templates: %w", err)

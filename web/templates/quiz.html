@@ -13,7 +13,7 @@
     <details class="menu">
       <summary aria-label="session menu" title="session menu">⋮</summary>
       <div class="menuitems">
-        {{if not .Email}}
+        {{if and (not .Email) (not local)}}
         <a class="mact" href="/login">
           <span class="mi-title">Login</span>
           <span class="mi-desc">login required to track progress beyond browser session</span>
@@ -72,7 +72,7 @@
       </div>
     </details>
     {{else}}
-    {{template "authmenu" .Email}}
+    {{if not local}}{{template "authmenu" .Email}}{{end}}
     {{end}}
   </span>
 </header>

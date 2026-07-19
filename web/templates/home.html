@@ -2,7 +2,7 @@
 {{template "top" "decks"}}
 <header class="bar">
   <span class="barleft"><span class="brand">study</span></span>
-  <span class="barright">{{template "authmenu" .Email}}</span>
+  <span class="barright">{{if not local}}{{template "authmenu" .Email}}{{end}}</span>
 </header>
 <main class="list">
   {{range .Sections}}

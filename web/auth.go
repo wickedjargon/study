@@ -41,20 +41,39 @@ func (s *Server) currentUser(r *http.Request) (id, email string) {
 }
 
 // visitorID is the identity progress is keyed by: the logged-in user when
-// there is one, else the guest cookie (minted on first contact).
+// there is one, else the guest cookie (minted on first contact). Desktop
+// mode is one machine, one user: a fixed identity, no cookies.
 func (s *Server) visitorID(w http.ResponseWriter, r *http.Request) string {
+	if s.Local {
+		return "local"
+	}
 	if id, _ := s.currentUser(r); id != "" {
 		return id
 	}
 	return s.guestID(w, r)
 }
 
+// localGuard bounces the auth pages home in desktop mode, where accounts
+// don't exist. Reports whether it handled the request.
+func (s *Server) localGuard(w http.ResponseWriter, r *http.Request) bool {
+	if s.Local {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	}
+	return s.Local
+}
+
 func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
+	if s.localGuard(w, r) {
+		return
+	}
 	_, email := s.currentUser(r)
 	s.render(w, "login", loginView{Stage: "form", Email: email})
 }
 
 func (s *Server) handleLoginSend(w http.ResponseWriter, r *http.Request) {
+	if s.localGuard(w, r) {
+		return
+	}
 	addr, err := mail.ParseAddress(strings.TrimSpace(r.FormValue("email")))
 	if err != nil || len(addr.Address) > 254 {
 		s.render(w, "login", loginView{Stage: "form", Error: "That doesn't look like an email address"})
@@ -97,6 +116,9 @@ func (s *Server) mayMail(email string) bool {
 }
 
 func (s *Server) handleAuthPage(w http.ResponseWriter, r *http.Request) {
+	if s.localGuard(w, r) {
+		return
+	}
 	// The token is not checked here: a prefetching scanner learns nothing and
 	// spends nothing. The page submits itself (a click, without JS) and the
 	// POST decides.
@@ -104,6 +126,9 @@ func (s *Server) handleAuthPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAuthRedeem(w http.ResponseWriter, r *http.Request) {
+	if s.localGuard(w, r) {
+		return
+	}
 	email, guest, err := s.ids.redeemToken(r.PathValue("token"))
 	if err == errNoToken {
 		s.render(w, "login", loginView{Stage: "gone"})
@@ -159,6 +184,9 @@ func (s *Server) adoptGuest(guest, userID string) {
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if s.localGuard(w, r) {
+		return
+	}
 	if c, err := r.Cookie("session"); err == nil {
 		if err := s.ids.deleteSession(c.Value); err != nil {
 			log.Printf("deleting session: %v", err)
