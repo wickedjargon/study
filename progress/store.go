@@ -399,6 +399,21 @@ func (s *Store) LastStudied() time.Time {
 	return last
 }
 
+// LastStudiedFor returns the most recent answer time among the given card
+// IDs only — the deck being studied, not the whole store. The same-day
+// launch gate scopes with it: the web keeps one store per pack group, so
+// without the scoping a sibling deck's answers would mark every deck in the
+// group "studied today".
+func (s *Store) LastStudiedFor(ids []string) time.Time {
+	var last time.Time
+	for _, id := range ids {
+		if cp, ok := s.data.Cards[id]; ok && cp.LastSeen.After(last) {
+			last = cp.LastSeen
+		}
+	}
+	return last
+}
+
 // SummaryFor returns aggregate stats scoped to the given card IDs — i.e. the
 // deck as it exists now, in the direction being studied — so orphaned progress
 // and the opposite direction's history don't inflate the numbers.

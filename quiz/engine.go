@@ -292,9 +292,16 @@ func NewEngine(d *deck.Deck, pool []deck.Card, store *progress.Store) *Engine {
 	// come from batches landing on different days). The session stays queued;
 	// the caught-up screen's continue serves it. Due reviews or an --ahead
 	// launch start immediately, as before.
+	//
+	// "Studied today" is measured over this deck's pool, not the whole
+	// store: the web shares one store across a pack group's decks, and a
+	// sibling deck's answers must not open a never-studied deck on the
+	// notice. (The session's own cards can't carry the signal — they are
+	// all new here by construction — the evidence is the pool's other
+	// cards, batched earlier and scheduled out.)
 	if d.Order == deck.OrderAdaptive && store != nil &&
 		len(e.main)+len(e.pendingNew) > 0 && e.allQueuedNew() &&
-		sameDay(store.LastStudied(), time.Now()) {
+		sameDay(store.LastStudiedFor(e.poolIDs()), time.Now()) {
 		e.state = CaughtUp
 		return e
 	}
@@ -307,6 +314,16 @@ func NewEngine(d *deck.Deck, pool []deck.Card, store *progress.Store) *Engine {
 		e.state = CaughtUp
 	}
 	return e
+}
+
+// poolIDs returns the IDs of every card in the deck's pool — the whole file
+// in the studied direction, of which the session may be a subset.
+func (e *Engine) poolIDs() []string {
+	ids := make([]string, len(e.pool))
+	for i, c := range e.pool {
+		ids[i] = c.ID
+	}
+	return ids
 }
 
 // allQueuedNew reports whether every card in the session entered it

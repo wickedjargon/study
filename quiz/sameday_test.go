@@ -136,3 +136,20 @@ func TestProgressZeroForLapModes(t *testing.T) {
 		t.Errorf("sequential Progress = %d, want 0", p)
 	}
 }
+
+// TestForeignHistoryDoesNotGate: answers recorded today under IDs outside
+// this deck's pool must not open a never-studied deck on the caught-up
+// notice. The web keeps one store per pack group, so a sibling topic deck's
+// history lands in the same file — the gate scopes to the pool, and a deck
+// whose own cards are untouched starts quizzing immediately.
+func TestForeignHistoryDoesNotGate(t *testing.T) {
+	d := testDeck(3)
+	d.Order = deck.OrderAdaptive
+	store := newTestStore(t)
+	store.RecordCorrect("sibling-deck-card") // today, in the shared store
+
+	e := NewEngine(d, nil, store)
+	if e.State() != ShowQuestion {
+		t.Fatalf("State = %v, want ShowQuestion — foreign same-day history gated an untouched deck", e.State())
+	}
+}
