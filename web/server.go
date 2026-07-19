@@ -719,6 +719,7 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 
 	sess.mu.Lock()
 	e := sess.engine
+	flash := ""
 	switch action {
 	case "start", "review", "intros", "mode":
 		// getSession already recomposed.
@@ -750,6 +751,34 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		// One transcription attempt on a near-miss result. The engine keeps
 		// the count; Next stays inert until the debt is paid.
 		e.PracticeTyped(r.FormValue("practice"))
+	case "entry":
+		// One entry of a set card's enumeration. The verdict rides the
+		// redirect as ?f= so the next render can flash it; the completing
+		// entry produces the card's single result.
+		if out := e.AnswerSetEntry(r.FormValue("entry")); out != nil {
+			if out.Result != nil {
+				sess.last = out.Result
+				if err := sess.store.Save(); err != nil {
+					log.Printf("saving progress: %v", err)
+				}
+			} else {
+				switch out.Verdict {
+				case quiz.SetDuplicate:
+					flash = "dup"
+				case quiz.SetClose:
+					flash = "close"
+				case quiz.SetMiss:
+					flash = "miss"
+				}
+			}
+		}
+	case "giveup":
+		if res := e.AnswerSetGiveUp(); res != nil {
+			sess.last = res
+			if err := sess.store.Save(); err != nil {
+				log.Printf("saving progress: %v", err)
+			}
+		}
 	case "preview":
 		e.ConfirmPreview()
 	case "continue":
@@ -761,7 +790,11 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 	}
 	sess.mu.Unlock()
 
-	http.Redirect(w, r, "/q/"+g.Slug+"/"+info.Slug, http.StatusSeeOther)
+	dest := "/q/" + g.Slug + "/" + info.Slug
+	if flash != "" {
+		dest += "?f=" + flash
+	}
+	http.Redirect(w, r, dest, http.StatusSeeOther)
 }
 
 func (s *Server) handleMedia(w http.ResponseWriter, r *http.Request) {

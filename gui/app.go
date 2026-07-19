@@ -251,6 +251,9 @@ type App struct {
 
 	// Text input buffer (type mode).
 	inputBuf string
+	// setHint is the last set-card entry's feedback ("close", "not one of
+	// them"), shown under the input until the next entry.
+	setHint string
 
 	// choiceSel is the arrow/vim-keys highlight on the choice screen:
 	// 0..N-1 an option, N the no-idea row. Every served card starts back on
@@ -730,6 +733,7 @@ func (a *App) handleKey(ev xevent.KeyPressEvent) {
 			a.confusedImg = nil
 			a.noteImg = nil
 			a.inputBuf = ""
+			a.setHint = ""
 
 			if s := a.engine.State(); s == quiz.ShowQuestion || s == quiz.ShowPreview {
 				a.presentCard()
@@ -881,6 +885,33 @@ func (a *App) moveChoiceSel(dir int) {
 func (a *App) handleTypeKey(key string, ev xevent.KeyPressEvent) {
 	switch key {
 	case "Return":
+		// Set cards answer entry by entry; an empty enter gives up and
+		// reveals the list. The completing entry grades the card once.
+		if c := a.engine.Current(); c != nil && c.IsSet() {
+			if strings.TrimSpace(a.inputBuf) == "" {
+				a.setResult(a.engine.AnswerSetGiveUp())
+				a.saveProgress()
+			} else if out := a.engine.AnswerSetEntry(a.inputBuf); out != nil {
+				switch out.Verdict {
+				case quiz.SetHit:
+					a.setHint = ""
+				case quiz.SetDuplicate:
+					a.setHint = "already named"
+				case quiz.SetClose:
+					a.setHint = "close — check the spelling"
+				case quiz.SetMiss:
+					a.setHint = "✗ not one of them"
+				}
+				if out.Result != nil {
+					a.setHint = ""
+					a.setResult(out.Result)
+					a.saveProgress()
+				}
+			}
+			a.inputBuf = ""
+			a.render()
+			return
+		}
 		a.setResult(a.engine.AnswerTyped(a.inputBuf))
 		// A near-miss result reuses the buffer for its practice line; it
 		// must not open pre-filled with the misspelling just submitted.
@@ -1506,10 +1537,40 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 
 	var actions []string
 	if a.engine.Mode() == deck.ModeType {
+		// A set card shows the enumeration state above its input: the
+		// running count, the items named so far (green, wrapped), and the
+		// last entry's feedback.
+		if card.IsSet() {
+			named := a.engine.SetNamed()
+			counter := fmt.Sprintf("named %d of %d", a.engine.SetNamedCount(), card.SetTarget())
+			a.drawText(canvas, counter, padding+20, y, a.fontSmall, dimColor)
+			y += lineHeight(a.fontSmall)
+			var got []string
+			for i, it := range card.SetItems {
+				if i < len(named) && named[i] {
+					got = append(got, it.Text)
+				}
+			}
+			if len(got) > 0 {
+				maxW := a.width - padding*3 - 20
+				measure := func(s string) int { return font.MeasureString(a.fontRegular, s).Round() }
+				for _, line := range wrapLines(strings.Join(got, ", "), maxW, measure) {
+					a.drawText(canvas, line, padding+20, y, a.fontRegular, greenColor)
+					y += lineHeight(a.fontRegular)
+				}
+			}
+			if a.setHint != "" {
+				a.drawText(canvas, a.setHint, padding+20, y, a.fontSmall, redColor)
+				y += lineHeight(a.fontSmall)
+			}
+		}
 		// Text input field.
 		prompt := "> " + a.inputBuf + "_"
 		a.drawText(canvas, prompt, padding+20, y, a.fontRegular, accentColor)
 		actions = []string{"enter: submit"}
+		if card.IsSet() {
+			actions = []string{"enter: submit", "empty enter: give up"}
+		}
 	} else {
 		// Choices, then the dim opt-out — for when every option would be a
 		// blind guess. Deliberately understated: an educated guess is still
@@ -1584,7 +1645,41 @@ func (a *App) renderResult(canvas *image.RGBA) {
 
 	y += a.scaled(10)
 
-	if a.engine.Mode() == deck.ModeType {
+	if card.IsSet() {
+		// The set reveal: the verdict line, what was named (green), and the
+		// remainder (dim — on a quota card the rest was never demanded).
+		markColor := greenColor
+		if !a.result.Correct {
+			markColor = redColor
+		}
+		named := a.engine.SetNamed()
+		var got, missed []string
+		for i, it := range card.SetItems {
+			if i < len(named) && named[i] {
+				got = append(got, it.Text)
+			} else {
+				missed = append(missed, it.Text)
+			}
+		}
+		verdict := fmt.Sprintf("named %d of %d", len(got), card.SetTarget())
+		a.drawText(canvas, verdict, padding+20, y, a.fontRegular, markColor)
+		a.drawMarkAfter(canvas, verdict, padding+20, y, a.result.Correct, markColor)
+		y += lineHeight(a.fontRegular)
+		maxW := a.width - padding*3 - 20
+		measure := func(s string) int { return font.MeasureString(a.fontRegular, s).Round() }
+		if len(got) > 0 {
+			for _, line := range wrapLines(strings.Join(got, ", "), maxW, measure) {
+				a.drawText(canvas, line, padding+20, y, a.fontRegular, greenColor)
+				y += lineHeight(a.fontRegular)
+			}
+		}
+		if len(missed) > 0 {
+			for _, line := range wrapLines(strings.Join(missed, ", "), maxW, measure) {
+				a.drawText(canvas, line, padding+20, y, a.fontRegular, dimColor)
+				y += lineHeight(a.fontRegular)
+			}
+		}
+	} else if a.engine.Mode() == deck.ModeType {
 		// Show what was typed; the ✔/✘ mark on this line is the verdict.
 		markColor := greenColor
 		if !a.result.Correct {

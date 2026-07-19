@@ -412,6 +412,17 @@ button.quiet:hover { color: var(--fg); }
 .typed.practice { flex-wrap: wrap; }
 .practice-note { flex-basis: 100%; color: var(--dim); margin: 0 0 0.1rem; }
 
+/* Set-answer cards: the enumeration status line, the named-so-far list on
+   the question screen, and the marked reveal on the result screen. */
+.setstatus { display: flex; justify-content: space-between; margin: 0 0 0.4rem; }
+.setcount { color: var(--dim); }
+.setflash { color: var(--bad); }
+.setnamed { margin: 0 0 0.5rem; }
+.setnamed span { color: var(--ok); }
+.setlist { margin: 0.2rem 0 0.4rem; }
+.setlist .named { color: var(--ok); }
+.setlist .unnamed { color: var(--dim); }
+
 .choices { display: grid; gap: 0.5rem; }
 .choice {
   display: flex;

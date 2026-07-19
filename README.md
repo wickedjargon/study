@@ -219,6 +219,31 @@ A card with no separator and a `{{...}}` deletion blanks the braced text
 The capital of France is {{Paris}}.
 ```
 
+## Set answers
+
+`+` lines make the answer an enumeration: name the items one at a time, any
+order, until you've named them all — or until an optional `quota:` is met
+("name any five"). An `=` under an item accepts a variant of that item.
+
+```
+Name five countries that border China
+---
+quota: 5
++ Russia
++ Mongolia
++ Kazakhstan
++ Myanmar
+= Burma
++ Laos
++ Vietnam
+```
+
+One verdict per card: a clean run is correct, a wrong guess or giving up
+(empty enter) is a miss — you still finish naming, and the reveal marks
+what you named against the full list. A misspelled entry close to an
+unnamed item costs nothing: retype it. Duplicates are ignored. Set cards
+are typed-only and don't reverse.
+
 ## Notes
 
 A second `---` adds a note, revealed only after you answer:

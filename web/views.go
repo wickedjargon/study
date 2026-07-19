@@ -121,12 +121,29 @@ type quizView struct {
 	// template swaps the next button for the practice input while positive.
 	PracticeOwed int
 
+	// Set-answer cards. SetNamed is the question screen's checked-off list
+	// (in item order); SetItems is the result reveal, every item marked
+	// named or not; SetFlash is one entry's feedback carried across the
+	// redirect (?f=dup|close|miss).
+	SetCard   bool
+	SetNamed  []string
+	SetItems  []setItemView
+	SetCount  int
+	SetTarget int
+	SetFlash  string
+
 	// Caught up / summary.
 	NextDue     string
 	CanContinue bool
 
 	// Summary all-time numbers.
 	AllCorrect, AllWrong, CardsStudied int
+}
+
+// setItemView is one item of a set card's result reveal.
+type setItemView struct {
+	Text  string
+	Named bool
 }
 
 // quizURL returns the quiz page for a group's deck.
@@ -290,6 +307,26 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		view.IsLearning = e.CurrentIsLearning()
 		view.IsRetry = e.IsRetry()
 		view.IsAhead = e.CurrentIsAhead()
+		if card.IsSet() {
+			view.SetCard = true
+			view.Choice = false
+			named := e.SetNamed()
+			for i, it := range card.SetItems {
+				if i < len(named) && named[i] {
+					view.SetNamed = append(view.SetNamed, it.Text)
+				}
+			}
+			view.SetCount = e.SetNamedCount()
+			view.SetTarget = card.SetTarget()
+			switch r.URL.Query().Get("f") {
+			case "dup":
+				view.SetFlash = "already named"
+			case "close":
+				view.SetFlash = "close — check the spelling"
+			case "miss":
+				view.SetFlash = "✗ not one of them"
+			}
+		}
 
 	case quiz.ShowPreview:
 		card := e.Current()
@@ -326,6 +363,19 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		view.ResultAnswer = res.Answer
 		if res.ConfusedWith != nil {
 			view.Confused = mediaViews(mediaBase, sess.deck.ImgTint, res.ConfusedWith.Question)
+		}
+		if res.Card.IsSet() {
+			view.SetCard = true
+			named := e.SetNamed()
+			for i, it := range res.Card.SetItems {
+				v := setItemView{Text: it.Text}
+				if i < len(named) && named[i] {
+					v.Named = true
+					view.SetCount++
+				}
+				view.SetItems = append(view.SetItems, v)
+			}
+			view.SetTarget = res.Card.SetTarget()
 		}
 		view.PracticeOwed = e.PracticeOwed()
 		if !res.Correct && !res.NearMiss {

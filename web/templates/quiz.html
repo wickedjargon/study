@@ -114,6 +114,23 @@
          Deliberately understated: an educated guess is still wanted. */}}
     <button name="noidea" value="1" class="noidea"><kbd>0</kbd><span>no idea</span></button>
   </form>
+  {{else if .SetCard}}
+  {{/* Enumeration: one entry at a time until the target is named. The
+       completing entry (or giving up) grades the whole card once. */}}
+  <div class="setstatus">
+    <span class="setcount">named {{.SetCount}} of {{.SetTarget}}</span>
+    {{if .SetFlash}}<span class="setflash">{{.SetFlash}}</span>{{end}}
+  </div>
+  {{if .SetNamed}}
+  <p class="setnamed">{{range $i, $t := .SetNamed}}{{if $i}}, {{end}}<span>{{$t}}</span>{{end}}</p>
+  {{end}}
+  <form method="post" action="{{.Base}}/entry" class="typed" id="answerform">
+    <input type="text" name="entry" dir="auto" autofocus autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="name one…">
+    <button class="primary">check</button>
+  </form>
+  <form method="post" action="{{.Base}}/giveup" class="actions">
+    <button class="quiet" title="end the card and reveal the full list">give up</button>
+  </form>
   {{else}}
   <form method="post" action="{{.Base}}/answer" class="typed" id="answerform">
     <input type="text" name="answer" dir="auto" autofocus autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="type your answer…">
@@ -158,7 +175,15 @@
     {{template "media" .Question}}
     <hr class="divider">
     {{if and (not .ResultCorrect) .ResultTyped}}<p class="typedanswer">you answered <s dir="auto">{{.ResultTyped}}</s></p>{{end}}
+    {{if .SetCard}}
+    {{/* The reveal marks what was and wasn't named, replacing the joined
+         answer line. Unnamed is dim, not red: on a quota card the rest was
+         never demanded. */}}
+    <p class="setcount">named {{.SetCount}} of {{.SetTarget}}</p>
+    <p class="setlist">{{range $i, $it := .SetItems}}{{if $i}}, {{end}}<span class="{{if $it.Named}}named{{else}}unnamed{{end}}">{{$it.Text}}</span>{{end}}</p>
+    {{else}}
     <div class="answerside">{{template "media" .AnswerSide}}</div>
+    {{end}}
     {{if .Note}}<div class="cardnote">{{template "media" .Note}}</div>{{end}}
     {{if .Confused}}
     <div class="confused">
