@@ -221,12 +221,9 @@ The capital of France is {{Paris}}.
 
 ## Set answers
 
-`+` lines make the answer an enumeration: name the items one at a time, any
-order, until you've named them all — or until an optional `quota:` is met
-("name any five"). An optional `attempts:` caps the counted entries (right
-answers and wrong guesses — misspellings and duplicates are free): the card
-ends as a miss the moment the target is out of reach. An `=` under an item
-accepts a variant of that item.
+`+` lines make the answer a set. Name them one at a time, any order.
+`quota:` means any N will do. `attempts:` caps your tries. `=` accepts a
+variant.
 
 ```
 Name five countries that border China
@@ -241,11 +238,10 @@ quota: 5
 + Vietnam
 ```
 
-One verdict per card: a clean run is correct, a wrong guess or giving up
-(empty enter) is a miss — you still finish naming, and the reveal marks
-what you named against the full list. A misspelled entry close to an
-unnamed item costs nothing: retype it. Duplicates are ignored. Set cards
-are typed-only and don't reverse. Try it: `study examples/set.deck`
+One verdict per card. Clean run is correct. A wrong guess or an empty
+enter is a miss, but you keep naming and the reveal shows what you got.
+Typos and duplicates are free. Typed-only, no reverse. Try it:
+`study examples/set.deck`
 
 ## Notes
 
