@@ -222,13 +222,16 @@ The capital of France is {{Paris}}.
 ## Set answers
 
 `+` lines make the answer a set. Name them one at a time, any order.
-`quota:` means any N will do. `attempts:` caps your tries. `=` accepts a
-variant.
+
+- `quota:` means any N will do.
+- `attempts:` caps your tries. 
+- `=` accepts a variant.
 
 ```
-Name five countries that border China
+Name three countries that border China
 ---
-quota: 5
+quota: 3
+attempts: 5
 + Russia
 + Mongolia
 + Kazakhstan
@@ -237,11 +240,6 @@ quota: 5
 + Laos
 + Vietnam
 ```
-
-One verdict per card. Clean run is correct. A wrong guess or an empty
-enter is a miss, but you keep naming and the reveal shows what you got.
-Typos and duplicates are free. Typed-only, no reverse. Try it:
-`study examples/set.deck`
 
 ## Notes
 
