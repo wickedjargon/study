@@ -184,37 +184,17 @@ func TestSetAttemptsCap(t *testing.T) {
 	if left := e.SetAttemptsLeft(); left != 4 {
 		t.Fatalf("attempts left = %d, want 4 — costless entries must be free", left)
 	}
-	e.AnswerSetEntry("japan") // miss: 3 left
-	e.AnswerSetEntry("chile") // miss: 2 left
-	out := e.AnswerSetEntry("peru")
-	if out.Result != nil { // miss: 1 left — hopeless, but the try is promised
-		t.Fatalf("card ended with tries still owed — every attempt gets played")
+	e.AnswerSetEntry("japan") // miss: 3 left, need 2 — still possible
+	out := e.AnswerSetEntry("chile")
+	if out.Result != nil { // miss: 2 left, need 2 — still possible
+		t.Fatalf("card ended while the target was still reachable")
 	}
-	out = e.AnswerSetEntry("ghana") // miss: 0 left — done
+	out = e.AnswerSetEntry("peru") // miss: 1 left, need 2 — dead
 	if out.Result == nil {
-		t.Fatal("card must end when the tries run out")
+		t.Fatal("card must end when the target is out of reach")
 	}
 	if out.Result.Correct {
 		t.Fatal("exhausted card graded correct")
-	}
-}
-
-// TestSetAttemptsExhaustOnHit: the last capped attempt can be a hit that
-// still leaves the quota unmet — the card ends there, wrong.
-func TestSetAttemptsExhaustOnHit(t *testing.T) {
-	d := chinaDeck(3)
-	d.Cards[0].Attempts = 5
-	e := NewEngine(d, nil, nil)
-	e.AnswerSetEntry("russia") // hit 1
-	e.AnswerSetEntry("japan")  // miss
-	e.AnswerSetEntry("chile")  // miss
-	e.AnswerSetEntry("peru")   // miss
-	out := e.AnswerSetEntry("nepal") // hit 2, last attempt, quota unmet
-	if out.Verdict != SetHit {
-		t.Fatalf("verdict = %v, want hit", out.Verdict)
-	}
-	if out.Result == nil || out.Result.Correct {
-		t.Fatal("last-attempt hit short of quota must end the card wrong")
 	}
 }
 

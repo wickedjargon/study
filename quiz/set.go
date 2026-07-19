@@ -100,9 +100,7 @@ func (e *Engine) AnswerSetEntry(input string) *SetOutcome {
 		e.set.named[i] = true
 		e.set.log = append(e.set.log, SetLogEntry{Text: items[i].Text, Hit: true})
 		out := &SetOutcome{Verdict: SetHit, Item: i}
-		// Quota reached completes the card; so does spending the last
-		// capped attempt on a hit that still leaves the target unmet.
-		if len(e.set.named) >= e.current.SetTarget() || e.SetAttemptsLeft() == 0 {
+		if len(e.set.named) >= e.current.SetTarget() {
 			out.Result = e.finishSet(false)
 		}
 		return out
@@ -121,11 +119,10 @@ func (e *Engine) AnswerSetEntry(input string) *SetOutcome {
 	e.set.wrong++
 	e.set.log = append(e.set.log, SetLogEntry{Text: strings.TrimSpace(input), Hit: false})
 	out := &SetOutcome{Verdict: SetMiss, Item: -1}
-	// An attempts cap counts exactly the logged entries, and every attempt
-	// gets played: even a card that can no longer reach its target keeps
-	// taking entries until the tries run out — the cap is a promise, and
-	// attempting retrieval is worth something on a lost card too.
-	if e.SetAttemptsLeft() == 0 {
+	// An attempts cap counts exactly the logged entries. The card ends the
+	// moment the target is out of reach — playing out dead attempts can't
+	// change a verdict that only misses can have tainted.
+	if left := e.SetAttemptsLeft(); left >= 0 && left < e.current.SetTarget()-len(e.set.named) {
 		out.Result = e.finishSet(false)
 	}
 	return out
