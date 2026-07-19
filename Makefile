@@ -34,15 +34,16 @@ WEB_DECKS = \
 	$(HOME)/d/projects/study-decks/study-world-capitals.deck \
 	'$(HOME)/d/projects/study-decks/study-bc-birds.deck@British Columbia Birds' \
 	$(HOME)/d/projects/study-decks/study-animal-tracks.deck \
-	$(HOME)/d/projects/study-decks/study-speed-trivia.deck \
-	'$(HOME)/d/projects/study-decks/study-which-is-bigger.deck@Which Is Bigger?' \
 	$(HOME)/d/projects/study-decks/study-world-landmarks.deck \
 	$(HOME)/d/projects/study-decks/study-locator-maps.deck \
 	'$(HOME)/d/projects/study-decks/study-flags-by-region.deck@Flags by Region' \
 	$(HOME)/d/projects/study-decks/study-borders.deck \
 	$(HOME)/d/projects/study-decks/study-waters.deck \
 	'$(HOME)/d/projects/study-decks/study-us-presidents.deck@US Presidents' \
-	$(HOME)/d/projects/study-decks/study-canada.deck
+	$(HOME)/d/projects/study-decks/study-canada.deck \
+	'[Trivia]' \
+	$(HOME)/d/projects/study-decks/study-speed-trivia.deck \
+	'$(HOME)/d/projects/study-decks/study-which-is-bigger.deck@Which Is Bigger?'
 
 # Bind localhost by default; `make run ADDR=0.0.0.0:8091` opens it to the
 # LAN (e.g. to try it from a phone).
