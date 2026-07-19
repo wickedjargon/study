@@ -30,7 +30,37 @@ func Compose(d *deck.Deck, store *progress.Store, now time.Time) {
 		d.Cards = store.FilterWeak(d.Cards)
 		shuffleCards(d.Cards)
 		d.Cards = store.PrioritizeCards(d.Cards)
+	case deck.OrderSequential:
+		// Sequential resumes where the last session left off: the lap is
+		// rotated to start just after the most recently answered card.
+		// Derived from LastSeen rather than a stored position, so it needs
+		// no schema and survives deck edits (a deleted card just stops
+		// being the anchor). Authored order is preserved within the lap.
+		rotateAfterLastSeen(d.Cards, store)
 	}
+}
+
+// rotateAfterLastSeen rotates cards in place so the card following the most
+// recently answered one comes first. A never-studied deck, or one whose last
+// answer was its final card, starts at the top.
+func rotateAfterLastSeen(cards []deck.Card, store *progress.Store) {
+	if store == nil {
+		return
+	}
+	last := -1
+	var lastTime time.Time
+	for i := range cards {
+		cp := store.Get(cards[i].ID)
+		if !cp.LastSeen.IsZero() && !cp.LastSeen.Before(lastTime) {
+			lastTime = cp.LastSeen
+			last = i
+		}
+	}
+	if last < 0 || last == len(cards)-1 {
+		return
+	}
+	rotated := append(append([]deck.Card{}, cards[last+1:]...), cards[:last+1]...)
+	copy(cards, rotated)
 }
 
 // SplitDue partitions deck cards for an adaptive session: reviews are studied

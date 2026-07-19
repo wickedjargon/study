@@ -102,7 +102,6 @@ type ReviewEvent struct {
 	Overdue float64   `json:"overdue,omitempty"` // days past due when asked (negative = early)
 	Sched   string    `json:"sched,omitempty"`   // ladder outcome on a completing answer: advance, hold, lapse
 	Near    bool      `json:"near,omitempty"`    // typed miss within typo distance of an accepted answer
-	Drill   bool      `json:"drill,omitempty"`   // sequential mode's massed repetition (kept out of stats)
 	// Secs is capped wall-clock seconds from serve to answer. Diagnostic
 	// only: the user goes AFK mid-question, so time cannot distinguish
 	// struggle from absence and must never feed the scheduler.

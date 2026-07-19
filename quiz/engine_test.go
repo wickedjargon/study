@@ -147,29 +147,42 @@ func TestEngineCorrectAnswer(t *testing.T) {
 	}
 }
 
-func TestEngineWrongAnswerCreatesRetry(t *testing.T) {
-	// The retry drill belongs to sequential mode; the evidence scheduler
-	// (default) spaces misses out instead (see requeue_test.go).
+func TestSequentialMissRejoinsLap(t *testing.T) {
+	// Sequential is a reading order, not a scheduler: a miss is recorded and
+	// the card rejoins the lap at the tail — no immediate repeat, no drill.
 	d := testDeck(4)
 	d.Order = deck.OrderSequential
 	e := NewEngine(d, nil, nil)
 
-	// Find a wrong answer index.
+	missed := e.Current()
 	opts := e.Options()
-	wrong := -1
 	for i, o := range opts {
-		if o != e.Current().AnswerText {
-			wrong = i
+		if o != missed.AnswerText {
+			if res := e.Answer(i); res.Correct {
+				t.Fatal("expected wrong result")
+			}
 			break
 		}
 	}
-
-	result := e.Answer(wrong)
-	if result.Correct {
-		t.Error("expected wrong result")
+	e.Next()
+	if e.Current().ID == missed.ID {
+		t.Fatal("missed card repeated immediately — the drill is gone")
 	}
-	if len(e.retry) != 1 {
-		t.Errorf("expected 1 card in retry queue, got %d", len(e.retry))
+	// It comes around at the end of the lap, wearing the retry badge.
+	for lap := 0; lap < 3 && e.Current().ID != missed.ID; lap++ {
+		for i, o := range e.Options() {
+			if o == e.Current().AnswerText {
+				e.Answer(i)
+				break
+			}
+		}
+		e.Next()
+	}
+	if e.Current().ID != missed.ID {
+		t.Fatal("missed card never came around the lap")
+	}
+	if !e.IsRetry() {
+		t.Error("the come-around miss must read retry")
 	}
 }
 
@@ -204,31 +217,35 @@ func TestEngineCorrectAnswerCycle(t *testing.T) {
 	}
 }
 
-func TestEngineRetryGraduation(t *testing.T) {
+func TestSequentialLapOrderSurvivesMiss(t *testing.T) {
+	// After a miss, the lap continues in authored order; the missed card
+	// waits its turn at the tail rather than jumping the queue.
 	d := testDeck(5)
 	d.Order = deck.OrderSequential
 	e := NewEngine(d, nil, nil)
 
-	// Answer first card wrong.
-	firstCard := e.Current()
-	opts := e.Options()
-	for i, o := range opts {
-		if o != firstCard.AnswerText {
+	first := e.Current()
+	for i, o := range e.Options() {
+		if o != first.AnswerText {
 			e.Answer(i)
 			break
 		}
 	}
 	e.Next()
 
-	// The card should be in the retry queue.
-	if len(e.retry) != 1 {
-		t.Fatalf("expected 1 retry card, got %d", len(e.retry))
-	}
-	if e.retry[0].card.ID != firstCard.ID {
-		t.Error("wrong card in retry queue")
-	}
-	if e.retry[0].remaining != minRepeats {
-		t.Errorf("expected %d remaining, got %d", minRepeats, e.retry[0].remaining)
+	// The next four serves are the rest of the lap, in order, then the miss.
+	want := []string{d.Cards[1].ID, d.Cards[2].ID, d.Cards[3].ID, d.Cards[4].ID, first.ID}
+	for _, id := range want {
+		if e.Current().ID != id {
+			t.Fatalf("serve = %s, want %s", e.Current().ID, id)
+		}
+		for i, o := range e.Options() {
+			if o == e.Current().AnswerText {
+				e.Answer(i)
+				break
+			}
+		}
+		e.Next()
 	}
 }
 
@@ -292,9 +309,10 @@ func TestEngineAnswerTimeout(t *testing.T) {
 	if e.TotalWrong != 1 {
 		t.Errorf("expected 1 wrong, got %d", e.TotalWrong)
 	}
-	// A timed-out card is queued for retry, like any wrong answer.
-	if len(e.retry) != 1 || e.retry[0].card.ID != card.ID {
-		t.Error("expected timed-out card in retry queue")
+	// A timed-out card rejoins the lap at the tail, like any wrong answer.
+	e.Next()
+	if e.Current().ID == card.ID {
+		t.Error("timed-out card repeated immediately — it should wait its lap turn")
 	}
 }
 
@@ -364,7 +382,7 @@ func TestEngineCustomDistractors(t *testing.T) {
 // (recordAnswer skips fromRetry serves). IsRetry itself is a display label —
 // "your last attempt at this card was a miss" — so it reads true from the
 // moment a miss is graded and through the drill reps.
-func TestEngineRetryStatsInvariant(t *testing.T) {
+func TestSequentialStats(t *testing.T) {
 	store, err := progress.NewStore(t.TempDir() + "/d.deck")
 	if err != nil {
 		t.Fatalf("store: %v", err)
@@ -374,11 +392,11 @@ func TestEngineRetryStatsInvariant(t *testing.T) {
 	e := NewEngine(d, nil, store)
 
 	if e.IsRetry() {
-		t.Fatal("first card comes from the main queue; IsRetry must be false")
+		t.Fatal("first card comes fresh; IsRetry must be false")
 	}
 	missed := e.Current().ID
 
-	// The cold miss lands in persisted stats, and the card reads retry from
+	// The miss lands in persisted stats once, and the card reads retry from
 	// this grading on.
 	for i, o := range e.Options() {
 		if o != e.Current().AnswerText {
@@ -387,31 +405,27 @@ func TestEngineRetryStatsInvariant(t *testing.T) {
 		}
 	}
 	if got := store.Get(missed).TimesWrong; got != 1 {
-		t.Fatalf("cold miss recorded %d times, want 1", got)
+		t.Fatalf("miss recorded %d times, want 1", got)
 	}
 	if !e.IsRetry() {
 		t.Error("a card whose last graded answer was a miss must read retry")
 	}
 
-	// Advancing replays the same card as a retry drill rep.
+	// No drill: the next serve is a different card, and every graded answer
+	// counts in stats.
 	e.Next()
-	if !e.IsRetry() {
-		t.Error("the replayed card after a wrong answer must be a retry rep")
+	if e.Current().ID == missed {
+		t.Fatal("missed card repeated immediately")
 	}
-
-	// A correct drill rep stays a retry rep and stays out of stats until the
-	// card graduates.
+	next := e.Current().ID
 	for i, o := range e.Options() {
 		if o == e.Current().AnswerText {
 			e.Answer(i)
 			break
 		}
 	}
-	if !e.IsRetry() {
-		t.Error("a correct drill rep must still report IsRetry true")
-	}
-	if cp := store.Get(missed); cp.TimesCorrect != 0 || cp.TimesWrong != 1 {
-		t.Errorf("drill reps must stay out of stats, got %d correct %d wrong, want 0 and 1", cp.TimesCorrect, cp.TimesWrong)
+	if cp := store.Get(next); cp.TimesCorrect != 1 {
+		t.Errorf("correct answer recorded %d times, want 1", cp.TimesCorrect)
 	}
 }
 

@@ -4,8 +4,9 @@
 // table): each card must be correctly recalled a criterion number
 // of times per session, repetitions are spaced by intervening cards rather
 // than massed back-to-back, and the session completes when every card meets
-// its criterion. Sequential mode instead keeps Byki-style repeat-on-wrong
-// drilling and cycles its laps forever.
+// its criterion. Sequential mode is a reading order, not a scheduler: it
+// cycles its laps forever, resumes where the last session left off, and a
+// miss simply comes around again next lap.
 package quiz
 
 import (
@@ -68,11 +69,9 @@ type Engine struct {
 	caseSensitive bool
 	store         *progress.Store
 
-	// Card queues. main is kept sorted by ascending due tick; the earliest-due
-	// card is always served next. retry holds cards answered wrong that owe
-	// consecutive correct repetitions.
-	main  []queuedCard
-	retry []*retryCard
+	// Card queue: main is kept sorted by ascending due tick; the earliest-due
+	// card is always served next.
+	main []queuedCard
 
 	// pendingNew holds the session's never-studied cards beyond the
 	// introduction window (activeNewLimit), in serving order; each is
@@ -95,12 +94,10 @@ type Engine struct {
 	pool []*deck.Card
 
 	// Current state.
-	current       *deck.Card
-	currentOpts   []string // current answer choices (choice mode only)
-	correctIdx    int      // index of correct answer in currentOpts
-	fromRetry     bool     // is current card from retry queue?
-	repeatCurrent bool     // repeat this card immediately (wrong answer)
-	state         State
+	current     *deck.Card
+	currentOpts []string // current answer choices (choice mode only)
+	correctIdx  int      // index of correct answer in currentOpts
+	state       State
 
 	// preview enables the first-viewing reveal (ShowPreview). previewed marks
 	// cards already revealed this session, so a card is never revealed twice —
@@ -174,16 +171,6 @@ type queuedCard struct {
 	card *deck.Card
 	due  int
 }
-
-// retryCard tracks a card in the retry queue.
-type retryCard struct {
-	card      *deck.Card
-	remaining int // how many more times to show this card
-}
-
-// minRepeats is the minimum number of times a wrong card is repeated in
-// sequential mode's drill.
-const minRepeats = 3
 
 // Evidence-scheduler session criterion, in correct recalls per card. Rawson &
 // Dunlosky (2011): three recalls for new material in its first session, one
@@ -454,9 +441,6 @@ func (e *Engine) ContinueAll() {
 	// The session is now the whole deck, so the distractor pool and stats
 	// scope (allCards) follow.
 	e.main = e.main[:0]
-	e.retry = nil
-	e.repeatCurrent = false
-	e.fromRetry = false
 	e.current = nil
 	e.lapsed = make(map[string]bool)
 	e.ahead = make(map[string]bool)
@@ -602,11 +586,11 @@ func (e *Engine) Options() []string {
 
 // IsRetry reports whether the current card's most recent graded answer — in
 // any session — was a miss: "your previous attempt was incorrect". Covers
-// sequential mode's drill queue, the evidence scheduler's gap-requeued
-// misses, and store-seeded misses from past sessions; a correct answer
+// the evidence scheduler's gap-requeued misses, sequential's come-around
+// laps, and store-seeded misses from past sessions; a correct answer
 // clears it, dropping the card back to "learning".
 func (e *Engine) IsRetry() bool {
-	return e.fromRetry || (e.current != nil && e.lastWrong[e.current.ID])
+	return e.current != nil && e.lastWrong[e.current.ID]
 }
 
 // seedRecord primes a card's label state from its stored record, so badges
@@ -656,10 +640,10 @@ func (e *Engine) CurrentIsAhead() bool {
 	return e.current != nil && e.ahead[e.current.ID]
 }
 
-// Remaining returns the number of cards left (main + retry + introductions
-// not yet admitted).
+// Remaining returns the number of cards left (main + introductions not yet
+// admitted).
 func (e *Engine) Remaining() int {
-	n := len(e.main) + len(e.retry) + len(e.pendingNew)
+	n := len(e.main) + len(e.pendingNew)
 	if e.current != nil && e.state != Done {
 		n++
 	}
@@ -973,20 +957,14 @@ func (e *Engine) Next() {
 }
 
 // recordAnswer persists the outcome of the current card to the store, before
-// handleCorrect/handleWrong schedule its next appearance.
-//
-// Under the evidence scheduler every attempt is a spaced retrieval and counts.
-// In sequential mode, retry-queue reps are massed drill repetitions, not
-// cold recall, so they stay out of persisted stats; only the original
-// main-queue showing counts there.
+// handleCorrect/handleWrong schedule its next appearance. Every graded
+// answer counts — the massed drill whose repetitions needed excluding is
+// gone.
 func (e *Engine) recordAnswer(correct bool) {
 	if e.store == nil {
 		return
 	}
 	e.logReview(correct)
-	if e.fromRetry {
-		return
-	}
 	if correct {
 		e.store.RecordCorrect(e.current.ID)
 	} else {
@@ -996,15 +974,12 @@ func (e *Engine) recordAnswer(correct bool) {
 
 // logReview appends this graded answer to the review log, capturing the
 // scheduler's view of the card before handleCorrect/handleWrong mutate it.
-// Runs for every graded answer, including sequential drill reps (flagged, so
-// analysis can separate massed practice from cold evidence).
 func (e *Engine) logReview(correct bool) {
 	id := e.current.ID
 	ev := progress.ReviewEvent{
 		TS:      time.Now(),
 		Card:    id,
 		Correct: correct,
-		Drill:   e.fromRetry,
 		Near:    e.nearPending,
 	}
 	if e.Mode() == deck.ModeChoice {
@@ -1082,24 +1057,6 @@ func (e *Engine) handleCorrect() {
 		return
 	}
 
-	if e.fromRetry {
-		// Handle retry queue graduation.
-		for i, rc := range e.retry {
-			if rc.card.ID == e.current.ID {
-				rc.remaining--
-				if rc.remaining <= 0 {
-					e.retry = append(e.retry[:i], e.retry[i+1:]...)
-					// The drilled card rejoins the lap at the tail.
-					e.requeueTail(e.current)
-				} else {
-					e.repeatCurrent = true
-				}
-				return
-			}
-		}
-		return
-	}
-
 	// Sequential mode: to the back of the lap.
 	e.requeueTail(e.current)
 }
@@ -1123,56 +1080,26 @@ func (e *Engine) handleWrong() {
 		return
 	}
 
-	e.repeatCurrent = true
-
-	// Check if already in retry queue — reset to full repeats.
-	for _, rc := range e.retry {
-		if rc.card.ID == e.current.ID {
-			rc.remaining = minRepeats
-			return
-		}
-	}
-	// Add to retry queue.
-	e.retry = append(e.retry, &retryCard{
-		card:      e.current,
-		remaining: minRepeats,
-	})
+	// Sequential: a reading order, not a scheduler. The miss is recorded
+	// (the badge will read "retry" when it comes around) and the card simply
+	// rejoins the lap at the tail — no massed drill, which only exercises
+	// short-term memory.
+	e.requeueTail(e.current)
 }
 
-// advance moves to the next card from main or retry queue.
+// advance moves to the next card from the main queue.
 func (e *Engine) advance() {
 	// Practice debt never outlives its result screen, and a set card's
 	// entry progress never outlives its serve (End/ContinueAll also route
 	// here eventually via a fresh serve).
 	e.practiceOwed = 0
 	e.set = setState{}
-	// If the last answer was wrong, repeat the same card immediately.
-	if e.repeatCurrent && e.current != nil {
-		e.repeatCurrent = false
-		e.fromRetry = true
-		if e.current.Mode == deck.ModeChoice {
-			e.currentOpts, e.correctIdx = e.generateChoices(e.current)
-		}
-		e.state = ShowQuestion
-		e.servedAt = time.Now()
-		return
-	}
 
-	// Normal advancement: main queue, then retry queue.
 	if len(e.main) > 0 {
-		if len(e.retry) > 0 && e.TotalSeen > 0 && e.TotalSeen%3 == 0 {
-			e.current = e.retry[0].card
-			e.fromRetry = true
-		} else {
-			// Serve the earliest-due card and advance the logical clock.
-			e.current = e.main[0].card
-			e.main = e.main[1:]
-			e.step++
-			e.fromRetry = false
-		}
-	} else if len(e.retry) > 0 {
-		e.current = e.retry[0].card
-		e.fromRetry = true
+		// Serve the earliest-due card and advance the logical clock.
+		e.current = e.main[0].card
+		e.main = e.main[1:]
+		e.step++
 	} else if len(e.pendingNew) > 0 {
 		// The queues drained with introductions still waiting (reviews can
 		// complete without freeing a window slot) — admit rather than end.
@@ -1198,9 +1125,8 @@ func (e *Engine) advance() {
 		e.currentOpts, e.correctIdx = e.generateChoices(e.current)
 	}
 
-	// A brand-new card is revealed before it's quizzed. Only fresh main-queue
-	// serves qualify: a retry/repeat card was necessarily answered already.
-	if !e.fromRetry && e.shouldPreview(e.current) {
+	// A brand-new card is revealed before it's quizzed.
+	if e.shouldPreview(e.current) {
 		e.previewed[e.current.ID] = true
 		e.state = ShowPreview
 		return

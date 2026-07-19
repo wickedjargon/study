@@ -64,3 +64,46 @@ func TestComposeAdaptive(t *testing.T) {
 		t.Errorf("second card = %s, want a fresh card", id)
 	}
 }
+
+// TestSequentialResume: composition rotates the lap to start just after the
+// most recently answered card, so quitting mid-lap and relaunching continues
+// where the last session left off.
+func TestSequentialResume(t *testing.T) {
+	store := newTestStore(t)
+	d := testDeck(5)
+	d.Order = deck.OrderSequential
+
+	// Cards 0..2 answered in order; card 2 is the most recent.
+	for i := 0; i <= 2; i++ {
+		store.RecordCorrect(d.Cards[i].ID)
+	}
+
+	Compose(d, store, time.Now())
+	if d.Cards[0].ID != "delta" { // testDeck answers: alpha..epsilon; index 3
+		t.Fatalf("resume start = %s, want delta (the card after the last answered)", d.Cards[0].ID)
+	}
+	// The lap wraps: all five cards still present, order preserved.
+	if len(d.Cards) != 5 || d.Cards[4].ID != "gamma" {
+		t.Fatalf("rotated lap malformed: %v", []string{d.Cards[0].ID, d.Cards[1].ID, d.Cards[2].ID, d.Cards[3].ID, d.Cards[4].ID})
+	}
+}
+
+// TestSequentialResumeFreshAndFinished: a never-studied deck starts at the
+// top, and so does one whose last answer was the final card.
+func TestSequentialResumeFreshAndFinished(t *testing.T) {
+	store := newTestStore(t)
+	d := testDeck(3)
+	d.Order = deck.OrderSequential
+	Compose(d, store, time.Now())
+	if d.Cards[0].ID != "alpha" {
+		t.Fatalf("fresh deck starts at %s, want alpha", d.Cards[0].ID)
+	}
+
+	store.RecordCorrect(d.Cards[2].ID) // last card answered most recently
+	d2 := testDeck(3)
+	d2.Order = deck.OrderSequential
+	Compose(d2, store, time.Now())
+	if d2.Cards[0].ID != "alpha" {
+		t.Fatalf("finished lap resumes at %s, want alpha (wrap to top)", d2.Cards[0].ID)
+	}
+}
