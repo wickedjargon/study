@@ -41,9 +41,7 @@ WEB_DECKS = \
 	'$(HOME)/d/projects/study-decks/study-flags-by-region.deck@Flags by Region' \
 	$(HOME)/d/projects/study-decks/study-borders.deck \
 	$(HOME)/d/projects/study-decks/study-waters.deck \
-	'$(HOME)/d/projects/study-decks/study-us-presidents.deck/level1-famous.deck@US Presidents (Famous)' \
-	'$(HOME)/d/projects/study-decks/study-us-presidents.deck/level2-notable.deck@US Presidents (Notable)' \
-	'$(HOME)/d/projects/study-decks/study-us-presidents.deck/level3-obscure.deck@US Presidents (Obscure)' \
+	'$(HOME)/d/projects/study-decks/study-us-presidents.deck@US Presidents' \
 	$(HOME)/d/projects/study-decks/study-canada.deck
 
 # Bind localhost by default; `make run ADDR=0.0.0.0:8091` opens it to the
