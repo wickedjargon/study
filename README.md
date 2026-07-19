@@ -223,7 +223,10 @@ The capital of France is {{Paris}}.
 
 `+` lines make the answer an enumeration: name the items one at a time, any
 order, until you've named them all — or until an optional `quota:` is met
-("name any five"). An `=` under an item accepts a variant of that item.
+("name any five"). An optional `attempts:` caps the counted entries (right
+answers and wrong guesses — misspellings and duplicates are free): the card
+ends as a miss the moment the target is out of reach. An `=` under an item
+accepts a variant of that item.
 
 ```
 Name five countries that border China

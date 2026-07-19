@@ -118,7 +118,7 @@
   {{/* Enumeration: one entry at a time until the target is named. The
        completing entry (or giving up) grades the whole card once. */}}
   <div class="setstatus">
-    <span class="setcount">named {{.SetCount}} of {{.SetTarget}}</span>
+    <span class="setcount">named {{.SetCount}} of {{.SetTarget}}{{if ge .SetTriesLeft 0}} · {{.SetTriesLeft}} {{if eq .SetTriesLeft 1}}try{{else}}tries{{end}} left{{end}}</span>
   </div>
   {{/* The serve's transcript: one counted entry per line in typed order,
        named items with the ✓, wrong guesses (as typed) with the ✗. */}}

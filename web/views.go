@@ -125,12 +125,13 @@ type quizView struct {
 	// (in item order); SetItems is the result reveal, every item marked
 	// named or not; SetFlash is one entry's feedback carried across the
 	// redirect (?f=dup|close|miss).
-	SetCard   bool
-	SetLog    []setLogView // the serve's counted entries, in typed order
-	SetItems  []setItemView
-	SetCount  int
-	SetTarget int
-	SetFlash  string // transient dim hint: duplicate or near spelling
+	SetCard      bool
+	SetLog       []setLogView // the serve's counted entries, in typed order
+	SetItems     []setItemView
+	SetCount     int
+	SetTarget    int
+	SetTriesLeft int    // counted entries still allowed (-1: no cap)
+	SetFlash     string // transient dim hint: duplicate or near spelling
 
 	// Caught up / summary.
 	NextDue     string
@@ -325,6 +326,7 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 			}
 			view.SetCount = e.SetNamedCount()
 			view.SetTarget = card.SetTarget()
+			view.SetTriesLeft = e.SetAttemptsLeft() // -1: no cap
 			// Only the costless outcomes flash (dim, transient); counted
 			// entries are in the transcript.
 			switch r.URL.Query().Get("f") {

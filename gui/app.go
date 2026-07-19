@@ -1544,6 +1544,13 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 		// last entry's feedback.
 		if card.IsSet() {
 			counter := fmt.Sprintf("named %d of %d", a.engine.SetNamedCount(), card.SetTarget())
+			if left := a.engine.SetAttemptsLeft(); left >= 0 {
+				tries := "tries"
+				if left == 1 {
+					tries = "try"
+				}
+				counter += fmt.Sprintf(" · %d %s left", left, tries)
+			}
 			a.drawText(canvas, counter, padding+20, y, a.fontSmall, dimColor)
 			y += lineHeight(a.fontSmall)
 			// The serve's transcript, one counted entry per line in the

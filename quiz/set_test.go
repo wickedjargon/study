@@ -170,3 +170,47 @@ func TestSetLogTranscript(t *testing.T) {
 		}
 	}
 }
+
+// TestSetAttemptsCap: the card ends as a miss the moment the target is out
+// of reach; misspells and duplicates never consume attempts.
+func TestSetAttemptsCap(t *testing.T) {
+	d := chinaDeck(3)
+	d.Cards[0].Attempts = 5
+	e := NewEngine(d, nil, nil)
+
+	e.AnswerSetEntry("russia")   // hit: 1 of 3, 4 left
+	e.AnswerSetEntry("mongolla") // close: free
+	e.AnswerSetEntry("russia")   // duplicate: free
+	if left := e.SetAttemptsLeft(); left != 4 {
+		t.Fatalf("attempts left = %d, want 4 — costless entries must be free", left)
+	}
+	e.AnswerSetEntry("japan") // miss: 3 left, need 2 — still possible
+	out := e.AnswerSetEntry("chile")
+	if out.Result != nil { // miss: 2 left, need 2 — still possible
+		t.Fatalf("card ended while the target was still reachable")
+	}
+	out = e.AnswerSetEntry("peru") // miss: 1 left, need 2 — dead
+	if out.Result == nil {
+		t.Fatal("card must end when the target is out of reach")
+	}
+	if out.Result.Correct {
+		t.Fatal("exhausted card graded correct")
+	}
+}
+
+// TestSetAttemptsCleanRunUnaffected: a cap never interferes with a clean
+// enumeration, since it must be at least the target.
+func TestSetAttemptsCleanRunUnaffected(t *testing.T) {
+	d := chinaDeck(3)
+	d.Cards[0].Attempts = 3
+	e := NewEngine(d, nil, nil)
+	for _, s := range []string{"russia", "india", "nepal"} {
+		out := e.AnswerSetEntry(s)
+		if out.Verdict != SetHit {
+			t.Fatalf("%s: verdict %v", s, out.Verdict)
+		}
+		if s == "nepal" && (out.Result == nil || !out.Result.Correct) {
+			t.Fatal("clean capped run must complete correct")
+		}
+	}
+}

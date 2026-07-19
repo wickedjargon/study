@@ -5,6 +5,7 @@
 Name 3 countries that border China
 ---
 quota: 3
+attempts: 5
 + Russia
 + Mongolia
 + Kazakhstan

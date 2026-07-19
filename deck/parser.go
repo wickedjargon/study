@@ -77,10 +77,14 @@ type Card struct {
 	// SetItems makes this a set-answer card ("+ " lines in the answer
 	// section): the user enumerates the items, any order, one entry at a
 	// time. Quota is how many distinct items complete the card (0 = all of
-	// them — "name the countries" vs "name five countries"). Set cards are
+	// them — "name the countries" vs "name five countries"). Attempts caps
+	// the counted entries (hits and wrong guesses — misspells and
+	// duplicates are free): 0 = unlimited, otherwise the card ends as a
+	// miss when the target can no longer be reached. Set cards are
 	// type-mode only and don't reverse.
 	SetItems  []SetItem
 	Quota     int
+	Attempts  int
 	Mode      QuizMode // per-card mode (choice or type)
 	Choices   int      // per-card choice count (0 = use deck default)
 	TimeLimit int      // per-card time limit in seconds
@@ -700,6 +704,8 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, deckModeSet
 	var setItems []SetItem
 	quota := 0
 	quotaSet := false
+	attempts := 0
+	attemptsSet := false
 	for _, line := range afterSep {
 		trimmed := strings.TrimSpace(line)
 		switch {
@@ -715,6 +721,13 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, deckModeSet
 				quotaSet = true
 			} else {
 				warn("ignoring %q (quota: needs an integer >= 1)", trimmed)
+			}
+		case strings.HasPrefix(trimmed, "attempts:"):
+			if n, err := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(trimmed, "attempts:"))); err == nil && n >= 1 {
+				attempts = n
+				attemptsSet = true
+			} else {
+				warn("ignoring %q (attempts: needs an integer >= 1)", trimmed)
 			}
 		case strings.HasPrefix(trimmed, "= "), strings.HasPrefix(trimmed, "=") && len(trimmed) > 1:
 			a := strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(trimmed, "= "), "="))
@@ -746,11 +759,20 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, deckModeSet
 		if quota > len(setItems) {
 			return nil, fmt.Errorf("quota: %d exceeds the %d + items: %q", quota, len(setItems), strings.Join(filtered, " / "))
 		}
+		target := quota
+		if target == 0 {
+			target = len(setItems)
+		}
+		if attemptsSet && attempts < target {
+			return nil, fmt.Errorf("attempts: %d can't reach the target of %d: %q", attempts, target, strings.Join(filtered, " / "))
+		}
 		if cardMode == ModeChoice && modeSet {
 			warn("set card ignores answer-mode choice (enumeration is typed)")
 		}
 	} else if quotaSet {
 		return nil, fmt.Errorf("quota: without + items: %q", strings.Join(filtered, " / "))
+	} else if attemptsSet {
+		return nil, fmt.Errorf("attempts: without + items: %q", strings.Join(filtered, " / "))
 	}
 
 	if len(answerLines) == 0 && len(setItems) == 0 {
@@ -826,6 +848,7 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, deckModeSet
 		Distractors:    distractors,
 		SetItems:       setItems,
 		Quota:          quota,
+		Attempts:       attempts,
 		Mode:           cardMode,
 		Choices:        cardChoices,
 		TimeLimit:      cardTime,

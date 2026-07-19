@@ -118,7 +118,26 @@ func (e *Engine) AnswerSetEntry(input string) *SetOutcome {
 
 	e.set.wrong++
 	e.set.log = append(e.set.log, SetLogEntry{Text: strings.TrimSpace(input), Hit: false})
-	return &SetOutcome{Verdict: SetMiss, Item: -1}
+	out := &SetOutcome{Verdict: SetMiss, Item: -1}
+	// An attempts cap counts exactly the logged entries. The card ends the
+	// moment the target is out of reach — playing out dead attempts can't
+	// change a verdict that only misses can have tainted.
+	if left := e.SetAttemptsLeft(); left >= 0 && left < e.current.SetTarget()-len(e.set.named) {
+		out.Result = e.finishSet(false)
+	}
+	return out
+}
+
+// SetAttemptsLeft returns how many counted entries the current set card
+// still allows, or -1 when it has no attempts cap.
+func (e *Engine) SetAttemptsLeft() int {
+	if e.current == nil || !e.current.IsSet() || e.current.Attempts <= 0 {
+		return -1
+	}
+	if left := e.current.Attempts - len(e.set.log); left > 0 {
+		return left
+	}
+	return 0
 }
 
 // AnswerSetGiveUp ends the current set card without reaching the target: a
