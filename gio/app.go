@@ -621,6 +621,9 @@ func (a *App) inputRow(th *material.Theme) layout.Widget {
 // inputHint stays minimal — the controls box carries the guidance. The one
 // exception is practice, where the answer itself is the ghost to type over.
 func (a *App) inputHint() string {
+	if a.engine == nil {
+		return ""
+	}
 	if a.engine.State() == quiz.ShowResult && a.engine.PracticeOwed() > 0 && a.result != nil {
 		return a.result.Answer
 	}
