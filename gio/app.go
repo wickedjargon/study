@@ -248,10 +248,17 @@ func (a *App) frame(gtx layout.Context, th *material.Theme) {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(a.header(th)),
 			layout.Rigid(spacer(16)),
-			layout.Flexed(1, a.body(th)),
+			// Content flows from the top with the prompt right under it,
+			// like the X11 screens; the legend and footer sink to the
+			// bottom.
+			layout.Rigid(a.body(th)),
+			layout.Rigid(spacer(16)),
+			layout.Rigid(a.inputRow(th)),
+			layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
+				return layout.Dimensions{Size: gtx.Constraints.Min}
+			}),
 			layout.Rigid(a.controlsBox(th)),
 			layout.Rigid(spacer(8)),
-			layout.Rigid(a.inputRow(th)),
 			layout.Rigid(a.footer(th)),
 		)
 	})
