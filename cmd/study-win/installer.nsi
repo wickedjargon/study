@@ -43,9 +43,10 @@ Page instfiles
 UninstPage uninstConfirm
 UninstPage instfiles
 
-; One deck pack as one optional component.
+; One deck pack as one optional component, deselected by default — the
+; starter geography packs below are the only ones pre-checked.
 !macro DeckPack secname dir
-Section "${secname}"
+Section /o "${secname}"
   SetOutPath "${DECKS}\${dir}"
   File /r "${DISTDIR}\decks\${dir}\*"
 SectionEnd
@@ -80,8 +81,9 @@ Section "study (required)"
   CreateShortcut "$SMPROGRAMS\study\Uninstall study.lnk" "$INSTDIR\uninstall.exe"
 SectionEnd
 
+SectionGroup /e "Deck packs"
 SectionGroup "Languages (audio, the big ones)"
-  Section "Japanese"
+  Section /o "Japanese"
     SetOutPath "${DECKS}\language-packs\study-japanese.deck"
     File /r "${DISTDIR}\decks\language-packs\study-japanese.deck\*"
     SetOutPath "${DECKS}\study-japanese-numbers.deck"
@@ -89,13 +91,13 @@ SectionGroup "Languages (audio, the big ones)"
     SetOutPath "${DECKS}\study-mahjong.deck"
     File /r "${DISTDIR}\decks\study-mahjong.deck\*"
   SectionEnd
-  Section "Farsi"
+  Section /o "Farsi"
     SetOutPath "${DECKS}\language-packs\study-farsi.deck"
     File /r "${DISTDIR}\decks\language-packs\study-farsi.deck\*"
     SetOutPath "${DECKS}\study-farsi-numbers.deck"
     File /r "${DISTDIR}\decks\study-farsi-numbers.deck\*"
   SectionEnd
-  Section "Mandarin Chinese"
+  Section /o "Mandarin Chinese"
     SetOutPath "${DECKS}\language-packs\study-mandarin-chinese.deck"
     File /r "${DISTDIR}\decks\language-packs\study-mandarin-chinese.deck\*"
     SetOutPath "${DECKS}\study-chinese-numbers.deck"
@@ -105,12 +107,12 @@ SectionGroup "Languages (audio, the big ones)"
     SetOutPath "${DECKS}\study-chinese-mahjong-terms.deck"
     File /r "${DISTDIR}\decks\study-chinese-mahjong-terms.deck\*"
   SectionEnd
-  Section "Spanish (Colombian)"
+  Section /o "Spanish (Colombian)"
     SetOutPath "${DECKS}\language-packs\study-colombian-spanish.deck"
     File /r "${DISTDIR}\decks\language-packs\study-colombian-spanish.deck\*"
   SectionEnd
   !insertmacro DeckPack "Spanish (Mexican)" "study-mexican-spanish.deck"
-  Section "Portuguese (Brazilian)"
+  Section /o "Portuguese (Brazilian)"
     SetOutPath "${DECKS}\language-packs\study-brazilian-portuguese.deck"
     File /r "${DISTDIR}\decks\language-packs\study-brazilian-portuguese.deck\*"
   SectionEnd
@@ -127,7 +129,10 @@ SectionGroup "Geography"
     SetOutPath "${DECKS}\study-world-capitals.deck"
     File /r "${DISTDIR}\decks\study-world-capitals.deck\*"
   SectionEnd
-  !insertmacro DeckPack "Locator Maps" "study-locator-maps.deck"
+  Section "Locator Maps"
+    SetOutPath "${DECKS}\study-locator-maps.deck"
+    File /r "${DISTDIR}\decks\study-locator-maps.deck\*"
+  SectionEnd
   !insertmacro DeckPack "Country Silhouettes" "study-country-silhouettes.deck"
   !insertmacro DeckPack "Borders" "study-borders.deck"
   !insertmacro DeckPack "Bodies of Water" "study-waters.deck"
@@ -149,6 +154,7 @@ SectionGroup "More"
   !insertmacro DeckPack "US Presidents" "study-us-presidents.deck"
   !insertmacro DeckPack "Dog Breeds" "study-dog-breeds.deck"
   !insertmacro DeckPack "Animal Tracks" "study-animal-tracks.deck"
+SectionGroupEnd
 SectionGroupEnd
 
 Section "Desktop shortcut"
