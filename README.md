@@ -2,13 +2,9 @@
 
 A flashcard quiz tool. Decks are plain text files. Available for Linux, Windows, and web.
 
-install the windows version here:
+windows: [study-setup.exe](https://github.com/wickedjargon/study/releases/latest/download/study-setup.exe)
 
-[study-setup.exe](https://github.com/wickedjargon/study/releases/latest/download/study-setup.exe)
-
-access the web version here:
-
-[study.fftp.io](https://study.fftp.io/)
+browser: [study.fftp.io](https://study.fftp.io/)
 
 study uses a [spaced-repetition](https://en.wikipedia.org/wiki/Spaced_repetition) scheduler based on evidence gathered from these papers:
 
