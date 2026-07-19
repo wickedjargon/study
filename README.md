@@ -242,7 +242,7 @@ One verdict per card: a clean run is correct, a wrong guess or giving up
 (empty enter) is a miss — you still finish naming, and the reveal marks
 what you named against the full list. A misspelled entry close to an
 unnamed item costs nothing: retype it. Duplicates are ignored. Set cards
-are typed-only and don't reverse.
+are typed-only and don't reverse. Try it: `study examples/set.deck`
 
 ## Notes
 

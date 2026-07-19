@@ -1,0 +1,40 @@
+# Set Answers Demo
+# answer-mode: type
+# answer-case: insensitive
+
+Name 3 countries that border China
+---
+quota: 3
++ Russia
++ Mongolia
++ Kazakhstan
++ Kyrgyzstan
++ Tajikistan
++ Afghanistan
++ Pakistan
++ India
++ Nepal
++ Bhutan
++ Myanmar
+= Burma
++ Laos
++ Vietnam
++ North Korea
+= DPRK
+---
+China has 14 neighbors, tied with Russia for the most in the world.
+
+Name the five Great Lakes
+---
++ Superior
+= Lake Superior
++ Michigan
+= Lake Michigan
++ Huron
+= Lake Huron
++ Erie
+= Lake Erie
++ Ontario
+= Lake Ontario
+---
+HOMES: Huron, Ontario, Michigan, Erie, Superior.
