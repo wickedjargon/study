@@ -83,8 +83,8 @@ study example.deck
 ```
 
 For more, [examples/basic.deck](examples/basic.deck) is a small beginner deck,
-and the [language packs](https://github.com/wickedjargon/study-language-packages)
-are full-size decks. 
+and the [deck packs](https://github.com/wickedjargon/study-decks) are
+full-size decks: geography, trivia, US presidents, BC driving, and more.
 
 # Web version
 
