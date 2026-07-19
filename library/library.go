@@ -183,9 +183,13 @@ func isPack(dir string) bool {
 	return err == nil && len(matches) > 0
 }
 
-// entryName is the display name for a deck path: the base name with the .deck
-// suffix dropped (packs conventionally carry it too, e.g. study-farsi.deck/).
+// entryName is the display name for a deck path: the pack's own .deck-info
+// name when it has one, else the base name with the .deck suffix dropped
+// (packs conventionally carry it too, e.g. study-farsi.deck/).
 func entryName(path string) string {
+	if n := deck.PackInfoName(path); n != "" {
+		return n
+	}
 	return strings.TrimSuffix(filepath.Base(path), ".deck")
 }
 

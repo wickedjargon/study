@@ -300,6 +300,11 @@ func (s *Server) scanPath(path, display string) error {
 // line rather than sinking the whole server.
 func (s *Server) addGroup(path, display string) {
 	if display == "" {
+		// The pack names itself (.deck-info) before the directory name is
+		// prettified as a fallback.
+		display = deck.PackInfoName(path)
+	}
+	if display == "" {
 		display = prettyName(filepath.Base(path))
 	}
 	slug := s.uniqueGroupSlug(display)
@@ -376,6 +381,9 @@ func (s *Server) nestPack(groupSlug, path, display string) error {
 	}
 	base := filepath.Base(path)
 	name := display
+	if name == "" {
+		name = deck.PackInfoName(path)
+	}
 	if name == "" {
 		name = strings.TrimPrefix(prettyName(base), g.Name+" ")
 	}
