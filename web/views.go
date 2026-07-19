@@ -125,13 +125,12 @@ type quizView struct {
 	// (in item order); SetItems is the result reveal, every item marked
 	// named or not; SetFlash is one entry's feedback carried across the
 	// redirect (?f=dup|close|miss).
-	SetCard       bool
-	SetNamed      []string
-	SetItems      []setItemView
-	SetCount      int
-	SetTarget     int
-	SetFlash      string
-	SetFlashClass string // ok (✓ hit), bad (✗ wrong guess), dim (costless)
+	SetCard   bool
+	SetLog    []setLogView // the serve's counted entries, in typed order
+	SetItems  []setItemView
+	SetCount  int
+	SetTarget int
+	SetFlash  string // transient dim hint: duplicate or near spelling
 
 	// Caught up / summary.
 	NextDue     string
@@ -145,6 +144,13 @@ type quizView struct {
 type setItemView struct {
 	Text  string
 	Named bool
+}
+
+// setLogView is one counted entry of a set card's question-screen
+// transcript: a named item (OK) or a wrong guess as typed.
+type setLogView struct {
+	Text string
+	OK   bool
 }
 
 // quizURL returns the quiz page for a group's deck.
@@ -311,37 +317,21 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		if card.IsSet() {
 			view.SetCard = true
 			view.Choice = false
-			named := e.SetNamed()
-			for i, it := range card.SetItems {
-				if i < len(named) && named[i] {
-					view.SetNamed = append(view.SetNamed, it.Text)
-				}
+			// The serve's transcript, one counted entry per line in the
+			// order typed — the engine keeps it, so it survives the
+			// redirect round-trips.
+			for _, en := range e.SetLog() {
+				view.SetLog = append(view.SetLog, setLogView{Text: en.Text, OK: en.Hit})
 			}
 			view.SetCount = e.SetNamedCount()
 			view.SetTarget = card.SetTarget()
-			// Entry feedback, appended to the named-list line: a hit's item
-			// already ends the list so the flash is just the ✓; a wrong
-			// guess appends as typed (?t=) with the ✗; the costless
-			// outcomes append dim, unmarked.
-			typed := r.URL.Query().Get("t")
-			if len(typed) > 80 {
-				typed = typed[:80]
-			}
+			// Only the costless outcomes flash (dim, transient); counted
+			// entries are in the transcript.
 			switch r.URL.Query().Get("f") {
-			case "hit":
-				view.SetFlash = "✓"
-				view.SetFlashClass = "ok"
 			case "dup":
-				view.SetFlash = "· already named"
-				view.SetFlashClass = "dim"
+				view.SetFlash = "already named"
 			case "close":
-				view.SetFlash = "· close — check the spelling"
-				view.SetFlashClass = "dim"
-			case "miss":
-				if typed != "" {
-					view.SetFlash = typed + " ✗"
-					view.SetFlashClass = "bad"
-				}
+				view.SetFlash = "close — check the spelling"
 			}
 		}
 

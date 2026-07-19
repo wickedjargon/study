@@ -149,3 +149,24 @@ func TestSetIgnoresSingleAnswerPath(t *testing.T) {
 		t.Fatal("state moved")
 	}
 }
+
+// TestSetLogTranscript: counted entries log in typed order — hits as
+// canonical text, wrong guesses as typed — while duplicates and near
+// spellings stay out.
+func TestSetLogTranscript(t *testing.T) {
+	e := NewEngine(chinaDeck(3), nil, nil)
+	e.AnswerSetEntry("burma")    // hit, logs as Myanmar
+	e.AnswerSetEntry("Japan")    // miss, logs as typed
+	e.AnswerSetEntry("burma")    // duplicate: no log
+	e.AnswerSetEntry("mongolla") // close: no log
+	log := e.SetLog()
+	want := []SetLogEntry{{"Myanmar", true}, {"Japan", false}}
+	if len(log) != len(want) {
+		t.Fatalf("log has %d entries, want %d: %v", len(log), len(want), log)
+	}
+	for i, w := range want {
+		if log[i] != w {
+			t.Errorf("log[%d] = %v, want %v", i, log[i], w)
+		}
+	}
+}

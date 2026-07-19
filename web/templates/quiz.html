@@ -120,11 +120,15 @@
   <div class="setstatus">
     <span class="setcount">named {{.SetCount}} of {{.SetTarget}}</span>
   </div>
-  {{/* One status line: the named list carries the last entry's verdict in
-       place — a hit's ✓ ends the list, a wrong guess appends in red. */}}
-  {{if or .SetNamed .SetFlash}}
-  <p class="setnamed" dir="auto">{{range $i, $t := .SetNamed}}{{if $i}}, {{end}}<span>{{$t}}</span>{{end}}{{if .SetFlash}} <span class="setflash {{.SetFlashClass}}">{{.SetFlash}}</span>{{end}}</p>
+  {{/* The serve's transcript: one counted entry per line in typed order,
+       named items with the ✓, wrong guesses (as typed) with the ✗. */}}
+  {{if .SetLog}}
+  <ul class="setlog">
+    {{range .SetLog}}<li class="{{if .OK}}ok{{else}}bad{{end}}" dir="auto">{{.Text}} {{if .OK}}✓{{else}}✗{{end}}</li>
+    {{end}}
+  </ul>
   {{end}}
+  {{if .SetFlash}}<p class="setflash">{{.SetFlash}}</p>{{end}}
   <form method="post" action="{{.Base}}/entry" class="typed" id="answerform">
     <input type="text" name="entry" dir="auto" autofocus autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="name one…">
     <button class="primary">check</button>

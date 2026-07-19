@@ -251,11 +251,10 @@ type App struct {
 
 	// Text input buffer (type mode).
 	inputBuf string
-	// setHint is the last set-card entry's feedback, shown under the input
-	// until the next entry; setHintMark adds the tally's verdict mark after
-	// it (+1 ✔ for a named item, -1 ✘ for a wrong guess, 0 none).
-	setHint     string
-	setHintMark int
+	// setHint is a set card's transient feedback for the costless outcomes
+	// (duplicate, near spelling), shown dim until the next entry. Counted
+	// entries live in the engine's SetLog transcript instead.
+	setHint string
 
 	// choiceSel is the arrow/vim-keys highlight on the choice screen:
 	// 0..N-1 an option, N the no-idea row. Every served card starts back on
@@ -736,7 +735,6 @@ func (a *App) handleKey(ev xevent.KeyPressEvent) {
 			a.noteImg = nil
 			a.inputBuf = ""
 			a.setHint = ""
-			a.setHintMark = 0
 
 			if s := a.engine.State(); s == quiz.ShowQuestion || s == quiz.ShowPreview {
 				a.presentCard()
@@ -895,24 +893,19 @@ func (a *App) handleTypeKey(key string, ev xevent.KeyPressEvent) {
 				a.setResult(a.engine.AnswerSetGiveUp())
 				a.saveProgress()
 			} else if out := a.engine.AnswerSetEntry(a.inputBuf); out != nil {
-				a.setHintMark = 0
+				// Counted entries (hits, wrong guesses) land in the
+				// engine's transcript; only the costless outcomes need a
+				// transient hint.
 				switch out.Verdict {
-				case quiz.SetHit:
-					// The item just joined the named list; the list line
-					// itself wears the ✔ — no separate echo line.
-					a.setHint = ""
-					a.setHintMark = 1
 				case quiz.SetDuplicate:
 					a.setHint = "already named"
 				case quiz.SetClose:
 					a.setHint = "close — check the spelling"
-				case quiz.SetMiss:
-					a.setHint = a.inputBuf
-					a.setHintMark = -1
+				default:
+					a.setHint = ""
 				}
 				if out.Result != nil {
 					a.setHint = ""
-					a.setHintMark = 0
 					a.setResult(out.Result)
 					a.saveProgress()
 				}
@@ -1550,57 +1543,26 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 		// running count, the items named so far (green, wrapped), and the
 		// last entry's feedback.
 		if card.IsSet() {
-			named := a.engine.SetNamed()
 			counter := fmt.Sprintf("named %d of %d", a.engine.SetNamedCount(), card.SetTarget())
 			a.drawText(canvas, counter, padding+20, y, a.fontSmall, dimColor)
 			y += lineHeight(a.fontSmall)
-			var got []string
-			for i, it := range card.SetItems {
-				if i < len(named) && named[i] {
-					got = append(got, it.Text)
+			// The serve's transcript, one counted entry per line in the
+			// order typed: named items green with the ✔, wrong guesses red
+			// with the ✘, each aligned with the input's text (past "> ").
+			x := padding + 20 + font.MeasureString(a.fontRegular, "> ").Round()
+			for _, en := range a.engine.SetLog() {
+				c := greenColor
+				if !en.Hit {
+					c = redColor
 				}
+				a.drawText(canvas, en.Text, x, y, a.fontRegular, c)
+				a.drawMarkAfter(canvas, en.Text, x, y, en.Hit, c)
+				y += lineHeight(a.fontRegular)
 			}
-			// One status line, not a stack: the named list carries the last
-			// entry's verdict in place. A hit ends the list, so it just gets
-			// the ✔; a wrong guess appends in red with the ✘; the costless
-			// outcomes append dim. No separate echo line. Indented past the
-			// input's "> " so the line starts exactly where the typing did.
-			measure := func(s string) int { return font.MeasureString(a.fontRegular, s).Round() }
-			x := padding + 20 + measure("> ")
-			maxW := a.width - padding*2 - x
-			lastLine := ""
-			if len(got) > 0 {
-				lines := wrapLines(strings.Join(got, ", "), maxW, measure)
-				for i, line := range lines {
-					a.drawText(canvas, line, x, y, a.fontRegular, greenColor)
-					if i < len(lines)-1 {
-						y += lineHeight(a.fontRegular)
-					} else {
-						lastLine = line
-					}
-				}
-			}
-			drew := lastLine != ""
-			switch {
-			case a.setHintMark > 0 && drew:
-				a.drawMarkAfter(canvas, lastLine, x, y, true, greenColor)
-			case a.setHintMark < 0:
-				txt := a.setHint
-				if drew {
-					txt = "  " + txt
-				}
-				a.drawText(canvas, txt, x+measure(lastLine), y, a.fontRegular, redColor)
-				a.drawMarkAfter(canvas, lastLine+txt, x, y, false, redColor)
-				drew = true
-			case a.setHint != "":
-				txt := a.setHint
-				if drew {
-					txt = " · " + txt
-				}
-				a.drawText(canvas, txt, x+measure(lastLine), y, a.fontRegular, dimColor)
-				drew = true
-			}
-			if drew {
+			// The costless outcomes (duplicate, near spelling) are a
+			// transient dim hint, replaced by the next entry.
+			if a.setHint != "" {
+				a.drawText(canvas, a.setHint, x, y, a.fontRegular, dimColor)
 				y += lineHeight(a.fontRegular)
 			}
 		}

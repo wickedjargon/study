@@ -416,11 +416,10 @@ button.quiet:hover { color: var(--fg); }
    the question screen, and the marked reveal on the result screen. */
 .setstatus { display: flex; justify-content: space-between; margin: 0 0 0.4rem; }
 .setcount { color: var(--dim); }
-.setflash.ok { color: var(--ok); }
-.setflash.bad { color: var(--bad); }
-.setflash.dim { color: var(--dim); }
-.setnamed { margin: 0 0 0.5rem; }
-.setnamed span { color: var(--ok); }
+.setflash { color: var(--dim); margin: 0 0 0.4rem; }
+.setlog { list-style: none; margin: 0 0 0.5rem; padding: 0; }
+.setlog .ok { color: var(--ok); }
+.setlog .bad { color: var(--bad); }
 .setlist { margin: 0.2rem 0 0.4rem; }
 .setlist .named { color: var(--ok); }
 .setlist .unnamed { color: var(--dim); }

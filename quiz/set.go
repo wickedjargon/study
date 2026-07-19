@@ -1,6 +1,8 @@
 package quiz
 
 import (
+	"strings"
+
 	"study/deck"
 )
 
@@ -42,6 +44,21 @@ type SetOutcome struct {
 type setState struct {
 	named map[int]bool
 	wrong int
+	log   []SetLogEntry
+}
+
+// SetLogEntry is one counted entry of the current serve, in the order it
+// was typed: a named item (canonical text, Hit) or a wrong guess (as
+// typed). The costless outcomes (duplicates, near spellings) don't log.
+type SetLogEntry struct {
+	Text string
+	Hit  bool
+}
+
+// SetLog returns the serve's counted entries in order — the transcript both
+// frontends print above the input.
+func (e *Engine) SetLog() []SetLogEntry {
+	return e.set.log
 }
 
 // SetNamed reports which of the current card's items have been named this
@@ -81,6 +98,7 @@ func (e *Engine) AnswerSetEntry(input string) *SetOutcome {
 			return &SetOutcome{Verdict: SetDuplicate, Item: i}
 		}
 		e.set.named[i] = true
+		e.set.log = append(e.set.log, SetLogEntry{Text: items[i].Text, Hit: true})
 		out := &SetOutcome{Verdict: SetHit, Item: i}
 		if len(e.set.named) >= e.current.SetTarget() {
 			out.Result = e.finishSet(false)
@@ -99,6 +117,7 @@ func (e *Engine) AnswerSetEntry(input string) *SetOutcome {
 	}
 
 	e.set.wrong++
+	e.set.log = append(e.set.log, SetLogEntry{Text: strings.TrimSpace(input), Hit: false})
 	return &SetOutcome{Verdict: SetMiss, Item: -1}
 }
 
