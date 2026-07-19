@@ -42,6 +42,13 @@ rsync -a --delete --exclude '__pycache__' --exclude '.git' --exclude '*.geojson'
 	"$P/study-decks/study-animal-tracks.deck" \
 	"$P/study-decks/study-speed-trivia.deck" \
 	"$P/study-decks/study-which-is-bigger.deck" \
+	"$P/study-decks/study-world-landmarks.deck" \
+	"$P/study-decks/study-locator-maps.deck" \
+	"$P/study-decks/study-flags-by-region.deck" \
+	"$P/study-decks/study-borders.deck" \
+	"$P/study-decks/study-waters.deck" \
+	"$P/study-decks/study-us-presidents.deck" \
+	"$P/study-decks/study-canada.deck" \
 	"$SERVER:/opt/study-web/decks/"
 
 echo "== install binary & restart =="
