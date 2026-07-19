@@ -5,7 +5,7 @@
     <a class="brand" href="/">study</a>
     <span class="grouptitle"><span class="roundel">{{.Initial}}</span> {{.Name}}</span>
   </span>
-  <span class="barright">{{template "authmenu" .Email}}</span>
+  <span class="barright">{{if not local}}{{template "authmenu" .Email}}{{end}}</span>
 </header>
 <main class="list">
   <ul class="decklist">

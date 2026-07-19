@@ -29,7 +29,7 @@
     {{end}}
   </ul>
   {{end}}
-  <footer class="contact"><a href="mailto:farzineff@gmail.com">farzineff@gmail.com</a></footer>
+  {{if not local}}<footer class="contact"><a href="mailto:farzineff@gmail.com">farzineff@gmail.com</a></footer>{{end}}
 </main>
 {{template "bottom"}}
 {{end}}
