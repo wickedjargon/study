@@ -49,10 +49,13 @@ win-decks:
 		$(WIN_DECK_SRC) $(WIN_DIST)/decks/
 
 # The one-file installer (study-setup.exe): per-user, Start Menu shortcut,
-# .deck association, uninstaller. Needs makensis (Debian: apt install nsis);
-# runs on the host, not archbox.
+# .deck association, uninstaller. Split toolchains: the exe builds in
+# archbox (distrobox enter archbox -- make study-win), the installer packs
+# on the host (makensis; Debian: apt install nsis) — so this target checks
+# for the exe rather than rebuilding it.
 VERSION = 1.0.0
-study-setup: study-win win-decks
+study-setup: win-decks
+	@test -x $(WIN_DIST)/study.exe || { echo "no study.exe — run: distrobox enter archbox -- make study-win"; exit 1; }
 	cd cmd/study-win && makensis -DDISTDIR=../../$(WIN_DIST) -DVERSION=$(VERSION) installer.nsi
 	mv cmd/study-win/study-setup.exe dist/
 	@echo "installer at dist/study-setup.exe"
