@@ -38,11 +38,11 @@ WEB_DECKS = \
 	$(HOME)/d/projects/study-decks/study-locator-maps.deck \
 	'$(HOME)/d/projects/study-decks/study-flags-by-region.deck@Flags by Region' \
 	$(HOME)/d/projects/study-decks/study-borders.deck \
-	$(HOME)/d/projects/study-decks/study-waters.deck \
+	'$(HOME)/d/projects/study-decks/study-waters.deck@Bodies of Water' \
 	'$(HOME)/d/projects/study-decks/study-us-presidents.deck@US Presidents' \
 	$(HOME)/d/projects/study-decks/study-canada.deck \
 	'[Trivia]' \
-	$(HOME)/d/projects/study-decks/study-speed-trivia.deck \
+	'$(HOME)/d/projects/study-decks/study-speed-trivia.deck@Trivia Grab Bag' \
 	'$(HOME)/d/projects/study-decks/study-which-is-bigger.deck@Which Is Bigger?'
 
 # Bind localhost by default; `make run ADDR=0.0.0.0:8091` opens it to the
