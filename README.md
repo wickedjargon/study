@@ -254,10 +254,6 @@ not onion
 Garlic is Allium sativum. Same genus, different species.
 ```
 
-You're asked the first section, graded against the second, and shown the
-third with the result. Text and images only. Adding a note to an existing
-card keeps its progress. Try it: `study examples/notes.deck`
-
 ## Per-card overrides
 
 `# answer-mode:`, `# choice-count:`, and `# time-limit:` inside a card block
