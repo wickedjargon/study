@@ -7,8 +7,10 @@
 //
 // Interaction model: one persistent input line drives the whole session,
 // keyboard-first like the X11 version. On a question it takes the answer (or
-// a choice number); on every other screen an empty enter advances. Buttons
-// mirror the choices for the mouse.
+// a choice number); on every other screen an empty enter advances. Escape
+// ends the session, then quits the summary. Buttons mirror the choices for
+// the mouse. Layout and palette follow the X11 light scheme so the two can
+// be compared side by side without the paint getting in the way.
 package gio
 
 import (
@@ -25,6 +27,7 @@ import (
 	"gioui.org/io/key"
 	"gioui.org/layout"
 	"gioui.org/op"
+	"gioui.org/op/paint"
 	"gioui.org/text"
 	"gioui.org/unit"
 	"gioui.org/widget"
@@ -36,12 +39,17 @@ import (
 	"study/session"
 )
 
-// The X11 GUI's palette, roughly: verdicts green/red, structure dim.
+// The X11 GUI's light scheme (gui/app.go), same color roles: dim for
+// structure, accent for "what's being asked of me", green/red for verdicts,
+// yellow for the confusion contrast only.
 var (
-	okColor     = color.NRGBA{R: 0x2e, G: 0x7d, B: 0x32, A: 0xff}
-	badColor    = color.NRGBA{R: 0xc6, G: 0x28, B: 0x28, A: 0xff}
-	dimColor    = color.NRGBA{R: 0x8a, G: 0x88, B: 0x7a, A: 0xff}
-	accentColor = color.NRGBA{R: 0x8f, G: 0x5f, B: 0x00, A: 0xff}
+	bgColor     = color.NRGBA{R: 0xfb, G: 0xf1, B: 0xc7, A: 0xff}
+	textColor   = color.NRGBA{R: 0x3c, G: 0x38, B: 0x36, A: 0xff}
+	dimColor    = color.NRGBA{R: 0x92, G: 0x83, B: 0x74, A: 0xff}
+	okColor     = color.NRGBA{R: 0x79, G: 0x74, B: 0x0e, A: 0xff}
+	badColor    = color.NRGBA{R: 0x9d, G: 0x00, B: 0x06, A: 0xff}
+	yellowColor = color.NRGBA{R: 0xb5, G: 0x76, B: 0x14, A: 0xff}
+	accentColor = color.NRGBA{R: 0x07, G: 0x66, B: 0x78, A: 0xff}
 )
 
 // App is one running session in a Gio window.
@@ -53,7 +61,6 @@ type App struct {
 	input   widget.Editor
 	choices []widget.Clickable
 	noIdea  widget.Clickable
-	endBtn  widget.Clickable
 
 	result  *quiz.Result
 	setHint string // transient: duplicate / near-spelling feedback
@@ -94,6 +101,10 @@ func Run(deckPath string) error {
 func (a *App) loop(w *app.Window) error {
 	th := material.NewTheme()
 	th.Shaper = text.NewShaper(text.WithCollection(gofont.Collection()))
+	th.Palette.Bg = bgColor
+	th.Palette.Fg = textColor
+	th.Palette.ContrastBg = accentColor
+	th.Palette.ContrastFg = bgColor
 	var ops op.Ops
 	for {
 		switch e := w.Event().(type) {
@@ -101,6 +112,7 @@ func (a *App) loop(w *app.Window) error {
 			return e.Err
 		case app.FrameEvent:
 			gtx := app.NewContext(&ops, e)
+			paint.Fill(gtx.Ops, bgColor)
 			a.update(gtx)
 			a.frame(gtx, th)
 			e.Frame(gtx.Ops)
@@ -110,6 +122,19 @@ func (a *App) loop(w *app.Window) error {
 
 // update processes input events before drawing the frame.
 func (a *App) update(gtx layout.Context) {
+	// Escape ends the session (the summary shows), then quits — the X11
+	// binding. The filter rides the input's focus, which the input always
+	// holds.
+	for {
+		ev, ok := gtx.Event(key.Filter{Focus: &a.input, Name: key.NameEscape})
+		if !ok {
+			break
+		}
+		if ke, ok := ev.(key.Event); ok && ke.State == key.Press {
+			a.escape()
+		}
+	}
+
 	// The one input line: submits route by state.
 	for {
 		ev, ok := a.input.Update(gtx)
@@ -133,12 +158,14 @@ func (a *App) update(gtx layout.Context) {
 			a.finishAnswer(a.engine.AnswerNoIdea())
 		}
 	}
-	if a.endBtn.Clicked(gtx) {
-		if a.engine.State() == quiz.Done {
-			os.Exit(0)
-		}
-		a.engine.End()
+}
+
+func (a *App) escape() {
+	if a.engine.State() == quiz.Done {
+		os.Exit(0)
 	}
+	a.engine.End()
+	a.result = nil
 }
 
 // submit routes the input line's enter by session state — the whole
@@ -211,24 +238,27 @@ func (a *App) finishAnswer(res *quiz.Result) {
 	}
 }
 
-// frame draws the current screen.
+// frame draws the current screen: header, body, the controls box on the
+// right, the prompt line, footer — the X11 arrangement.
 func (a *App) frame(gtx layout.Context, th *material.Theme) {
-	// The input line owns the keyboard on every screen.
 	gtx.Execute(key.FocusCmd{Tag: &a.input})
 
 	inset := layout.UniformInset(unit.Dp(24))
 	inset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(a.header(th)),
-			layout.Rigid(spacer(12)),
+			layout.Rigid(spacer(16)),
 			layout.Flexed(1, a.body(th)),
-			layout.Rigid(spacer(12)),
+			layout.Rigid(a.controlsBox(th)),
+			layout.Rigid(spacer(8)),
 			layout.Rigid(a.inputRow(th)),
 			layout.Rigid(a.footer(th)),
 		)
 	})
 }
 
+// header: position left, badge centered (accent, like the X11 status bar),
+// tally right — hidden until something has been answered.
 func (a *App) header(th *material.Theme) layout.Widget {
 	e := a.engine
 	return func(gtx layout.Context) layout.Dimensions {
@@ -236,10 +266,14 @@ func (a *App) header(th *material.Theme) layout.Widget {
 		if e.State() == quiz.ShowResult || e.State() == quiz.Done {
 			pos = fmt.Sprintf("[%d/%d]", e.TotalSeen, e.TotalSeen+e.Remaining())
 		}
-		tally := fmt.Sprintf("✓%d  ✗%d", e.TotalCorrect, e.TotalWrong)
-		return layout.Flex{Spacing: layout.SpaceBetween}.Layout(gtx,
-			layout.Rigid(coloredLabel(th, unit.Sp(14), pos+"  "+a.badge(), dimColor)),
-			layout.Rigid(coloredLabel(th, unit.Sp(14), tally, dimColor)),
+		tally := ""
+		if e.TotalSeen > 0 {
+			tally = fmt.Sprintf("✓%d  ✗%d", e.TotalCorrect, e.TotalWrong)
+		}
+		return layout.Flex{}.Layout(gtx,
+			layout.Rigid(coloredLabel(th, unit.Sp(14), pos, dimColor, text.Start)),
+			layout.Flexed(1, coloredLabel(th, unit.Sp(14), a.badge(), accentColor, text.Middle)),
+			layout.Rigid(coloredLabel(th, unit.Sp(14), tally, dimColor, text.End)),
 		)
 	}
 }
@@ -279,30 +313,34 @@ func (a *App) body(th *material.Theme) layout.Widget {
 	}
 }
 
+// question draws centered and large, the X11 presentation.
+func (a *App) question(th *material.Theme, card *deck.Card) layout.FlexChild {
+	return layout.Rigid(coloredLabel(th, unit.Sp(26), textOf(card.Question), textColor, text.Middle))
+}
+
 func (a *App) questionBody(th *material.Theme) layout.Widget {
 	e := a.engine
 	card := e.Current()
 	return func(gtx layout.Context) layout.Dimensions {
-		var rows []layout.FlexChild
-		rows = append(rows,
-			layout.Rigid(coloredLabel(th, unit.Sp(22), textOf(card.Question), th.Palette.Fg)),
-			layout.Rigid(spacer(16)),
-		)
+		if card == nil {
+			return layout.Dimensions{}
+		}
+		rows := []layout.FlexChild{a.question(th, card), layout.Rigid(spacer(24))}
 		if card.IsSet() {
 			counter := fmt.Sprintf("named %d of %d", e.SetNamedCount(), card.SetTarget())
 			if left := e.SetAttemptsLeft(); left >= 0 {
 				counter += fmt.Sprintf(" · %d tries left", left)
 			}
-			rows = append(rows, layout.Rigid(coloredLabel(th, unit.Sp(14), counter, dimColor)))
+			rows = append(rows, layout.Rigid(coloredLabel(th, unit.Sp(14), counter, dimColor, text.Start)))
 			for _, en := range e.SetLog() {
 				c, mark := okColor, " ✓"
 				if !en.Hit {
 					c, mark = badColor, " ✗"
 				}
-				rows = append(rows, layout.Rigid(coloredLabel(th, unit.Sp(17), en.Text+mark, c)))
+				rows = append(rows, layout.Rigid(coloredLabel(th, unit.Sp(17), en.Text+mark, c, text.Start)))
 			}
 			if a.setHint != "" {
-				rows = append(rows, layout.Rigid(coloredLabel(th, unit.Sp(15), a.setHint, dimColor)))
+				rows = append(rows, layout.Rigid(coloredLabel(th, unit.Sp(15), a.setHint, dimColor, text.Start)))
 			}
 		} else if e.Mode() == deck.ModeChoice {
 			opts := e.Options()
@@ -313,18 +351,18 @@ func (a *App) questionBody(th *material.Theme) layout.Widget {
 				i, opt := i, opt
 				rows = append(rows, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 					b := material.Button(th, &a.choices[i], fmt.Sprintf("%d)  %s", i+1, opt))
-					b.Background = color.NRGBA{A: 0}
-					b.Color = th.Palette.Fg
+					b.Background = color.NRGBA{}
+					b.Color = textColor
 					b.Inset = layout.UniformInset(unit.Dp(4))
-					return leftAlign(gtx, b.Layout)
+					return layout.W.Layout(gtx, b.Layout)
 				}), layout.Rigid(spacer(2)))
 			}
 			rows = append(rows, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				b := material.Button(th, &a.noIdea, "0)  no idea")
-				b.Background = color.NRGBA{A: 0}
+				b.Background = color.NRGBA{}
 				b.Color = dimColor
 				b.Inset = layout.UniformInset(unit.Dp(4))
-				return leftAlign(gtx, b.Layout)
+				return layout.W.Layout(gtx, b.Layout)
 			}))
 		}
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx, rows...)
@@ -339,11 +377,8 @@ func (a *App) resultBody(th *material.Theme) layout.Widget {
 			return layout.Dimensions{}
 		}
 		card := res.Card
-		var rows []layout.FlexChild
+		rows := []layout.FlexChild{a.question(th, card), layout.Rigid(spacer(24))}
 		add := func(w layout.Widget) { rows = append(rows, layout.Rigid(w)) }
-
-		add(coloredLabel(th, unit.Sp(22), textOf(card.Question), th.Palette.Fg))
-		add(spacer(16))
 
 		if card.IsSet() {
 			named := e.SetNamed()
@@ -355,16 +390,17 @@ func (a *App) resultBody(th *material.Theme) layout.Widget {
 					missed = append(missed, it.Text)
 				}
 			}
-			verdict, c := fmt.Sprintf("✓ named %d of %d", len(got), card.SetTarget()), okColor
+			verdict, c := "✓", okColor
 			if !res.Correct {
-				verdict, c = fmt.Sprintf("✗ named %d of %d", len(got), card.SetTarget()), badColor
+				verdict, c = "✗", badColor
 			}
-			add(coloredLabel(th, unit.Sp(18), verdict, c))
+			add(coloredLabel(th, unit.Sp(18),
+				fmt.Sprintf("%s named %d of %d", verdict, len(got), card.SetTarget()), c, text.Start))
 			if len(got) > 0 {
-				add(coloredLabel(th, unit.Sp(16), strings.Join(got, ", "), okColor))
+				add(coloredLabel(th, unit.Sp(16), strings.Join(got, ", "), okColor, text.Start))
 			}
 			if len(missed) > 0 {
-				add(coloredLabel(th, unit.Sp(16), strings.Join(missed, ", "), dimColor))
+				add(coloredLabel(th, unit.Sp(16), strings.Join(missed, ", "), dimColor, text.Start))
 			}
 		} else {
 			verdict, c := "✓ correct", okColor
@@ -377,29 +413,32 @@ func (a *App) resultBody(th *material.Theme) layout.Widget {
 			default:
 				verdict, c = "✗ wrong", badColor
 			}
-			add(coloredLabel(th, unit.Sp(18), verdict, c))
+			add(coloredLabel(th, unit.Sp(18), verdict, c, text.Start))
 			if !res.Correct && res.Typed != "" {
-				add(coloredLabel(th, unit.Sp(16), "> "+res.Typed, badColor))
+				add(coloredLabel(th, unit.Sp(16), "> "+res.Typed, badColor, text.Start))
 			}
 			if !res.Correct {
-				add(coloredLabel(th, unit.Sp(16), "= "+res.Answer, okColor))
+				add(coloredLabel(th, unit.Sp(16), "= "+res.Answer, okColor, text.Start))
 			}
 		}
 
 		if note := textOf(card.Note); note != "" {
-			add(spacer(10))
-			add(coloredLabel(th, unit.Sp(15), note, dimColor))
+			add(spacer(12))
+			add(coloredLabel(th, unit.Sp(15), note, dimColor, text.Start))
 		}
 		if res.ConfusedWith != nil {
-			add(spacer(10))
+			add(spacer(12))
 			add(coloredLabel(th, unit.Sp(15),
-				"that's the answer to: "+deck.CardLabel(res.ConfusedWith), accentColor))
+				"that's the answer to: "+deck.CardLabel(res.ConfusedWith), yellowColor, text.Start))
 		}
 		if owed := e.PracticeOwed(); owed > 0 {
+			times := "times"
+			if owed == 1 {
+				times = "time"
+			}
 			add(spacer(14))
 			add(coloredLabel(th, unit.Sp(15),
-				fmt.Sprintf("almost — type it %d more times to continue: %s", owed, res.Answer),
-				accentColor))
+				fmt.Sprintf("almost — type it %d more %s to continue", owed, times), dimColor, text.Start))
 		}
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx, rows...)
 	}
@@ -411,16 +450,15 @@ func (a *App) previewBody(th *material.Theme) layout.Widget {
 		if card == nil {
 			return layout.Dimensions{}
 		}
-		var rows []layout.FlexChild
-		rows = append(rows,
-			layout.Rigid(coloredLabel(th, unit.Sp(22), textOf(card.Question), th.Palette.Fg)),
-			layout.Rigid(spacer(14)),
-			layout.Rigid(coloredLabel(th, unit.Sp(18), textOf(card.Answer), okColor)),
-		)
+		rows := []layout.FlexChild{
+			a.question(th, card),
+			layout.Rigid(spacer(18)),
+			layout.Rigid(coloredLabel(th, unit.Sp(18), textOf(card.Answer), okColor, text.Middle)),
+		}
 		if note := textOf(card.Note); note != "" {
 			rows = append(rows,
-				layout.Rigid(spacer(10)),
-				layout.Rigid(coloredLabel(th, unit.Sp(15), note, dimColor)))
+				layout.Rigid(spacer(12)),
+				layout.Rigid(coloredLabel(th, unit.Sp(15), note, dimColor, text.Middle)))
 		}
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx, rows...)
 	}
@@ -434,9 +472,7 @@ func (a *App) caughtUpBody(th *material.Theme) layout.Widget {
 			msg += "  Next review " + due.Local().Format("Mon 15:04") + "."
 		}
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-			layout.Rigid(coloredLabel(th, unit.Sp(20), "✓  "+msg, okColor)),
-			layout.Rigid(spacer(8)),
-			layout.Rigid(coloredLabel(th, unit.Sp(15), "enter: keep studying ahead of schedule", dimColor)),
+			layout.Rigid(coloredLabel(th, unit.Sp(20), "✓  "+msg, okColor, text.Middle)),
 		)
 	}
 }
@@ -445,71 +481,84 @@ func (a *App) summaryBody(th *material.Theme) layout.Widget {
 	e := a.engine
 	return func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-			layout.Rigid(coloredLabel(th, unit.Sp(20), "Session complete", th.Palette.Fg)),
+			layout.Rigid(coloredLabel(th, unit.Sp(20), "Session complete", textColor, text.Middle)),
 			layout.Rigid(spacer(10)),
 			layout.Rigid(coloredLabel(th, unit.Sp(16),
-				fmt.Sprintf("✓ %d correct   ✗ %d wrong", e.TotalCorrect, e.TotalWrong), dimColor)),
-			layout.Rigid(spacer(8)),
-			layout.Rigid(coloredLabel(th, unit.Sp(15), "enter: quit", dimColor)),
+				fmt.Sprintf("✓ %d correct   ✗ %d wrong", e.TotalCorrect, e.TotalWrong), dimColor, text.Middle)),
 		)
 	}
 }
 
-func (a *App) inputRow(th *material.Theme) layout.Widget {
-	return func(gtx layout.Context) layout.Dimensions {
-		hint := a.inputHint()
-		ed := material.Editor(th, &a.input, hint)
-		ed.TextSize = unit.Sp(18)
-		return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
-			layout.Rigid(coloredLabel(th, unit.Sp(18), "> ", accentColor)),
-			layout.Flexed(1, ed.Layout),
-		)
-	}
-}
-
-// inputHint is the input line's ghost text: what enter will do right now.
-func (a *App) inputHint() string {
+// controlsBox is the X11 GUI's bordered action legend, bottom-right: what
+// enter and escape do on this screen.
+func (a *App) controlsBox(th *material.Theme) layout.Widget {
 	e := a.engine
+	var lines []string
 	switch e.State() {
 	case quiz.ShowQuestion:
 		c := e.Current()
 		switch {
 		case c != nil && c.IsSet():
-			return "name one… (empty enter: give up)"
+			lines = []string{"enter: submit", "empty enter: give up"}
 		case e.Mode() == deck.ModeChoice:
-			return "type a choice number, 0 for no idea"
+			lines = []string{"1-9: pick", "0: no idea"}
 		default:
-			return "type your answer…"
+			lines = []string{"enter: submit"}
 		}
+		lines = append(lines, "esc: end")
 	case quiz.ShowResult:
-		if owed := e.PracticeOwed(); owed > 0 && a.result != nil {
-			return a.result.Answer
+		if e.PracticeOwed() > 0 {
+			lines = []string{"enter: check", "esc: end"}
+		} else {
+			lines = []string{"enter: continue", "esc: end"}
 		}
-		return "enter: continue"
 	case quiz.ShowPreview:
-		return "enter: got it, quiz me"
+		lines = []string{"enter: got it, quiz me", "esc: end"}
 	case quiz.CaughtUp:
-		return "enter: keep studying"
+		lines = []string{"enter: keep studying", "esc: end"}
 	default:
-		return "enter: quit"
+		lines = []string{"enter or esc: quit"}
 	}
+	return func(gtx layout.Context) layout.Dimensions {
+		return layout.E.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			return widget.Border{Color: dimColor, Width: unit.Dp(1), CornerRadius: unit.Dp(2)}.Layout(gtx,
+				func(gtx layout.Context) layout.Dimensions {
+					return layout.UniformInset(unit.Dp(8)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+						var rows []layout.FlexChild
+						for _, l := range lines {
+							rows = append(rows, layout.Rigid(coloredLabel(th, unit.Sp(13), l, dimColor, text.Start)))
+						}
+						return layout.Flex{Axis: layout.Vertical}.Layout(gtx, rows...)
+					})
+				})
+		})
+	}
+}
+
+func (a *App) inputRow(th *material.Theme) layout.Widget {
+	return func(gtx layout.Context) layout.Dimensions {
+		ed := material.Editor(th, &a.input, a.inputHint())
+		ed.TextSize = unit.Sp(18)
+		ed.HintColor = dimColor
+		return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+			layout.Rigid(coloredLabel(th, unit.Sp(18), "> ", accentColor, text.Start)),
+			layout.Flexed(1, ed.Layout),
+		)
+	}
+}
+
+// inputHint stays minimal — the controls box carries the guidance. The one
+// exception is practice, where the answer itself is the ghost to type over.
+func (a *App) inputHint() string {
+	if a.engine.State() == quiz.ShowResult && a.engine.PracticeOwed() > 0 && a.result != nil {
+		return a.result.Answer
+	}
+	return ""
 }
 
 func (a *App) footer(th *material.Theme) layout.Widget {
 	return func(gtx layout.Context) layout.Dimensions {
-		label := "end session"
-		if a.engine.State() == quiz.Done {
-			label = "quit"
-		}
-		b := material.Button(th, &a.endBtn, label)
-		b.Background = color.NRGBA{A: 0}
-		b.Color = dimColor
-		b.TextSize = unit.Sp(13)
-		b.Inset = layout.UniformInset(unit.Dp(4))
-		return layout.Flex{Spacing: layout.SpaceBetween}.Layout(gtx,
-			layout.Rigid(coloredLabel(th, unit.Sp(13), "study-gio (preview) — "+a.deckName, dimColor)),
-			layout.Rigid(b.Layout),
-		)
+		return coloredLabel(th, unit.Sp(13), "study-gio (preview) — "+a.deckName, dimColor, text.Start)(gtx)
 	}
 }
 
@@ -527,18 +576,15 @@ func textOf(media []deck.Media) string {
 	return strings.Join(parts, "\n")
 }
 
-func coloredLabel(th *material.Theme, size unit.Sp, txt string, c color.NRGBA) layout.Widget {
+func coloredLabel(th *material.Theme, size unit.Sp, txt string, c color.NRGBA, align text.Alignment) layout.Widget {
 	return func(gtx layout.Context) layout.Dimensions {
 		l := material.Label(th, size, txt)
 		l.Color = c
+		l.Alignment = align
 		return l.Layout(gtx)
 	}
 }
 
 func spacer(dp unit.Dp) layout.Widget {
 	return layout.Spacer{Height: dp}.Layout
-}
-
-func leftAlign(gtx layout.Context, w layout.Widget) layout.Dimensions {
-	return layout.W.Layout(gtx, w)
 }
