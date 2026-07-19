@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"study/deck"
@@ -125,12 +126,13 @@ type quizView struct {
 	// (in item order); SetItems is the result reveal, every item marked
 	// named or not; SetFlash is one entry's feedback carried across the
 	// redirect (?f=dup|close|miss).
-	SetCard   bool
-	SetNamed  []string
-	SetItems  []setItemView
-	SetCount  int
-	SetTarget int
-	SetFlash  string
+	SetCard       bool
+	SetNamed      []string
+	SetItems      []setItemView
+	SetCount      int
+	SetTarget     int
+	SetFlash      string
+	SetFlashClass string // ok (✓ hit), bad (✗ wrong guess), dim (costless)
 
 	// Caught up / summary.
 	NextDue     string
@@ -318,13 +320,24 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 			}
 			view.SetCount = e.SetNamedCount()
 			view.SetTarget = card.SetTarget()
+			// Entry feedback, marked with the tally's ✓/✗: a hit echoes the
+			// canonical item, a wrong guess gets the cross, the costless
+			// outcomes (duplicate, near spelling) stay dim.
 			switch r.URL.Query().Get("f") {
+			case "hit":
+				if i, err := strconv.Atoi(r.URL.Query().Get("i")); err == nil && i >= 0 && i < len(card.SetItems) {
+					view.SetFlash = card.SetItems[i].Text + " ✓"
+					view.SetFlashClass = "ok"
+				}
 			case "dup":
 				view.SetFlash = "already named"
+				view.SetFlashClass = "dim"
 			case "close":
 				view.SetFlash = "close — check the spelling"
+				view.SetFlashClass = "dim"
 			case "miss":
-				view.SetFlash = "✗ not one of them"
+				view.SetFlash = "not one of them ✗"
+				view.SetFlashClass = "bad"
 			}
 		}
 

@@ -119,7 +119,7 @@
        completing entry (or giving up) grades the whole card once. */}}
   <div class="setstatus">
     <span class="setcount">named {{.SetCount}} of {{.SetTarget}}</span>
-    {{if .SetFlash}}<span class="setflash">{{.SetFlash}}</span>{{end}}
+    {{if .SetFlash}}<span class="setflash {{.SetFlashClass}}">{{.SetFlash}}</span>{{end}}
   </div>
   {{if .SetNamed}}
   <p class="setnamed">{{range $i, $t := .SetNamed}}{{if $i}}, {{end}}<span>{{$t}}</span>{{end}}</p>

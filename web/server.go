@@ -763,6 +763,8 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 				}
 			} else {
 				switch out.Verdict {
+				case quiz.SetHit:
+					flash = "hit&i=" + strconv.Itoa(out.Item)
 				case quiz.SetDuplicate:
 					flash = "dup"
 				case quiz.SetClose:

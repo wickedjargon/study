@@ -251,9 +251,11 @@ type App struct {
 
 	// Text input buffer (type mode).
 	inputBuf string
-	// setHint is the last set-card entry's feedback ("close", "not one of
-	// them"), shown under the input until the next entry.
-	setHint string
+	// setHint is the last set-card entry's feedback, shown under the input
+	// until the next entry; setHintMark adds the tally's verdict mark after
+	// it (+1 ✔ for a named item, -1 ✘ for a wrong guess, 0 none).
+	setHint     string
+	setHintMark int
 
 	// choiceSel is the arrow/vim-keys highlight on the choice screen:
 	// 0..N-1 an option, N the no-idea row. Every served card starts back on
@@ -734,6 +736,7 @@ func (a *App) handleKey(ev xevent.KeyPressEvent) {
 			a.noteImg = nil
 			a.inputBuf = ""
 			a.setHint = ""
+			a.setHintMark = 0
 
 			if s := a.engine.State(); s == quiz.ShowQuestion || s == quiz.ShowPreview {
 				a.presentCard()
@@ -892,18 +895,24 @@ func (a *App) handleTypeKey(key string, ev xevent.KeyPressEvent) {
 				a.setResult(a.engine.AnswerSetGiveUp())
 				a.saveProgress()
 			} else if out := a.engine.AnswerSetEntry(a.inputBuf); out != nil {
+				a.setHintMark = 0
 				switch out.Verdict {
 				case quiz.SetHit:
-					a.setHint = ""
+					// Echo the canonical item ("burma" reads back as
+					// Myanmar ✔) with the tally's own mark.
+					a.setHint = c.SetItems[out.Item].Text
+					a.setHintMark = 1
 				case quiz.SetDuplicate:
 					a.setHint = "already named"
 				case quiz.SetClose:
 					a.setHint = "close — check the spelling"
 				case quiz.SetMiss:
-					a.setHint = "✗ not one of them"
+					a.setHint = "not one of them"
+					a.setHintMark = -1
 				}
 				if out.Result != nil {
 					a.setHint = ""
+					a.setHintMark = 0
 					a.setResult(out.Result)
 					a.saveProgress()
 				}
@@ -1560,8 +1569,20 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 				}
 			}
 			if a.setHint != "" {
-				a.drawText(canvas, a.setHint, padding+20, y, a.fontSmall, redColor)
-				y += lineHeight(a.fontSmall)
+				// The entry verdict, marked like the tally: ✔ names, ✘
+				// wrong guesses, plain dim for the costless outcomes.
+				hc := dimColor
+				switch {
+				case a.setHintMark > 0:
+					hc = greenColor
+				case a.setHintMark < 0:
+					hc = redColor
+				}
+				a.drawText(canvas, a.setHint, padding+20, y, a.fontRegular, hc)
+				if a.setHintMark != 0 {
+					a.drawMarkAfter(canvas, a.setHint, padding+20, y, a.setHintMark > 0, hc)
+				}
+				y += lineHeight(a.fontRegular)
 			}
 		}
 		// Text input field.
