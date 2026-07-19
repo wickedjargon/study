@@ -37,10 +37,15 @@ func editBudget(n int) int {
 	}
 }
 
-// totalBudget caps edits across a whole multi-word answer regardless of its
-// length: two slips anywhere is finger trouble, three or more is not
-// knowing the answer.
-const totalBudget = 2
+// totalBudget caps edits across a *sentence* answer (4+ words): two slips
+// anywhere is finger trouble, three or more is not knowing the answer. Short
+// answers — names, places, up to 3 words — rely on per-word budgets alone:
+// "theadoore rosevelt" is 3 edits, but both words are within budget, and
+// nearly-right-everywhere is exactly what a spelling mistake looks like.
+const (
+	totalBudget    = 2
+	totalCapAtWords = 4
+)
 
 // nearMiss reports whether the (already failed) typed answer is a spelling
 // near miss of one of the card's accepted answers. Comparison happens on
@@ -74,16 +79,20 @@ func (e *Engine) nearMiss(c *deck.Card, got string) bool {
 }
 
 // wordBagMatch reports whether two multi-word strings pair up word-for-word
-// ignoring order, each pair within its per-word edit budget and the whole
-// within totalBudget. A perfect pairing with zero edits (pure scramble) is
-// also a near miss: the knowledge is there, the convention isn't. Answers
-// longer than a handful of words are left to the whole-string check —
-// sentence answers are order-sensitive content, and a scrambled sentence is
-// simply wrong.
+// ignoring order, each pair within its per-word edit budget — and, for
+// sentence-length answers, the whole within totalBudget. A perfect pairing
+// with zero edits (pure scramble) is also a near miss: the knowledge is
+// there, the convention isn't. Answers longer than a handful of words are
+// left to the whole-string check — sentence answers are order-sensitive
+// content, and a scrambled sentence is simply wrong.
 func wordBagMatch(got, cand string) bool {
 	gw, cw := strings.Fields(got), strings.Fields(cand)
 	if len(gw) != len(cw) || len(cw) < 2 || len(cw) > 5 {
 		return false
+	}
+	capTotal := -1 // short answers: per-word budgets only
+	if len(cw) >= totalCapAtWords {
+		capTotal = totalBudget
 	}
 	best := -1
 	permute(gw, func(p []string) {
@@ -99,7 +108,7 @@ func wordBagMatch(got, cand string) bool {
 			best = total
 		}
 	})
-	return best >= 0 && best <= totalBudget
+	return best >= 0 && (capTotal < 0 || best <= capTotal)
 }
 
 // permute calls f with every permutation of s (Heap's algorithm, in place;

@@ -51,6 +51,7 @@ func TestNearMissSpecimens(t *testing.T) {
 		"franklin d roosevelt", // sanity: distance 0 never reaches nearMiss in practice, but scramble layer tolerates exact words
 		"roosevelt franklin d", // pure scramble, zero edits
 		"franklin rosevelt",    // near the accepted "Franklin Roosevelt"
+		"franklen d rosavelt",  // 3 edits, but every word within its budget
 	}
 	for _, s := range near {
 		if !e.nearMiss(card, s) {
@@ -59,15 +60,35 @@ func TestNearMissSpecimens(t *testing.T) {
 	}
 
 	far := []string{
-		"franklen d rosavelt", // three edits total: no longer "almost"
-		"abraham lincoln",     // different president entirely
-		"fdrr x yz",           // word count mismatch with every candidate
-		"",                    // empty input
+		"abraham lincoln", // different president entirely
+		"fdrr x yz",       // word count mismatch with every candidate
+		"",                // empty input
 	}
 	for _, s := range far {
 		if e.nearMiss(card, s) {
 			t.Errorf("nearMiss(%q) = true, want false", s)
 		}
+	}
+}
+
+// TestNearMissBothWordsMisspelled: a short answer with every word inside
+// its own budget is a spelling mistake even when the edits sum past the
+// sentence cap — the user's "Theadoore rosevelt" screenshot.
+func TestNearMissBothWordsMisspelled(t *testing.T) {
+	d := testDeck(1)
+	d.Cards[0].AnswerText = "Theodore Roosevelt"
+	d.Cards[0].Accept = []string{"Teddy Roosevelt"}
+	e := NewEngine(d, nil, nil)
+	if !e.nearMiss(&d.Cards[0], "Theadoore rosevelt") {
+		t.Error("theadoore rosevelt (2+1 edits, both words in budget) must flag")
+	}
+	// A sentence keeps the strict total cap: four words, each within its own
+	// per-word budget, three edits overall — still no flag.
+	d2 := testDeck(1)
+	d2.Cards[0].AnswerText = "please speak more slowly"
+	e2 := NewEngine(d2, nil, nil)
+	if e2.nearMiss(&d2.Cards[0], "pleese spek mre slowly") {
+		t.Error("3 edits across a 4-word sentence must not flag")
 	}
 }
 
