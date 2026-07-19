@@ -73,7 +73,11 @@ Section "study (required)"
   WriteRegStr HKCU "Software\Classes\study.deckfile\DefaultIcon" "" "$INSTDIR\study.exe,0"
   WriteRegStr HKCU "Software\Classes\study.deckfile\shell\open\command" "" '"$INSTDIR\study.exe" "%1"'
 
-  CreateShortcut "$SMPROGRAMS\study.lnk" "$INSTDIR\study.exe"
+  ; A Start Menu folder with the app and the discoverable uninstall
+  ; (Settings > Apps has it too).
+  CreateDirectory "$SMPROGRAMS\study"
+  CreateShortcut "$SMPROGRAMS\study\study.lnk" "$INSTDIR\study.exe"
+  CreateShortcut "$SMPROGRAMS\study\Uninstall study.lnk" "$INSTDIR\uninstall.exe"
 SectionEnd
 
 SectionGroup "Languages (audio, the big ones)"
@@ -152,6 +156,9 @@ Section "Desktop shortcut"
 SectionEnd
 
 Section "Uninstall"
+  Delete "$SMPROGRAMS\study\study.lnk"
+  Delete "$SMPROGRAMS\study\Uninstall study.lnk"
+  RMDir "$SMPROGRAMS\study"
   Delete "$SMPROGRAMS\study.lnk"
   Delete "$DESKTOP\study.lnk"
   Delete "$INSTDIR\study.exe"
