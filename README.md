@@ -6,7 +6,7 @@ windows: [study-setup.exe](https://github.com/wickedjargon/study/releases/latest
 
 browser: [study.fftp.io](https://study.fftp.io/)
 
-study uses a [spaced-repetition](https://en.wikipedia.org/wiki/Spaced_repetition) scheduler based on evidence gathered from these papers:
+study uses a flashcard scheduler based on evidence gathered from these papers:
 
 | Paper | Takeaway |
 |-------|----------|
