@@ -157,6 +157,71 @@ measurement and is the prerequisite for fitting item 8.
   or leech surfacing. Persistently missed cards are already reachable
   through weak-only cram and `--stats`.
 
+## Appendix: the original list (2026-07-19 session)
+
+Preserved verbatim for reference. This is the first version of this list,
+produced before the online research above. Items 3 and 8 are now settled
+refusals. Item 1 maps to current item 8, item 4 to current item 4, item 5
+to current item 7, item 6 to current item 2, item 7 to current item 5.
+Item 2 (adaptive relearning criterion) has no successor above and is
+still worth considering.
+
+> Ranked by expected learning impact, all compatible with the
+> evidence-first philosophy, and numbered for reference:
+>
+> 1. **Per-card memory modeling.** The single biggest lever. The current
+>    ladder is one-size-fits-all: every card climbs the same rungs, and a
+>    lapse halves the level. Real cards differ enormously in difficulty,
+>    and the review-log data to estimate it already exists (every answer
+>    is recorded with timestamps). Even a simple ease factor per card
+>    (Anki's approach) beats a fixed ladder; the full version is an
+>    FSRS-style model tracking each card's stability and difficulty,
+>    scheduling for a target recall probability like 90% instead of fixed
+>    steps. This turns "the ladder" into "this card's ladder."
+>
+> 2. **Adaptive relearning criterion.** A direct extension of your own
+>    Rawson & Dunlosky foundation: relearning sessions currently demand
+>    one recall from every studied card, but a card with a lapse history
+>    has proven that one recall doesn't re-establish it. Cards with
+>    repeated lapses should owe two or three relearning recalls, cards
+>    with spotless records could stay at one. Cheap to implement,
+>    squarely inside the successive-relearning literature.
+>
+> 3. **Response latency as evidence.** The advantage only study has,
+>    since grading is objective: a correct answer after eight hesitant
+>    seconds is measurably weaker retrieval than an instant one, and
+>    latency-weighted evidence could feed both the session criterion and
+>    the ladder. Needs care to normalize per user and per card length so
+>    slow typing isn't punished as weak memory.
+>
+> 4. **Backlog triage.** After a break, the composition rule "most
+>    overdue first" is arguably backwards: the most overdue cards are the
+>    most likely already forgotten, and their marginal loss from waiting
+>    another day is small, while barely-overdue cards are still savable.
+>    Ordering a backlog by predicted retention (save what's closest to
+>    slipping) and capping the day's bite retains more per minute of a
+>    comeback session.
+>
+> 5. **Mode-aware evidence weighting.** Already designed in this
+>    conversation: correct answers in an easier mode than the card's
+>    authored one hold the rung instead of climbing it.
+>
+> 6. **Interval fuzz and load smoothing.** Deterministic intervals make
+>    cards learned together stay clumped forever, arriving in the same
+>    groups on the same days, which lets group context substitute for
+>    memory. A few percent of randomness on due dates breaks the clumps
+>    and simultaneously flattens due-count spikes.
+>
+> 7. **Sibling spacing.** Forward and reverse of the same card on the
+>    same day prime each other, booking recognition of a fresh echo as
+>    full-strength evidence. Keeping the pair on different days makes the
+>    evidence honest.
+>
+> 8. **Leech detection.** Not a scheduling change so much as a stop-loss:
+>    after N lapses the scheduler is provably not the answer, and the
+>    card should be flagged for re-authoring (or a confusion pairing)
+>    instead of consuming reps forever.
+
 ## Sources
 
 - [srs-benchmark](https://github.com/open-spaced-repetition/srs-benchmark)
