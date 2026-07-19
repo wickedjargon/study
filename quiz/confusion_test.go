@@ -358,3 +358,28 @@ func TestConfusionDoesNotReaddCompletedCard(t *testing.T) {
 		t.Fatal("session never completed")
 	}
 }
+
+// TestSharedAnswerCarriesNoConfusion: an answer accepted by two or more
+// other cards identifies nothing specific — binary-answer decks like
+// Onion-or-not must not report a mix-up (or spoil another card's answer)
+// on every wrong guess.
+func TestSharedAnswerCarriesNoConfusion(t *testing.T) {
+	d := testDeck(3)
+	d.Cards[0].AnswerText = "Real newspaper"
+	d.Cards[1].AnswerText = "The Onion"
+	d.Cards[2].AnswerText = "The Onion"
+	for i := range d.Cards {
+		d.Cards[i].Mode = deck.ModeType
+	}
+	e := NewEngine(d, nil, nil)
+
+	// Current card answers "Real newspaper"; the wrong guess "The Onion"
+	// belongs to two other cards.
+	res := e.AnswerTyped("The Onion")
+	if res.Correct {
+		t.Fatal("wrong guess graded correct")
+	}
+	if res.ConfusedWith != nil {
+		t.Fatalf("shared answer reported confusion with %q", res.ConfusedWith.AnswerText)
+	}
+}

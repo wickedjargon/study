@@ -821,14 +821,21 @@ func cardAccepts(c *deck.Card, got string, caseSensitive bool) bool {
 	return false
 }
 
-// noteConfusion handles a wrong answer that is itself the answer to another
-// card: a discrimination failure between two cards, not ordinary forgetting
-// of one. The confused-with card is returned for the result screen's contrast
-// line, and — when it still owes recalls this session — pulled forward so the
-// pair is retrieved near each other while the confusion is fresh. Its
-// between-session schedule is untouched: the user producing its answer to the
-// wrong cue is no evidence against that card itself, and a card past its
-// criterion is not dragged back in (that would collapse its spacing).
+// noteConfusion handles a wrong answer that is itself the answer to exactly
+// one other card: a discrimination failure between two cards, not ordinary
+// forgetting of one. The confused-with card is returned for the result
+// screen's contrast line, and — when it still owes recalls this session —
+// pulled forward so the pair is retrieved near each other while the
+// confusion is fresh. Its between-session schedule is untouched: the user
+// producing its answer to the wrong cue is no evidence against that card
+// itself, and a card past its criterion is not dragged back in (that would
+// collapse its spacing).
+//
+// An answer shared by two or more other cards identifies nothing specific,
+// so it carries no confusion signal at all. Binary-answer decks are the
+// motivating case: in Onion-or-not every miss lands on "some card whose
+// answer is The Onion", which is a wrong guess, not a mix-up — and the
+// contrast would spoil an upcoming card's answer besides.
 func (e *Engine) noteConfusion(got string) *deck.Card {
 	if strings.TrimSpace(got) == "" {
 		return nil
@@ -838,15 +845,10 @@ func (e *Engine) noteConfusion(got string) *deck.Card {
 		if c.ID == e.current.ID || !e.accepts(c, got) {
 			continue
 		}
-		if confused == nil {
-			confused = c
+		if confused != nil {
+			return nil // shared answer: no specific card to be confused with
 		}
-		// Among several cards sharing this answer, prefer one still active in
-		// the session — that one can actually be juxtaposed.
-		if e.evidenceScheduled() && e.need[c.ID] > 0 {
-			confused = c
-			break
-		}
+		confused = c
 	}
 	if confused == nil {
 		return nil
