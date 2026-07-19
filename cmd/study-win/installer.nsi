@@ -8,6 +8,13 @@
 ; them, Start Menu + optional desktop shortcut, a .deck file association,
 ; and an uninstaller registered in Settings → Apps. Progress data
 ; (%LOCALAPPDATA%\study) is only removed on uninstall if the user says so.
+;
+; Deck packs are individual components, grouped: uncheck what you don't
+; want. Non-solid compression on purpose — a skipped section then costs no
+; extraction time (solid LZMA would decompress through everything anyway,
+; which made installs slow). Cross-pack image borrowing pins two bundles:
+; flags-by-region and world-capitals reuse world-flags' images, so the
+; three ship as one component.
 
 !ifndef DISTDIR
   !error "pass -DDISTDIR=<folder with study.exe and decks/>"
@@ -20,7 +27,7 @@ Name "study"
 OutFile "study-setup.exe"
 Unicode true
 RequestExecutionLevel user
-SetCompressor /SOLID lzma
+SetCompressor lzma
 
 InstallDir "$LOCALAPPDATA\Programs\study"
 
@@ -28,12 +35,21 @@ Icon "study.ico"
 UninstallIcon "study.ico"
 
 !define UNINST "Software\Microsoft\Windows\CurrentVersion\Uninstall\study"
+!define DECKS "$APPDATA\study\decks"
 
 Page directory
 Page components
 Page instfiles
 UninstPage uninstConfirm
 UninstPage instfiles
+
+; One deck pack as one optional component.
+!macro DeckPack secname dir
+Section "${secname}"
+  SetOutPath "${DECKS}\${dir}"
+  File /r "${DISTDIR}\decks\${dir}\*"
+SectionEnd
+!macroend
 
 Section "study (required)"
   SectionIn RO
@@ -60,11 +76,76 @@ Section "study (required)"
   CreateShortcut "$SMPROGRAMS\study.lnk" "$INSTDIR\study.exe"
 SectionEnd
 
-Section "Deck packs"
-  ; The full catalog, to the user-editable location study.exe reads.
-  SetOutPath "$APPDATA\study\decks"
-  File /r "${DISTDIR}\decks\*"
-SectionEnd
+SectionGroup "Languages (audio, the big ones)"
+  Section "Japanese"
+    SetOutPath "${DECKS}\language-packs\study-japanese.deck"
+    File /r "${DISTDIR}\decks\language-packs\study-japanese.deck\*"
+    SetOutPath "${DECKS}\study-japanese-numbers.deck"
+    File /r "${DISTDIR}\decks\study-japanese-numbers.deck\*"
+    SetOutPath "${DECKS}\study-mahjong.deck"
+    File /r "${DISTDIR}\decks\study-mahjong.deck\*"
+  SectionEnd
+  Section "Farsi"
+    SetOutPath "${DECKS}\language-packs\study-farsi.deck"
+    File /r "${DISTDIR}\decks\language-packs\study-farsi.deck\*"
+    SetOutPath "${DECKS}\study-farsi-numbers.deck"
+    File /r "${DISTDIR}\decks\study-farsi-numbers.deck\*"
+  SectionEnd
+  Section "Mandarin Chinese"
+    SetOutPath "${DECKS}\language-packs\study-mandarin-chinese.deck"
+    File /r "${DISTDIR}\decks\language-packs\study-mandarin-chinese.deck\*"
+    SetOutPath "${DECKS}\study-chinese-numbers.deck"
+    File /r "${DISTDIR}\decks\study-chinese-numbers.deck\*"
+    SetOutPath "${DECKS}\study-chinese-mahjong-tiles.deck"
+    File /r "${DISTDIR}\decks\study-chinese-mahjong-tiles.deck\*"
+    SetOutPath "${DECKS}\study-chinese-mahjong-terms.deck"
+    File /r "${DISTDIR}\decks\study-chinese-mahjong-terms.deck\*"
+  SectionEnd
+  Section "Spanish (Colombian)"
+    SetOutPath "${DECKS}\language-packs\study-colombian-spanish.deck"
+    File /r "${DISTDIR}\decks\language-packs\study-colombian-spanish.deck\*"
+  SectionEnd
+  !insertmacro DeckPack "Spanish (Mexican)" "study-mexican-spanish.deck"
+  Section "Portuguese (Brazilian)"
+    SetOutPath "${DECKS}\language-packs\study-brazilian-portuguese.deck"
+    File /r "${DISTDIR}\decks\language-packs\study-brazilian-portuguese.deck\*"
+  SectionEnd
+SectionGroupEnd
+
+SectionGroup "Geography"
+  Section "World Flags, Capitals & Regions"
+    ; One component: flags-by-region and world-capitals borrow the
+    ; world-flags images.
+    SetOutPath "${DECKS}\study-world-flags.deck"
+    File /r "${DISTDIR}\decks\study-world-flags.deck\*"
+    SetOutPath "${DECKS}\study-flags-by-region.deck"
+    File /r "${DISTDIR}\decks\study-flags-by-region.deck\*"
+    SetOutPath "${DECKS}\study-world-capitals.deck"
+    File /r "${DISTDIR}\decks\study-world-capitals.deck\*"
+  SectionEnd
+  !insertmacro DeckPack "Locator Maps" "study-locator-maps.deck"
+  !insertmacro DeckPack "Country Silhouettes" "study-country-silhouettes.deck"
+  !insertmacro DeckPack "Borders" "study-borders.deck"
+  !insertmacro DeckPack "Bodies of Water" "study-waters.deck"
+  !insertmacro DeckPack "World Landmarks" "study-world-landmarks.deck"
+  !insertmacro DeckPack "Canada" "study-canada.deck"
+SectionGroupEnd
+
+SectionGroup "British Columbia"
+  !insertmacro DeckPack "BC Driving" "study-bc-driving.deck"
+  !insertmacro DeckPack "BC Birds (audio)" "study-bc-birds.deck"
+SectionGroupEnd
+
+SectionGroup "Trivia"
+  !insertmacro DeckPack "Trivia Grab Bag" "study-speed-trivia.deck"
+  !insertmacro DeckPack "Which Is Bigger?" "study-which-is-bigger.deck"
+SectionGroupEnd
+
+SectionGroup "More"
+  !insertmacro DeckPack "US Presidents" "study-us-presidents.deck"
+  !insertmacro DeckPack "Dog Breeds" "study-dog-breeds.deck"
+  !insertmacro DeckPack "Animal Tracks" "study-animal-tracks.deck"
+SectionGroupEnd
 
 Section "Desktop shortcut"
   CreateShortcut "$DESKTOP\study.lnk" "$INSTDIR\study.exe"
