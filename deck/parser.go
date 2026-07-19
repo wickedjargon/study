@@ -41,6 +41,13 @@ type Media struct {
 	Content string // text content or absolute file path
 }
 
+// SetItem is one required entry of a set-answer card: its canonical text
+// plus the accepted variants authored as "=" lines directly under it.
+type SetItem struct {
+	Text   string
+	Accept []string
+}
+
 // Card represents a single question/answer pair.
 type Card struct {
 	ID string // stable hash of the question's text lines
@@ -66,12 +73,32 @@ type Card struct {
 	// screen, so it can't help with the answer. Text and images only; audio
 	// is rejected at parse until its playback ordering is designed. Excluded
 	// from the card ID, so annotating a card never orphans its progress.
-	Note           []Media
-	Mode           QuizMode // per-card mode (choice or type)
-	Choices        int      // per-card choice count (0 = use deck default)
-	TimeLimit      int      // per-card time limit in seconds
+	Note []Media
+	// SetItems makes this a set-answer card ("+ " lines in the answer
+	// section): the user enumerates the items, any order, one entry at a
+	// time. Quota is how many distinct items complete the card (0 = all of
+	// them — "name the countries" vs "name five countries"). Set cards are
+	// type-mode only and don't reverse.
+	SetItems  []SetItem
+	Quota     int
+	Mode      QuizMode // per-card mode (choice or type)
+	Choices   int      // per-card choice count (0 = use deck default)
+	TimeLimit int      // per-card time limit in seconds
 	// (0 = inherit deck default, -1 = explicitly unlimited)
 	Cloze bool // fill-in-the-blank card ({{...}} deletion, no separator)
+}
+
+// IsSet reports whether this is a set-answer card (an enumeration, not a
+// single value).
+func (c *Card) IsSet() bool { return len(c.SetItems) > 0 }
+
+// SetTarget returns how many distinct items complete a set card: its quota,
+// or every item when no quota is authored.
+func (c *Card) SetTarget() int {
+	if c.Quota > 0 {
+		return c.Quota
+	}
+	return len(c.SetItems)
 }
 
 // EffectiveTimeLimit returns the time limit in seconds that applies to this
@@ -223,6 +250,11 @@ func (d *Deck) warn(format string, args ...any) {
 func (d *Deck) ForceAnswerMode(m QuizMode) {
 	d.Mode = m
 	for i := range d.Cards {
+		// Set cards have no choice presentation; they stay typed even when
+		// the session forces choice.
+		if m == ModeChoice && d.Cards[i].IsSet() {
+			continue
+		}
 		d.Cards[i].Mode = m
 	}
 }
@@ -656,13 +688,18 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, deckModeSet
 		return nil, fmt.Errorf("card has no answer (nothing after separator): %q", strings.Join(filtered, " / "))
 	}
 
-	// Separate the answer lines from distractor lines (~ prefix) and extra
-	// accepted-answer lines (= prefix). Distractors are wrong answers shown in
-	// choice mode; accepted answers are additional spellings counted correct in
-	// type mode (e.g. "= hi" alongside the primary answer "hello").
+	// Separate the answer lines from distractor lines (~ prefix), extra
+	// accepted-answer lines (= prefix), set items (+ prefix), and a quota
+	// directive. Distractors are wrong answers shown in choice mode; accepted
+	// answers are additional spellings counted correct in type mode ("= hi"
+	// alongside the primary answer "hello"). An "=" after a "+" item attaches
+	// to that item, mirroring how it attaches to the single answer.
 	var answerLines []string
 	var distractors []string
 	var accepts []string
+	var setItems []SetItem
+	quota := 0
+	quotaSet := false
 	for _, line := range afterSep {
 		trimmed := strings.TrimSpace(line)
 		switch {
@@ -670,16 +707,53 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, deckModeSet
 			distractors = append(distractors, strings.TrimPrefix(trimmed, "~ "))
 		case strings.HasPrefix(trimmed, "~") && len(trimmed) > 1:
 			distractors = append(distractors, strings.TrimSpace(trimmed[1:]))
-		case strings.HasPrefix(trimmed, "= "):
-			accepts = append(accepts, strings.TrimPrefix(trimmed, "= "))
-		case strings.HasPrefix(trimmed, "=") && len(trimmed) > 1:
-			accepts = append(accepts, strings.TrimSpace(trimmed[1:]))
+		case strings.HasPrefix(trimmed, "+ "):
+			setItems = append(setItems, SetItem{Text: strings.TrimPrefix(trimmed, "+ ")})
+		case strings.HasPrefix(trimmed, "quota:"):
+			if n, err := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(trimmed, "quota:"))); err == nil && n >= 1 {
+				quota = n
+				quotaSet = true
+			} else {
+				warn("ignoring %q (quota: needs an integer >= 1)", trimmed)
+			}
+		case strings.HasPrefix(trimmed, "= "), strings.HasPrefix(trimmed, "=") && len(trimmed) > 1:
+			a := strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(trimmed, "= "), "="))
+			if len(setItems) > 0 {
+				it := &setItems[len(setItems)-1]
+				it.Accept = append(it.Accept, a)
+			} else {
+				accepts = append(accepts, a)
+			}
 		default:
 			answerLines = append(answerLines, line)
 		}
 	}
 
-	if len(answerLines) == 0 {
+	// Set-answer card: two or more "+" items. Enumeration is typed entry by
+	// entry, so the card is forced to type mode, can't carry distractors, and
+	// its display answer is the joined list (the reveal every answer-visible
+	// screen shows).
+	if len(setItems) > 0 {
+		if len(setItems) < 2 {
+			return nil, fmt.Errorf("set card needs at least two + items: %q", strings.Join(filtered, " / "))
+		}
+		if len(distractors) > 0 {
+			return nil, fmt.Errorf("set card can't have ~ distractors (type-mode only): %q", strings.Join(filtered, " / "))
+		}
+		if len(answerLines) > 0 && extractText(parseMediaLines(answerLines, baseDir, warn)) != "" {
+			return nil, fmt.Errorf("set card mixes a plain answer line with + items: %q", strings.Join(filtered, " / "))
+		}
+		if quota > len(setItems) {
+			return nil, fmt.Errorf("quota: %d exceeds the %d + items: %q", quota, len(setItems), strings.Join(filtered, " / "))
+		}
+		if cardMode == ModeChoice && modeSet {
+			warn("set card ignores answer-mode choice (enumeration is typed)")
+		}
+	} else if quotaSet {
+		return nil, fmt.Errorf("quota: without + items: %q", strings.Join(filtered, " / "))
+	}
+
+	if len(answerLines) == 0 && len(setItems) == 0 {
 		return nil, fmt.Errorf("card has no answer (only distractors after ---): %q", strings.Join(filtered, " / "))
 	}
 
@@ -698,15 +772,28 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, deckModeSet
 
 	answer := parseMediaLines(answerLines, baseDir, warn)
 
-	// Build answer text from text elements on the answer side.
-	answerText := extractText(answer)
-	if answerText == "" {
-		return nil, fmt.Errorf("card answer has no text (needed for choices): %q", strings.Join(filtered, " / "))
-	}
-	// Answers are a single line: the user types or matches one value. Multiple
-	// text lines (joined with a newline by extractText) are rejected.
-	if strings.Contains(answerText, "\n") {
-		return nil, fmt.Errorf("card answer must be a single line: %q", strings.Join(filtered, " / "))
+	// Build answer text from text elements on the answer side. A set card's
+	// display answer is the joined item list — that's what every
+	// answer-visible screen (preview, flip-through, the reveal) shows.
+	var answerText string
+	if len(setItems) > 0 {
+		texts := make([]string, len(setItems))
+		for i, it := range setItems {
+			texts[i] = it.Text
+		}
+		answerText = strings.Join(texts, ", ")
+		answer = append(answer, Media{Type: Text, Content: answerText})
+		cardMode = ModeType
+	} else {
+		answerText = extractText(answer)
+		if answerText == "" {
+			return nil, fmt.Errorf("card answer has no text (needed for choices): %q", strings.Join(filtered, " / "))
+		}
+		// Answers are a single line: the user types or matches one value. Multiple
+		// text lines (joined with a newline by extractText) are rejected.
+		if strings.Contains(answerText, "\n") {
+			return nil, fmt.Errorf("card answer must be a single line: %q", strings.Join(filtered, " / "))
+		}
 	}
 
 	// The optional note: text and images only. Audio is rejected — the
@@ -737,6 +824,8 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, deckModeSet
 		Accept:         accepts,
 		QuestionAccept: qAccepts,
 		Distractors:    distractors,
+		SetItems:       setItems,
+		Quota:          quota,
 		Mode:           cardMode,
 		Choices:        cardChoices,
 		TimeLimit:      cardTime,

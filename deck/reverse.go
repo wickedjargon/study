@@ -58,6 +58,11 @@ func reverseCard(c *Card) (Card, bool) {
 	if c.Cloze {
 		return Card{}, false
 	}
+	// A set card's answer is an enumeration; prompting with the list and
+	// demanding the question back makes no card.
+	if c.IsSet() {
+		return Card{}, false
+	}
 
 	// The original prompt's text lines are the native script and its
 	// romanization; its non-text media (audio, image) ride along to the reveal.

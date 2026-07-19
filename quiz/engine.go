@@ -154,6 +154,9 @@ type Engine struct {
 	practiceOwed int
 	nearPending  bool
 
+	// set is the per-serve entry progress of a set-answer card (see set.go).
+	set setState
+
 	// servedAt is when the current card's question appeared, feeding the
 	// review log's diagnostic seconds field. Never read by scheduling: time
 	// can't distinguish struggle from an empty chair.
@@ -747,6 +750,11 @@ func (e *Engine) AnswerTyped(input string) *Result {
 	if e.state != ShowQuestion || e.current == nil {
 		return nil
 	}
+	// Set cards answer entry by entry (AnswerSetEntry); a single typed
+	// answer has no meaning against an enumeration.
+	if e.current.IsSet() {
+		return nil
+	}
 
 	expected := e.current.AnswerText
 	got := strings.TrimSpace(input)
@@ -801,13 +809,19 @@ func (e *Engine) matchesAnswer(got string) bool {
 // surrounding/embedded punctuation, and accents don't cause a right answer to
 // be marked wrong.
 func (e *Engine) accepts(c *deck.Card, got string) bool {
+	return cardAccepts(c, got, e.caseSensitive)
+}
+
+// cardAccepts is accepts without the engine: set items borrow the identical
+// comparison by wrapping themselves in a throwaway card.
+func cardAccepts(c *deck.Card, got string, caseSensitive bool) bool {
 	candidates := make([]string, 0, 1+len(c.Accept))
 	candidates = append(candidates, c.AnswerText)
 	candidates = append(candidates, c.Accept...)
 
 	got = strings.TrimSpace(got)
 	for _, cand := range candidates {
-		if e.caseSensitive {
+		if caseSensitive {
 			if got == strings.TrimSpace(cand) {
 				return true
 			}
@@ -1127,9 +1141,11 @@ func (e *Engine) handleWrong() {
 
 // advance moves to the next card from main or retry queue.
 func (e *Engine) advance() {
-	// Practice debt never outlives its result screen (End/ContinueAll also
-	// route here eventually via a fresh serve).
+	// Practice debt never outlives its result screen, and a set card's
+	// entry progress never outlives its serve (End/ContinueAll also route
+	// here eventually via a fresh serve).
 	e.practiceOwed = 0
+	e.set = setState{}
 	// If the last answer was wrong, repeat the same card immediately.
 	if e.repeatCurrent && e.current != nil {
 		e.repeatCurrent = false
