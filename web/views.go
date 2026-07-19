@@ -116,6 +116,10 @@ type quizView struct {
 	// since an image-only card (a flag, a dog) has no text to name it by.
 	Confused   []mediaView
 	WrongPause int
+	// PracticeOwed is the near-miss transcription debt: how many correct
+	// retypes of the exposed answer the result screen still requires. The
+	// template swaps the next button for the practice input while positive.
+	PracticeOwed int
 
 	// Caught up / summary.
 	NextDue     string
@@ -323,7 +327,10 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		if res.ConfusedWith != nil {
 			view.Confused = mediaViews(mediaBase, sess.deck.ImgTint, res.ConfusedWith.Question)
 		}
-		if !res.Correct {
+		view.PracticeOwed = e.PracticeOwed()
+		if !res.Correct && !res.NearMiss {
+			// A near miss substitutes transcription practice for the pause,
+			// even on the render after the debt is paid.
 			view.WrongPause = e.WrongPause()
 		}
 

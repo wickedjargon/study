@@ -746,6 +746,10 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		}
 	case "next":
 		e.Next()
+	case "practice":
+		// One transcription attempt on a near-miss result. The engine keeps
+		// the count; Next stays inert until the debt is paid.
+		e.PracticeTyped(r.FormValue("practice"))
 	case "preview":
 		e.ConfirmPreview()
 	case "continue":

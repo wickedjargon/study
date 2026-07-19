@@ -407,6 +407,11 @@ button.quiet:hover { color: var(--fg); }
 .typed input::placeholder { color: var(--dim); }
 .typed input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
 
+/* Near-miss transcription practice: the note rides above the input, so the
+   form wraps; the answer itself is the input's placeholder ghost. */
+.typed.practice { flex-wrap: wrap; }
+.practice-note { flex-basis: 100%; color: var(--dim); margin: 0 0 0.1rem; }
+
 .choices { display: grid; gap: 0.5rem; }
 .choice {
   display: flex;

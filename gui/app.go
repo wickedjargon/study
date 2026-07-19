@@ -617,6 +617,11 @@ func (a *App) lockResult() {
 	if secs <= 0 || a.result == nil || a.result.Correct {
 		return
 	}
+	// A near miss substitutes transcription practice for the pause: typing
+	// the answer three times is more engagement than any countdown forces.
+	if a.engine.PracticeOwed() > 0 {
+		return
+	}
 	a.resultLock = time.Now().Add(time.Duration(secs) * time.Second)
 }
 
@@ -702,6 +707,13 @@ func (a *App) handleKey(ev xevent.KeyPressEvent) {
 				a.setSpeed(defaultSpeed)
 				return
 			}
+		}
+		// A near-miss result owes transcription practice: keys type into the
+		// practice line, enter checks it, and continue is unreachable until
+		// the debt is paid (the engine's Next also refuses).
+		if a.engine.PracticeOwed() > 0 {
+			a.handlePracticeKey(key, ev)
+			return
 		}
 		switch key {
 		case "Return", "space":
@@ -870,6 +882,11 @@ func (a *App) handleTypeKey(key string, ev xevent.KeyPressEvent) {
 	switch key {
 	case "Return":
 		a.setResult(a.engine.AnswerTyped(a.inputBuf))
+		// A near-miss result reuses the buffer for its practice line; it
+		// must not open pre-filled with the misspelling just submitted.
+		if a.engine.PracticeOwed() > 0 {
+			a.inputBuf = ""
+		}
 		// In reverse mode the prompt was silent; reveal the target language now
 		// that the answer is in — speak its clip and load its image.
 		if a.reverse {
@@ -893,6 +910,84 @@ func (a *App) handleTypeKey(key string, ev xevent.KeyPressEvent) {
 		// selection; every other Ctrl combo is swallowed so it can't leak a
 		// stray character into the buffer (LookupString ignores Ctrl, so e.g.
 		// Ctrl+V would otherwise insert a literal "v").
+		if ev.State&xproto.ModMaskControl > 0 {
+			if key == "v" || key == "V" {
+				a.requestPaste(a.clipboardAtom, ev.Time)
+			}
+			return
+		}
+		if r, ok := a.typedRune(key, ev); ok {
+			a.inputBuf += string(r)
+			a.render()
+		}
+	}
+}
+
+// renderPractice draws the transcription line of a near-miss result: the
+// correct spelling sits directly on the input line as ghost text, so the
+// user types right over it — the accent-colored typed prefix consumes the
+// dim remainder as it goes. A deviation drops the ghost (the answer stays
+// visible in the green "=" line just above) and shows a bare cursor.
+// Returns the new y; a no-op when no practice is owed.
+func (a *App) renderPractice(canvas *image.RGBA, y int) int {
+	owed := a.engine.PracticeOwed()
+	if owed <= 0 || a.result == nil {
+		return y
+	}
+	y += a.scaled(10)
+	times := "times"
+	if owed == 1 {
+		times = "time"
+	}
+	a.drawText(canvas, fmt.Sprintf("almost — type it %d more %s to continue", owed, times),
+		padding+20, y, a.fontSmall, dimColor)
+	y += lineHeight(a.fontSmall)
+
+	prompt := "> " + a.inputBuf
+	if rest, ok := ghostRemainder(a.result.Answer, a.inputBuf); ok {
+		a.drawText(canvas, prompt, padding+20, y, a.fontRegular, accentColor)
+		w := font.MeasureString(a.fontRegular, prompt).Round()
+		a.drawText(canvas, rest, padding+20+w, y, a.fontRegular, dimColor)
+	} else {
+		a.drawText(canvas, prompt+"_", padding+20, y, a.fontRegular, accentColor)
+	}
+	return y + lineHeight(a.fontRegular)
+}
+
+// ghostRemainder returns what's left of target after the typed prefix, when
+// typed is a case-insensitive prefix of it — the ghost the user is typing
+// over. Reports false the moment the input deviates.
+func ghostRemainder(target, typed string) (string, bool) {
+	tr, ty := []rune(target), []rune(typed)
+	if len(ty) > len(tr) {
+		return "", false
+	}
+	for i, r := range ty {
+		if unicode.ToLower(r) != unicode.ToLower(tr[i]) {
+			return "", false
+		}
+	}
+	return string(tr[len(ty):]), true
+}
+
+// handlePracticeKey routes result-screen keys while a near miss owes
+// transcription practice. Same editing behavior as the answer input; enter
+// submits one transcription attempt instead of continuing.
+func (a *App) handlePracticeKey(key string, ev xevent.KeyPressEvent) {
+	switch key {
+	case "Return":
+		a.engine.PracticeTyped(a.inputBuf)
+		a.inputBuf = ""
+		a.render()
+	case "BackSpace":
+		if len(a.inputBuf) > 0 {
+			runes := []rune(a.inputBuf)
+			a.inputBuf = string(runes[:len(runes)-1])
+			a.render()
+		}
+	case "Escape":
+		a.endSession()
+	default:
 		if ev.State&xproto.ModMaskControl > 0 {
 			if key == "v" || key == "V" {
 				a.requestPaste(a.clipboardAtom, ev.Time)
@@ -1521,6 +1616,7 @@ func (a *App) renderResult(canvas *image.RGBA) {
 				y += lineHeight(a.fontRegular)
 			}
 		}
+		y = a.renderPractice(canvas, y)
 	} else {
 		// Choices with highlighting: the correct option gets the ✔, a wrongly
 		// chosen one the ✘.
@@ -1594,7 +1690,11 @@ func (a *App) renderResult(canvas *image.RGBA) {
 	}
 
 	// Controls.
-	lines := append([]string{"enter: continue"}, a.audioLines(audioSide)...)
+	hint := "enter: continue"
+	if a.engine.PracticeOwed() > 0 {
+		hint = "enter: check"
+	}
+	lines := append([]string{hint}, a.audioLines(audioSide)...)
 	a.drawControlsBox(canvas, append(lines, "esc: end"))
 
 	// Status overlay: progress, tags, tally and audio badge left; wrong-answer

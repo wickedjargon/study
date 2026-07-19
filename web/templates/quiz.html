@@ -167,9 +167,21 @@
     </div>
     {{end}}
   </section>
+  {{if .PracticeOwed}}
+  {{/* Near miss: the spelling was almost right, so the answer sits right in
+       the input as its ghost text — type it out where it's shown, until the
+       debt is paid. The grade already landed; this is finger practice, and
+       the engine refuses to advance until it's done. */}}
+  <form method="post" action="{{.Base}}/practice" class="typed practice" id="answerform">
+    <p class="practice-note">almost — type it {{.PracticeOwed}} more {{if eq .PracticeOwed 1}}time{{else}}times{{end}} to continue</p>
+    <input type="text" name="practice" dir="auto" autofocus autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="{{.ResultAnswer}}">
+    <button class="primary">check</button>
+  </form>
+  {{else}}
   <form method="post" action="{{.Base}}/next" class="actions" id="primaryform">
     <button class="primary" {{if .WrongPause}}data-pause="{{.WrongPause}}"{{end}}>next →</button>
   </form>
+  {{end}}
 
 {{else if eq .Screen "caughtup"}}
   <section class="card center standalone">
