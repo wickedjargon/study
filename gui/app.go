@@ -1563,14 +1563,16 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 			// One status line, not a stack: the named list carries the last
 			// entry's verdict in place. A hit ends the list, so it just gets
 			// the ✔; a wrong guess appends in red with the ✘; the costless
-			// outcomes append dim. No separate echo line.
-			maxW := a.width - padding*3 - 20
+			// outcomes append dim. No separate echo line. Indented past the
+			// input's "> " so the line starts exactly where the typing did.
 			measure := func(s string) int { return font.MeasureString(a.fontRegular, s).Round() }
+			x := padding + 20 + measure("> ")
+			maxW := a.width - padding*2 - x
 			lastLine := ""
 			if len(got) > 0 {
 				lines := wrapLines(strings.Join(got, ", "), maxW, measure)
 				for i, line := range lines {
-					a.drawText(canvas, line, padding+20, y, a.fontRegular, greenColor)
+					a.drawText(canvas, line, x, y, a.fontRegular, greenColor)
 					if i < len(lines)-1 {
 						y += lineHeight(a.fontRegular)
 					} else {
@@ -1581,21 +1583,21 @@ func (a *App) renderQuestion(canvas *image.RGBA) {
 			drew := lastLine != ""
 			switch {
 			case a.setHintMark > 0 && drew:
-				a.drawMarkAfter(canvas, lastLine, padding+20, y, true, greenColor)
+				a.drawMarkAfter(canvas, lastLine, x, y, true, greenColor)
 			case a.setHintMark < 0:
 				txt := a.setHint
 				if drew {
 					txt = "  " + txt
 				}
-				a.drawText(canvas, txt, padding+20+measure(lastLine), y, a.fontRegular, redColor)
-				a.drawMarkAfter(canvas, lastLine+txt, padding+20, y, false, redColor)
+				a.drawText(canvas, txt, x+measure(lastLine), y, a.fontRegular, redColor)
+				a.drawMarkAfter(canvas, lastLine+txt, x, y, false, redColor)
 				drew = true
 			case a.setHint != "":
 				txt := a.setHint
 				if drew {
 					txt = " · " + txt
 				}
-				a.drawText(canvas, txt, padding+20+measure(lastLine), y, a.fontRegular, dimColor)
+				a.drawText(canvas, txt, x+measure(lastLine), y, a.fontRegular, dimColor)
 				drew = true
 			}
 			if drew {
