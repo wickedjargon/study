@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"gioui.org/app"
-	"gioui.org/font/gofont"
 	"gioui.org/io/key"
 	"gioui.org/layout"
 	"gioui.org/op"
@@ -34,6 +33,7 @@ import (
 	"gioui.org/widget/material"
 
 	"study/deck"
+	"study/library"
 	"study/progress"
 	"study/quiz"
 	"study/session"
@@ -52,7 +52,8 @@ var (
 	accentColor = color.NRGBA{R: 0x07, G: 0x66, B: 0x78, A: 0xff}
 )
 
-// App is one running session in a Gio window.
+// App is one Gio window: the library screen when engine is nil, a running
+// session otherwise. A session opened from the library returns to it.
 type App struct {
 	engine   *quiz.Engine
 	store    *progress.Store
@@ -64,7 +65,24 @@ type App struct {
 
 	result  *quiz.Result
 	setHint string // transient: duplicate / near-spelling feedback
+
+	// Library screen state (library.go).
+	reg         *library.Registry
+	libRows     []*libRow
+	libList     widget.List
+	libErr      error
+	fromLibrary bool
 }
+
+// newWindow and appMain wrap Gio's window plumbing so Run and RunLibrary
+// share it.
+func newWindow(title string) *app.Window {
+	w := new(app.Window)
+	w.Option(app.Title(title), app.Size(unit.Dp(920), unit.Dp(660)))
+	return w
+}
+
+func appMain() { app.Main() }
 
 // Run loads the deck, starts a session, and blocks in the Gio main loop.
 func Run(deckPath string) error {
@@ -86,21 +104,20 @@ func Run(deckPath string) error {
 	a.input.Submit = true
 
 	go func() {
-		w := new(app.Window)
-		w.Option(app.Title("study — "+d.Name), app.Size(unit.Dp(920), unit.Dp(660)))
+		w := newWindow("study — " + d.Name)
 		if err := a.loop(w); err != nil {
 			log.Printf("study-gio: %v", err)
 			os.Exit(1)
 		}
 		os.Exit(0)
 	}()
-	app.Main()
+	appMain()
 	return nil
 }
 
 func (a *App) loop(w *app.Window) error {
 	th := material.NewTheme()
-	th.Shaper = text.NewShaper(text.WithCollection(gofont.Collection()))
+	th.Shaper = text.NewShaper(text.WithCollection(collection()))
 	th.Palette.Bg = bgColor
 	th.Palette.Fg = textColor
 	th.Palette.ContrastBg = accentColor
@@ -147,6 +164,11 @@ func (a *App) update(gtx layout.Context) {
 		}
 	}
 
+	if a.engine == nil {
+		a.libraryUpdate(gtx)
+		return
+	}
+
 	// Choice buttons.
 	if a.engine.State() == quiz.ShowQuestion && a.engine.Mode() == deck.ModeChoice {
 		for i := range a.choices {
@@ -161,7 +183,14 @@ func (a *App) update(gtx layout.Context) {
 }
 
 func (a *App) escape() {
+	if a.engine == nil {
+		os.Exit(0)
+	}
 	if a.engine.State() == quiz.Done {
+		if a.fromLibrary {
+			a.backToLibrary()
+			return
+		}
 		os.Exit(0)
 	}
 	a.engine.End()
@@ -171,6 +200,10 @@ func (a *App) escape() {
 // submit routes the input line's enter by session state — the whole
 // keyboard interface of this first slice.
 func (a *App) submit(text string) {
+	if a.engine == nil {
+		a.librarySubmit(text)
+		return
+	}
 	e := a.engine
 	switch e.State() {
 	case quiz.ShowQuestion:
@@ -222,6 +255,10 @@ func (a *App) submit(text string) {
 	case quiz.CaughtUp:
 		e.ContinueAll()
 	case quiz.Done:
+		if a.fromLibrary {
+			a.backToLibrary()
+			return
+		}
 		os.Exit(0)
 	}
 }
@@ -245,6 +282,25 @@ func (a *App) frame(gtx layout.Context, th *material.Theme) {
 
 	inset := layout.UniformInset(unit.Dp(24))
 	inset.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		if a.engine == nil {
+			// Library: the deck list scrolls in the flexed middle, prompt
+			// and legend below it.
+			errLine := ""
+			if a.libErr != nil {
+				errLine = a.libErr.Error()
+			}
+			return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
+				layout.Rigid(coloredLabel(th, unit.Sp(14), "library", dimColor, text.Middle)),
+				layout.Rigid(spacer(12)),
+				layout.Flexed(1, a.libraryBody(th)),
+				layout.Rigid(coloredLabel(th, unit.Sp(14), errLine, badColor, text.Start)),
+				layout.Rigid(spacer(8)),
+				layout.Rigid(a.inputRow(th)),
+				layout.Rigid(spacer(8)),
+				layout.Rigid(a.controlsBox(th)),
+				layout.Rigid(a.footer(th)),
+			)
+		}
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(a.header(th)),
 			layout.Rigid(spacer(16)),
@@ -499,6 +555,9 @@ func (a *App) summaryBody(th *material.Theme) layout.Widget {
 // controlsBox is the X11 GUI's bordered action legend, bottom-right: what
 // enter and escape do on this screen.
 func (a *App) controlsBox(th *material.Theme) layout.Widget {
+	if a.engine == nil {
+		return a.legend(th, []string{"number + enter: open", "esc: quit"})
+	}
 	e := a.engine
 	var lines []string
 	switch e.State() {
@@ -526,6 +585,11 @@ func (a *App) controlsBox(th *material.Theme) layout.Widget {
 	default:
 		lines = []string{"enter or esc: quit"}
 	}
+	return a.legend(th, lines)
+}
+
+// legend draws the bordered action box, right-aligned.
+func (a *App) legend(th *material.Theme, lines []string) layout.Widget {
 	return func(gtx layout.Context) layout.Dimensions {
 		return layout.E.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 			return widget.Border{Color: dimColor, Width: unit.Dp(1), CornerRadius: unit.Dp(2)}.Layout(gtx,
@@ -564,8 +628,12 @@ func (a *App) inputHint() string {
 }
 
 func (a *App) footer(th *material.Theme) layout.Widget {
+	name := a.deckName
+	if a.engine == nil {
+		name = "library"
+	}
 	return func(gtx layout.Context) layout.Dimensions {
-		return coloredLabel(th, unit.Sp(13), "study-gio (preview) — "+a.deckName, dimColor, text.Start)(gtx)
+		return coloredLabel(th, unit.Sp(13), "study-gio (preview) — "+name, dimColor, text.Start)(gtx)
 	}
 }
 

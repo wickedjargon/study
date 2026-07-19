@@ -12,12 +12,20 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 2 || os.Args[1] == "--help" || os.Args[1] == "-h" {
-		fmt.Fprintln(os.Stderr, "usage: study-gio <deck-file | pack-directory>")
+	switch {
+	case len(os.Args) == 1:
+		// Bare study-gio opens the library, mirroring bare study.
+		if err := gio.RunLibrary(); err != nil {
+			fmt.Fprintf(os.Stderr, "study-gio: %v\n", err)
+			os.Exit(1)
+		}
+	case len(os.Args) == 2 && os.Args[1] != "--help" && os.Args[1] != "-h":
+		if err := gio.Run(os.Args[1]); err != nil {
+			fmt.Fprintf(os.Stderr, "study-gio: %v\n", err)
+			os.Exit(1)
+		}
+	default:
+		fmt.Fprintln(os.Stderr, "usage: study-gio [deck-file | pack-directory]")
 		os.Exit(2)
-	}
-	if err := gio.Run(os.Args[1]); err != nil {
-		fmt.Fprintf(os.Stderr, "study-gio: %v\n", err)
-		os.Exit(1)
 	}
 }

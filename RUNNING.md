@@ -39,7 +39,8 @@ few keystrokes away. Progress is a fresh temp dir per start.
 
 # Running study-gio (preview)
 
-`study-gio <deck>` is the Gio-rendered desktop app — the same engine and
+`study-gio` opens the library (like bare `study`); `study-gio <deck>` runs
+one deck. It is the Gio-rendered desktop app — the same engine and
 progress files as `study`, drawn with a cross-platform toolkit (Windows is
 the eventual target). It installs alongside the X11 build for side-by-side
 comparison during the transition. First slice: text cards only (type,
