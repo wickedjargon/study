@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"study/deck"
@@ -320,13 +319,17 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 			}
 			view.SetCount = e.SetNamedCount()
 			view.SetTarget = card.SetTarget()
-			// Entry feedback, marked with the tally's ✓/✗: a hit echoes the
-			// canonical item, a wrong guess gets the cross, the costless
-			// outcomes (duplicate, near spelling) stay dim.
+			// Entry feedback, marked with the tally's ✓/✗ and echoing the
+			// entry as typed (?t=), the way the result screen echoes a
+			// typed answer. The costless outcomes stay dim, no mark.
+			typed := r.URL.Query().Get("t")
+			if len(typed) > 80 {
+				typed = typed[:80]
+			}
 			switch r.URL.Query().Get("f") {
 			case "hit":
-				if i, err := strconv.Atoi(r.URL.Query().Get("i")); err == nil && i >= 0 && i < len(card.SetItems) {
-					view.SetFlash = card.SetItems[i].Text + " ✓"
+				if typed != "" {
+					view.SetFlash = typed + " ✓"
 					view.SetFlashClass = "ok"
 				}
 			case "dup":
@@ -336,8 +339,10 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 				view.SetFlash = "close — check the spelling"
 				view.SetFlashClass = "dim"
 			case "miss":
-				view.SetFlash = "not one of them ✗"
-				view.SetFlashClass = "bad"
+				if typed != "" {
+					view.SetFlash = typed + " ✗"
+					view.SetFlashClass = "bad"
+				}
 			}
 		}
 

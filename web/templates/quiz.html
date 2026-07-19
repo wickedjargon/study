@@ -119,12 +119,14 @@
        completing entry (or giving up) grades the whole card once. */}}
   <div class="setstatus">
     <span class="setcount">named {{.SetCount}} of {{.SetTarget}}</span>
-    {{if .SetFlash}}<span class="setflash {{.SetFlashClass}}">{{.SetFlash}}</span>{{end}}
   </div>
   {{if .SetNamed}}
   <p class="setnamed">{{range $i, $t := .SetNamed}}{{if $i}}, {{end}}<span>{{$t}}</span>{{end}}</p>
   {{end}}
-  <form method="post" action="{{.Base}}/entry" class="typed" id="answerform">
+  <form method="post" action="{{.Base}}/entry" class="typed practice" id="answerform">
+    {{/* The previous entry, echoed verdict-marked right above where the
+         next one is typed — the result screen's typed-answer idiom. */}}
+    {{if .SetFlash}}<p class="setflash {{.SetFlashClass}}" dir="auto">{{.SetFlash}}</p>{{end}}
     <input type="text" name="entry" dir="auto" autofocus autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="name one…">
     <button class="primary">check</button>
   </form>

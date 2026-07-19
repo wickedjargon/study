@@ -416,6 +416,7 @@ button.quiet:hover { color: var(--fg); }
    the question screen, and the marked reveal on the result screen. */
 .setstatus { display: flex; justify-content: space-between; margin: 0 0 0.4rem; }
 .setcount { color: var(--dim); }
+.setflash { flex-basis: 100%; margin: 0 0 0.1rem; }
 .setflash.ok { color: var(--ok); }
 .setflash.bad { color: var(--bad); }
 .setflash.dim { color: var(--dim); }

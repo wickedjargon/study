@@ -898,16 +898,16 @@ func (a *App) handleTypeKey(key string, ev xevent.KeyPressEvent) {
 				a.setHintMark = 0
 				switch out.Verdict {
 				case quiz.SetHit:
-					// Echo the canonical item ("burma" reads back as
-					// Myanmar ✔) with the tally's own mark.
-					a.setHint = c.SetItems[out.Item].Text
+					// Echo the entry as it was typed, verdict-marked, right
+					// where it was typed — the result screen's "> x ✘" idiom.
+					a.setHint = "> " + a.inputBuf
 					a.setHintMark = 1
 				case quiz.SetDuplicate:
 					a.setHint = "already named"
 				case quiz.SetClose:
 					a.setHint = "close — check the spelling"
 				case quiz.SetMiss:
-					a.setHint = "not one of them"
+					a.setHint = "> " + a.inputBuf
 					a.setHintMark = -1
 				}
 				if out.Result != nil {

@@ -21,6 +21,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -762,15 +763,19 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 					log.Printf("saving progress: %v", err)
 				}
 			} else {
+				// The typed entry rides along so the next render can echo
+				// it verdict-marked, the way the result screen echoes a
+				// typed answer.
+				typed := r.FormValue("entry")
 				switch out.Verdict {
 				case quiz.SetHit:
-					flash = "hit&i=" + strconv.Itoa(out.Item)
+					flash = "hit&t=" + url.QueryEscape(typed)
 				case quiz.SetDuplicate:
 					flash = "dup"
 				case quiz.SetClose:
 					flash = "close"
 				case quiz.SetMiss:
-					flash = "miss"
+					flash = "miss&t=" + url.QueryEscape(typed)
 				}
 			}
 		}
