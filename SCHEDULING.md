@@ -28,7 +28,7 @@ back-to-back repetition, the exact pattern matters little.
 The weak layer is the between-session ladder. It is position-based (blind
 to how long a card actually survived), deterministic (cards learned
 together stay in lockstep forever), and clock-based rather than
-day-based. Every item below except 8 and 10 targets it.
+day-based. Every item below except 7 and 9 targets it.
 
 ## Candidate improvements
 
@@ -45,7 +45,7 @@ the biggest practical win for irregular studying and backlogs.
 
 The early-review side stays as is. Holding the rung on a clean ahead
 completion is the honest binary approximation, and partial credit for
-early reviews needs a real memory model (item 9) to do properly.
+early reviews needs a real memory model (item 8) to do properly.
 
 ### 2. Interval fuzz, then load balancing
 
@@ -74,7 +74,7 @@ days late on a 3-day interval is in far more danger than one 10 days late
 on a 120-day interval. Sort by overdue-days divided by interval instead.
 Zero cost with current data (Level gives the interval). The Anki
 ecosystem's simulations went further and made descending retrievability
-the default ordering, but that refinement needs item 9. The ratio is the
+the default ordering, but that refinement needs item 8. The ratio is the
 model-free version of the same idea.
 
 ### 5. Disperse forward and reverse siblings
@@ -87,17 +87,7 @@ burying and dispersal. At composition, when both directions are due,
 serve the more overdue one and push the sibling to the next day. Failing
 that, at least maximize their separation within the session.
 
-### 6. Surface leeches
-
-A card that lapses over and over ping-pongs on the low rungs and quietly
-eats a slice of every session. Anki tags or suspends at a lapse threshold
-(default 8). study's version should surface rather than suspend, since
-the durable fix is editing the card (split it, add a `note:`, add
-distractors, check it against its confusion partner): a `--stats` line
-and a session-summary mention naming the worst offenders. `TimesWrong`
-and the review log already hold the data.
-
-### 7. Throttle new cards under review debt
+### 6. Throttle new cards under review debt
 
 The new batch is a flat default of 10 regardless of how many reviews are
 due. Introduction rate is the main workload lever in every simulator and
@@ -106,7 +96,7 @@ the backlog. Scale the batch by the due count (full batch under a low
 water mark, zero above a high one), always overridable by the explicit
 flag.
 
-### 8. Weight production over recognition
+### 7. Weight production over recognition
 
 The testing-effect literature finds production tests (typed recall)
 produce more durable learning than recognition tests (multiple choice).
@@ -117,7 +107,7 @@ above some interval, or count a choice success as a fractional advance.
 All are mode-based rules decided before grading, so they stay inside the
 objective-grading stance.
 
-### 9. Per-card memory model (the endgame)
+### 8. Per-card memory model (the endgame)
 
 Replace the ladder with a difficulty/stability/retrievability model from
 the FSRS family, fit to the review log. State of the art in 2026: FSRS-6
@@ -143,14 +133,14 @@ ship default parameters first, optimize per deck once the log has a few
 thousand events. Neural schedulers (RWKV, LSTM) top the benchmark but are
 absurd for a single-user offline tool.
 
-### 10. Calibrate from the review log
+### 9. Calibrate from the review log
 
 Whatever lands, the log adjudicates it. Per-rung recall rate is the
 ladder's measured forgetting curve: a rung recalling above ~95 percent is
 too short, below ~80 percent too long. Add a small report (extend
 `--stats` or a `--calibrate` flag) computing recall by rung, by state,
-and by answer mode. This turns items 1 through 8 from taste into
-measurement and is the prerequisite for fitting item 9.
+and by answer mode. This turns items 1 through 7 from taste into
+measurement and is the prerequisite for fitting item 8.
 
 ## Settled refusals
 
@@ -163,6 +153,9 @@ measurement and is the prerequisite for fitting item 9.
 - **Self-graded ease buttons** (Again/Hard/Good/Easy). Objective grading
   is the design, and the FSRS results above show the pass/fail signal is
   sufficient, so there is no accuracy argument for adding them.
+- **Leech detection.** Rejected. No lapse thresholds, tags, suspension,
+  or leech surfacing. Persistently missed cards are already reachable
+  through weak-only cram and `--stats`.
 
 ## Sources
 
@@ -172,7 +165,7 @@ measurement and is the prerequisite for fitting item 9.
   and [Anki's algorithm FAQ](https://faqs.ankiweb.net/what-spaced-repetition-algorithm)
 - [FSRS-6 release discussion](https://github.com/orgs/open-spaced-repetition/discussions/30)
 - [Anki deck options manual](https://docs.ankiweb.net/deck-options.html)
-  (fuzz ranges, sort orders, leech threshold)
+  (fuzz ranges, sort orders)
 - [Descending retrievability as default sort](https://github.com/ankitects/anki/issues/3460)
 - [fsrs4anki-helper](https://github.com/open-spaced-repetition/fsrs4anki-helper)
   (load balance, disperse siblings, postpone/advance)
