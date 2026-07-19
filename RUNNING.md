@@ -36,3 +36,14 @@ make test-run
 Open http://127.0.0.1:8095. Tiny decks, one-letter answers, every screen a
 few keystrokes away. Progress is a fresh temp dir per start.
 
+
+# Running study-gio (preview)
+
+`study-gio <deck>` is the Gio-rendered desktop app — the same engine and
+progress files as `study`, drawn with a cross-platform toolkit (Windows is
+the eventual target). It installs alongside the X11 build for side-by-side
+comparison during the transition. First slice: text cards only (type,
+choice, set entry, practice, preview, caught-up, summary); no images,
+audio, library, or reverse mode yet. One input line drives everything:
+type answers (or a choice number) and enter; empty enter advances or, on a
+set card, gives up.
