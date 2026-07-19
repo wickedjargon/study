@@ -8,10 +8,6 @@ study:
 study-web:
 	go build -o study-web ./cmd/study-web
 
-# The Gio-rendered preview of the desktop app (see gio/app.go): installed
-# alongside the X11 build so the two can be compared during the transition.
-study-gio:
-	go build -o study-gio ./cmd/study-gio
 
 # The local demo decks. `make run` needs the binary built first (go lives in
 # the archbox container; running the binary doesn't).
@@ -69,24 +65,22 @@ test-run:
 # `make run` without its binary.
 COMPLETIONS = $(HOME)/.local/share/bash-completion/completions
 
-install: study study-web study-gio
+install: study study-web
 	mkdir -p $(PREFIX)/bin
 	cp -f study $(PREFIX)/bin/
-	cp -f study-gio $(PREFIX)/bin/
 	mkdir -p $(COMPLETIONS)
 	cp -f completions/study.bash $(COMPLETIONS)/study
-	@echo "installed to $(PREFIX)/bin/study and study-gio (+ bash completion)"
+	@echo "installed to $(PREFIX)/bin/study (+ bash completion)"
 
 uninstall:
 	rm -f $(PREFIX)/bin/study
-	rm -f $(PREFIX)/bin/study-gio
 	rm -f $(COMPLETIONS)/study
 
 clean:
-	rm -f study study-web study-gio
+	rm -f study study-web
 
 # The binaries are .PHONY so `make` always delegates to `go build`, which does
 # its own up-to-date checking. Without this, make sees the existing binary
 # (the target has no prerequisites) and skips rebuilding after source changes,
 # silently shipping a stale binary.
-.PHONY: all study study-web study-gio run install uninstall clean
+.PHONY: all study study-web run install uninstall clean
