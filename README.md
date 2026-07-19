@@ -1,6 +1,12 @@
 # study
 
-A flashcard quiz tool. Decks are plain text files. Available for Linux and web. Test out the web version here:
+A flashcard quiz tool. Decks are plain text files. Available for Linux, Windows, and web.
+
+install the windows version here:
+
+[study-setup.exe](https://github.com/wickedjargon/study/releases/latest/download/study-setup.exe)
+
+access the web version here:
 
 [study.fftp.io](https://study.fftp.io/)
 
