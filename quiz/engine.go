@@ -54,6 +54,10 @@ type Result struct {
 	// another card in the deck — the user confused the two cards, not merely
 	// forgot this one. The GUI names that card so the pair can be told apart.
 	ConfusedWith *deck.Card
+	// NearMiss marks a typed miss whose spelling is within typo distance of
+	// an accepted answer (see nearmiss.go). Still graded wrong; the result
+	// screen owes transcription practice (PracticeOwed) before advancing.
+	NearMiss bool
 }
 
 // Engine drives the quiz session.
@@ -142,6 +146,13 @@ type Engine struct {
 	// anything. A miss is the opposite — forgetting before the due date is
 	// strong evidence the interval was too long — so lapses count normally.
 	ahead map[string]bool
+
+	// practiceOwed is the transcription debt of a near-miss result: how many
+	// correct retypes of the exposed answer the result screen still requires.
+	// Next is a no-op while it's positive. nearPending carries the flag from
+	// detection to the review log write within one answer.
+	practiceOwed int
+	nearPending  bool
 
 	// servedAt is when the current card's question appeared, feeding the
 	// review log's diagnostic seconds field. Never read by scheduling: time
@@ -750,13 +761,26 @@ func (e *Engine) AnswerTyped(input string) *Result {
 	}
 
 	e.TotalSeen++
+	if !correct {
+		// Confusion first: producing another card's answer is a
+		// discrimination failure, never softened into a typo. Only a miss
+		// that matches no card can be a spelling near miss.
+		result.ConfusedWith = e.noteConfusion(got)
+		if result.ConfusedWith == nil && e.nearMiss(e.current, got) {
+			result.NearMiss = true
+			e.nearPending = true
+		}
+	}
 	e.recordAnswer(correct)
+	e.nearPending = false
 	if correct {
 		e.TotalCorrect++
 		e.handleCorrect()
 	} else {
 		e.TotalWrong++
-		result.ConfusedWith = e.noteConfusion(got)
+		if result.NearMiss {
+			e.practiceOwed = practiceReps
+		}
 		e.handleWrong()
 	}
 
@@ -923,10 +947,12 @@ func (e *Engine) AnswerTimeout() *Result {
 	return result
 }
 
-// Next advances to the next card after viewing the result.
-// Transitions from ShowResult to ShowQuestion (or Done).
+// Next advances to the next card after viewing the result. A no-op while a
+// near-miss result still owes transcription practice — the debt is paid
+// with PracticeTyped, not waited out. Transitions from ShowResult to
+// ShowQuestion (or Done).
 func (e *Engine) Next() {
-	if e.state != ShowResult {
+	if e.state != ShowResult || e.practiceOwed > 0 {
 		return
 	}
 	e.advance()
@@ -965,6 +991,7 @@ func (e *Engine) logReview(correct bool) {
 		Card:    id,
 		Correct: correct,
 		Drill:   e.fromRetry,
+		Near:    e.nearPending,
 	}
 	if e.Mode() == deck.ModeChoice {
 		ev.Mode = "choice"
@@ -1100,6 +1127,9 @@ func (e *Engine) handleWrong() {
 
 // advance moves to the next card from main or retry queue.
 func (e *Engine) advance() {
+	// Practice debt never outlives its result screen (End/ContinueAll also
+	// route here eventually via a fresh serve).
+	e.practiceOwed = 0
 	// If the last answer was wrong, repeat the same card immediately.
 	if e.repeatCurrent && e.current != nil {
 		e.repeatCurrent = false
