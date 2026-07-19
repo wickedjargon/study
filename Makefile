@@ -16,6 +16,47 @@ study-win:
 	env CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
 		go build -trimpath -ldflags "-s -w -H windowsgui" -o $(WIN_DIST)/study.exe ./cmd/study-win
 
+# The deck packs the Windows build ships — the same catalog deploy.sh sends
+# to study.fftp.io (keep the two lists in step).
+WIN_DECK_SRC = \
+	$(HOME)/d/projects/language-packs \
+	$(HOME)/d/projects/study-mexican-spanish.deck \
+	$(HOME)/d/projects/study-japanese-numbers.deck \
+	$(HOME)/d/projects/study-mahjong.deck \
+	$(HOME)/d/projects/study-farsi-numbers.deck \
+	$(HOME)/d/projects/study-chinese-numbers.deck \
+	$(HOME)/d/projects/study-chinese-mahjong-terms.deck \
+	$(HOME)/d/projects/study-chinese-mahjong-tiles.deck \
+	$(HOME)/d/projects/study-dog-breeds.deck \
+	$(HOME)/d/projects/study-decks/study-bc-driving.deck \
+	$(HOME)/d/projects/study-decks/study-world-flags.deck \
+	$(HOME)/d/projects/study-decks/study-country-silhouettes.deck \
+	$(HOME)/d/projects/study-decks/study-world-capitals.deck \
+	$(HOME)/d/projects/study-decks/study-bc-birds.deck \
+	$(HOME)/d/projects/study-decks/study-animal-tracks.deck \
+	$(HOME)/d/projects/study-decks/study-speed-trivia.deck \
+	$(HOME)/d/projects/study-decks/study-which-is-bigger.deck \
+	$(HOME)/d/projects/study-decks/study-world-landmarks.deck \
+	$(HOME)/d/projects/study-decks/study-locator-maps.deck \
+	$(HOME)/d/projects/study-decks/study-flags-by-region.deck \
+	$(HOME)/d/projects/study-decks/study-borders.deck \
+	$(HOME)/d/projects/study-decks/study-waters.deck \
+	$(HOME)/d/projects/study-decks/study-us-presidents.deck \
+	$(HOME)/d/projects/study-decks/study-canada.deck
+
+win-decks:
+	rsync -a --delete --exclude '__pycache__' --exclude '.git' --exclude '*.geojson' \
+		$(WIN_DECK_SRC) $(WIN_DIST)/decks/
+
+# The one-file installer (study-setup.exe): per-user, Start Menu shortcut,
+# .deck association, uninstaller. Needs makensis (Debian: apt install nsis);
+# runs on the host, not archbox.
+VERSION = 1.0.0
+study-setup: study-win win-decks
+	cd cmd/study-win && makensis -DDISTDIR=../../$(WIN_DIST) -DVERSION=$(VERSION) installer.nsi
+	mv cmd/study-win/study-setup.exe dist/
+	@echo "installer at dist/study-setup.exe"
+
 
 # The local demo decks. `make run` needs the binary built first (go lives in
 # the archbox container; running the binary doesn't).
@@ -91,4 +132,4 @@ clean:
 # its own up-to-date checking. Without this, make sees the existing binary
 # (the target has no prerequisites) and skips rebuilding after source changes,
 # silently shipping a stale binary.
-.PHONY: all study study-web run install uninstall clean
+.PHONY: all study study-web study-win win-decks study-setup run install uninstall clean

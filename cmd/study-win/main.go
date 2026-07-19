@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	webview "github.com/jchv/go-webview2"
 
@@ -51,37 +52,60 @@ func main() {
 		defer f.Close()
 	}
 
-	// Decks: explicit arguments, else every entry of the decks folder
-	// beside the exe.
+	// Decks: explicit arguments (the .deck file association passes one),
+	// else the installed decks folder (%APPDATA%\study\decks — the
+	// installer puts them there, user-editable, surviving app updates),
+	// else a decks folder beside the exe (the portable, no-installer
+	// layout).
 	paths := os.Args[1:]
 	if len(paths) == 0 {
-		decksDir := filepath.Join(base, "decks")
-		entries, err := os.ReadDir(decksDir)
-		if err != nil || len(entries) == 0 {
-			fatal(fmt.Errorf("no decks found — put deck packs in %s", decksDir))
+		candidates := []string{
+			filepath.Join(os.Getenv("APPDATA"), "study", "decks"),
+			filepath.Join(base, "decks"),
 		}
-		for _, e := range entries {
-			paths = append(paths, filepath.Join(decksDir, e.Name()))
+		for _, decksDir := range candidates {
+			entries, err := os.ReadDir(decksDir)
+			if err != nil || len(entries) == 0 {
+				continue
+			}
+			for _, e := range entries {
+				paths = append(paths, filepath.Join(decksDir, e.Name()))
+			}
+			break
+		}
+		if len(paths) == 0 {
+			fatal(fmt.Errorf("no decks found — looked in %s and %s", candidates[0], candidates[1]))
 		}
 	}
 
-	srv, err := web.New(paths, dataDir, "", nil)
+	// A fixed localhost port doubles as the single-instance check: if it's
+	// already bound and answering as study, this launch just opens another
+	// window onto the running server (a second tab, in effect) instead of a
+	// second process racing the first over the progress files. If something
+	// unrelated owns the port, fall back to an ephemeral one.
+	const fixedAddr = "127.0.0.1:8093"
+	url := "http://" + fixedAddr
+	ln, err := net.Listen("tcp", fixedAddr)
 	if err != nil {
-		fatal(err)
+		if !isStudyServing(url) {
+			if ln, err = net.Listen("tcp", "127.0.0.1:0"); err != nil {
+				fatal(err)
+			}
+			url = "http://" + ln.Addr().String()
+		}
 	}
-	srv.Local = true
-
-	// An ephemeral localhost port: nothing to configure, nothing exposed.
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		fatal(err)
-	}
-	go func() {
-		if err := http.Serve(ln, srv); err != nil {
+	if ln != nil {
+		srv, err := web.New(paths, dataDir, "", nil)
+		if err != nil {
 			fatal(err)
 		}
-	}()
-	url := "http://" + ln.Addr().String()
+		srv.Local = true
+		go func() {
+			if err := http.Serve(ln, srv); err != nil {
+				fatal(err)
+			}
+		}()
+	}
 
 	w := webview.NewWithOptions(webview.WebViewOptions{
 		DataPath:  filepath.Join(dataDir, "webview"),
@@ -104,6 +128,18 @@ func main() {
 	defer w.Destroy()
 	w.Navigate(url)
 	w.Run()
+}
+
+// isStudyServing reports whether a study server already answers at url —
+// the single-instance probe.
+func isStudyServing(url string) bool {
+	c := &http.Client{Timeout: 2 * time.Second}
+	resp, err := c.Get(url + "/")
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
 }
 
 // fatal logs and dies. With no console, the log file in %LOCALAPPDATA%\study
