@@ -94,6 +94,7 @@ WEB_DECKS = \
 	$(HOME)/d/projects/study-decks/study-waters.deck \
 	$(HOME)/d/projects/study-decks/study-us-presidents.deck \
 	$(HOME)/d/projects/study-decks/study-canada.deck \
+	$(HOME)/d/projects/study-decks/study-comptia-aplus.deck \
 	'[Trivia]' \
 	$(HOME)/d/projects/study-decks/study-speed-trivia.deck \
 	$(HOME)/d/projects/study-decks/study-which-is-bigger.deck

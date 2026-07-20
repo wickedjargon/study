@@ -49,6 +49,7 @@ rsync -a --delete --exclude '__pycache__' --exclude '.git' --exclude '*.geojson'
 	"$P/study-decks/study-waters.deck" \
 	"$P/study-decks/study-us-presidents.deck" \
 	"$P/study-decks/study-canada.deck" \
+	"$P/study-decks/study-comptia-aplus.deck" \
 	"$SERVER:/opt/study-web/decks/"
 
 echo "== install binary & restart =="
