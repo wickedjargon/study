@@ -172,6 +172,59 @@ func TestRenderQuestionImageBlock(t *testing.T) {
 	}
 }
 
+// TestPasteWanted covers the selection-delivery gate: paste lands wherever
+// typed input would — the answer field of a typed question and the practice
+// line of a near-miss result — and nowhere else.
+func TestPasteWanted(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	a := appForDeck(t, t.TempDir(), "q\n---\nabcdefgh\n")
+
+	if !a.pasteWanted() {
+		t.Error("typed question should accept paste")
+	}
+
+	// A near miss lands on the result screen still owing transcription
+	// practice; the practice line takes pastes like any typed input.
+	r := a.engine.AnswerTyped("abcdefgx")
+	if r == nil || !r.NearMiss {
+		t.Fatalf("expected a near-miss result, got %+v", r)
+	}
+	if a.engine.PracticeOwed() == 0 {
+		t.Fatal("near miss should owe practice")
+	}
+	if !a.pasteWanted() {
+		t.Error("practice line should accept paste")
+	}
+
+	// Debt paid: the result screen has no input field left.
+	for a.engine.PracticeOwed() > 0 {
+		if !a.engine.PracticeTyped("abcdefgh") {
+			t.Fatal("correct transcription should count")
+		}
+	}
+	if a.pasteWanted() {
+		t.Error("result screen without practice owed should not accept paste")
+	}
+
+	// No engine (library screen): nothing to paste into.
+	if (&App{}).pasteWanted() {
+		t.Error("no engine should not accept paste")
+	}
+}
+
+// TestPresentCardClearsSetHint: a set card's transient hint belongs to that
+// card alone; a freshly served card must not render it (it used to survive
+// Escape → summary → continue).
+func TestPresentCardClearsSetHint(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	a := appForDeck(t, t.TempDir(), "q\n---\nanswer\n")
+	a.setHint = "already named"
+	a.presentCard()
+	if a.setHint != "" {
+		t.Errorf("setHint = %q after presentCard, want empty", a.setHint)
+	}
+}
+
 // writePNG encodes a tiny opaque PNG into dir/name and returns its path.
 func writePNG(t *testing.T, dir, name string) string {
 	t.Helper()

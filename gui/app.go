@@ -185,16 +185,16 @@ type App struct {
 	// points at a physically sane size. The parsed *opentype.Font values are
 	// cached so a resize only re-runs the cheap NewFace step, not a full re-parse
 	// of the (potentially tens-of-MB) font file.
-	fontRegular     font.Face
-	fontBold        font.Face
-	fontSmall       font.Face
-	fontLarge       font.Face
+	fontRegular font.Face
+	fontBold    font.Face
+	fontSmall   font.Face
+	fontLarge   font.Face
 	// Faces from fontSymbolsFont: regular size for the ✔/✘ verdict marks,
 	// small size for the 🔊 audio badge. Nil without a symbols font.
 	fontSymbols      font.Face
 	fontSymbolsSmall font.Face
-	fontRegularFont *opentype.Font
-	fontBoldFont    *opentype.Font
+	fontRegularFont  *opentype.Font
+	fontBoldFont     *opentype.Font
 	// fontSymbolsFont carries the ✔/✘ verdict marks and the 🔊 audio badge: no
 	// CJK font covers them, so a symbols-capable font (Noto Sans Symbols2 or
 	// DejaVu Sans) is loaded separately. Nil when the system has none — the
@@ -202,10 +202,10 @@ type App struct {
 	fontSymbolsFont *opentype.Font
 	// hasSpeaker reports 🔊 coverage in fontSymbolsFont (DejaVu carries the
 	// marks but not the speaker), decided once at load time.
-	hasSpeaker bool
-	dpi             float64
-	baseFontPt      float64 // current base point size; adjustable with Ctrl+=/-
-	initialFontPt   float64 // the starting base size; Ctrl+0 resets to this
+	hasSpeaker    bool
+	dpi           float64
+	baseFontPt    float64 // current base point size; adjustable with Ctrl+=/-
+	initialFontPt float64 // the starting base size; Ctrl+0 resets to this
 
 	// Arabic-script rendering. Go's font.Drawer does no contextual shaping or
 	// RTL layout, so Arabic/Persian text (which joins cursively and reads
@@ -518,6 +518,7 @@ func (a *App) main() error {
 // begins once the reveal is confirmed.
 func (a *App) presentCard() {
 	a.choiceSel = 0
+	a.setHint = ""
 	a.loadQuestionImage()
 	a.playQuestionAudio()
 	if a.engine.State() == quiz.ShowPreview {
@@ -1128,6 +1129,22 @@ func (a *App) requestPaste(selection xproto.Atom, t xproto.Timestamp) {
 	xproto.ConvertSelection(a.xu.Conn(), a.win.Id, selection, a.utf8Atom, a.selPropAtom, t)
 }
 
+// pasteWanted reports whether pasted text has a field to land in: the answer
+// input of a typed question, or the practice line while a near-miss result
+// owes transcription. Deliveries in any other state are dropped.
+func (a *App) pasteWanted() bool {
+	if a.engine == nil {
+		return false
+	}
+	switch a.engine.State() {
+	case quiz.ShowQuestion:
+		return a.engine.Mode() == deck.ModeType
+	case quiz.ShowResult:
+		return a.engine.PracticeOwed() > 0
+	}
+	return false
+}
+
 // handleSelectionNotify reads the pasted text delivered by a ConvertSelection
 // request and appends its printable characters to the input buffer.
 func (a *App) handleSelectionNotify(ev xevent.SelectionNotifyEvent) {
@@ -1136,7 +1153,7 @@ func (a *App) handleSelectionNotify(ev xevent.SelectionNotifyEvent) {
 	if ev.Property == 0 {
 		return
 	}
-	if a.engine == nil || a.engine.State() != quiz.ShowQuestion || a.engine.Mode() != deck.ModeType {
+	if !a.pasteWanted() {
 		return
 	}
 
