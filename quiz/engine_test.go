@@ -458,3 +458,27 @@ func TestEngineCardIDs(t *testing.T) {
 		}
 	}
 }
+
+// TestRemainingOnResultScreen: on the result screen the serve is finished and
+// a re-queued card is already back in the queue — Remaining must not count the
+// current card again, or every result screen's denominator inflates by one.
+func TestRemainingOnResultScreen(t *testing.T) {
+	full := testDeck(1)
+	full.Order = deck.OrderAdaptive
+	e := NewEngine(full, full.Cards, newTestStore(t))
+
+	answerCurrent(e, true)
+	if e.State() != ShowResult {
+		t.Fatalf("State = %v, want ShowResult", e.State())
+	}
+	resultDenom := e.TotalSeen + e.Remaining()
+
+	e.Next()
+	if e.State() != ShowQuestion {
+		t.Fatalf("State = %v, want ShowQuestion (card owes more recalls)", e.State())
+	}
+	questionDenom := e.TotalSeen + e.Remaining()
+	if resultDenom != questionDenom {
+		t.Errorf("result denominator %d != question denominator %d for the same session shape", resultDenom, questionDenom)
+	}
+}

@@ -446,6 +446,11 @@ func (e *Engine) ContinueAll() {
 	e.ahead = make(map[string]bool)
 	e.answered = make(map[string]bool)
 	e.lastWrong = make(map[string]bool)
+	// Cards introduced in an earlier pass are studied now — without this
+	// reset they'd still read as new: mislabeled on screen, logged as "new"
+	// while ahead, and counted against the introduction window, starving
+	// genuinely new cards.
+	e.newCards = make(map[string]bool)
 	for i, c := range ordered {
 		e.main = append(e.main, queuedCard{card: c, due: e.step + i})
 		e.seedRecord(c.ID)
@@ -644,7 +649,10 @@ func (e *Engine) CurrentIsAhead() bool {
 // admitted).
 func (e *Engine) Remaining() int {
 	n := len(e.main) + len(e.pendingNew)
-	if e.current != nil && e.state != Done {
+	// On the result screen the current serve is finished — a card that owes
+	// more recalls is already re-queued in main, so counting current too
+	// would double it (and inflate every result screen's denominator by one).
+	if e.current != nil && e.state != Done && e.state != ShowResult {
 		n++
 	}
 	return n

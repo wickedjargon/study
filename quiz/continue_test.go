@@ -279,3 +279,33 @@ func TestContinueAllNoOpOutsideAdaptive(t *testing.T) {
 		t.Errorf("Remaining changed %d → %d; ContinueAll must be a no-op outside adaptive", before, e.Remaining())
 	}
 }
+
+// TestContinueAllForgetsIntroducedCards: cards introduced in an earlier pass
+// are studied by the time the next one starts — they must not still read as
+// new there, which would mislabel them on screen, log them as "new" while
+// ahead, and count them against the introduction window.
+func TestContinueAllForgetsIntroducedCards(t *testing.T) {
+	full := testDeck(2)
+	full.Order = deck.OrderAdaptive
+	e := NewEngine(full, full.Cards, newTestStore(t))
+
+	for i := 0; e.State() != Done; i++ {
+		if i > 40 {
+			t.Fatal("first pass did not complete")
+		}
+		answerCurrent(e, true)
+		e.Next()
+	}
+
+	e.ContinueAll()
+	for i := 0; e.State() != Done; i++ {
+		if i > 40 {
+			t.Fatal("second pass did not complete")
+		}
+		if e.CurrentIsNew() {
+			t.Errorf("card %s studied in pass 1 still reads new in pass 2", e.Current().ID)
+		}
+		answerCurrent(e, true)
+		e.Next()
+	}
+}
