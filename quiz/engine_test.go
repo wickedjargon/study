@@ -376,12 +376,11 @@ func TestEngineCustomDistractors(t *testing.T) {
 	}
 }
 
-// TestEngineRetryStatsInvariant locks in sequential mode's stats contract
-// directly: the first (cold) miss is recorded to the store, every drill
-// repetition after it is massed practice and stays out of persisted stats
-// (recordAnswer skips fromRetry serves). IsRetry itself is a display label —
-// "your last attempt at this card was a miss" — so it reads true from the
-// moment a miss is graded and through the drill reps.
+// TestSequentialStats locks in sequential mode's stats contract: every
+// graded answer, hit or miss, lands in persisted stats — a sequential miss
+// requeues the card at the lap's tail rather than entering a massed drill,
+// so there are no free repetitions to exclude. IsRetry stays a display
+// label: "your last attempt at this card was a miss".
 func TestSequentialStats(t *testing.T) {
 	store, err := progress.NewStore(t.TempDir() + "/d.deck")
 	if err != nil {

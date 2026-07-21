@@ -5,19 +5,6 @@ import (
 	"testing"
 )
 
-// drillToGraduation answers the current retry drill correctly until the card
-// graduates and a cold card is served again.
-func drillToGraduation(t *testing.T, e *Engine) {
-	t.Helper()
-	for i := 0; e.IsRetry(); i++ {
-		if i > 10 {
-			t.Fatal("drill did not graduate")
-		}
-		e.AnswerTyped(e.Current().AnswerText)
-		e.Next()
-	}
-}
-
 // TestSequentialLoops: deck order, wrapping to the top, forever.
 func TestSequentialLoops(t *testing.T) {
 	d := testDeck(3)
@@ -34,22 +21,21 @@ func TestSequentialLoops(t *testing.T) {
 	}
 }
 
-// TestSequentialMissKeepsOrder: a miss drills the card, then the lap resumes
-// where it was; the drilled card rejoins at the tail of the cycle.
+// TestSequentialMissKeepsOrder: a missed card requeues at the tail of the
+// cycle; the lap resumes where it was for everyone else.
 func TestSequentialMissKeepsOrder(t *testing.T) {
 	d := testDeck(3)
 	d.Order = deck.OrderSequential
 	e := NewEngine(d, nil, nil)
 
-	// Miss alpha, drill it to graduation.
+	// Miss alpha: it rejoins behind gamma.
 	e.AnswerTyped("definitely-wrong")
 	e.Next()
-	drillToGraduation(t, e)
 
 	want := []string{"beta", "gamma", "alpha", "beta", "gamma"}
 	for i, id := range want {
 		if got := e.Current().ID; got != id {
-			t.Fatalf("serve %d after drill: got %s, want %s", i, got, id)
+			t.Fatalf("serve %d after miss: got %s, want %s", i, got, id)
 		}
 		e.AnswerTyped(e.Current().AnswerText)
 		e.Next()
