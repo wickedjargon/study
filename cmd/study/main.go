@@ -252,7 +252,18 @@ func main() {
 	// resets forward progress, --forget --reverse resets reverse progress —
 	// so forgetting one skill doesn't destroy the other's history.
 	if *forget {
-		store.ResetDirection(*reverse)
+		if progress.PackMemberOf(d.Path) != "" {
+			// A member shares the pack's store: clear this deck's cards in
+			// this direction (their IDs already carry the prefix), not every
+			// sibling's history in the same file.
+			ids := make([]string, 0, len(d.Cards))
+			for i := range d.Cards {
+				ids = append(ids, d.Cards[i].ID)
+			}
+			store.ResetIDs(ids)
+		} else {
+			store.ResetDirection(*reverse)
+		}
 		if err := store.Save(); err != nil {
 			fmt.Fprintf(os.Stderr, "✗ saving reset: %v\n", err)
 			os.Exit(1)

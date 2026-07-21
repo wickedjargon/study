@@ -180,8 +180,23 @@ func (a *App) forgetSelected() {
 
 	store, err := progress.NewStore(row.entry.Path)
 	if err == nil {
-		store.Reset()
-		err = store.Save()
+		if progress.PackMemberOf(row.entry.Path) != "" {
+			// A member shares the pack's store: forget only its own cards,
+			// not every sibling's history in the same file.
+			var d *deck.Deck
+			if d, err = deck.Parse(row.entry.Path); err == nil {
+				ids := make([]string, 0, 2*len(d.Cards))
+				for i := range d.Cards {
+					ids = append(ids, d.Cards[i].ID, progress.ReverseID(d.Cards[i].ID))
+				}
+				store.ResetIDs(ids)
+			}
+		} else {
+			store.Reset()
+		}
+		if err == nil {
+			err = store.Save()
+		}
 	}
 	if err != nil {
 		a.libMsg = fmt.Sprintf("✗ forgetting %s: %v", name, err)

@@ -2,6 +2,7 @@ package progress
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"study/deck"
@@ -307,3 +308,97 @@ func TestScheduleClampsLevel(t *testing.T) {
 	}
 }
 
+// TestPackMemberSharesStore: a member deck (a *.deck file inside a *.deck
+// pack directory) opens the pack's store, folding in any progress recorded
+// under its own path before members shared — pack entries winning.
+func TestPackMemberSharesStore(t *testing.T) {
+	dir := t.TempDir()
+	packDir := filepath.Join(t.TempDir(), "x.deck")
+	if err := os.MkdirAll(packDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	member := filepath.Join(packDir, "a.deck")
+	if err := os.WriteFile(member, []byte("q\n---\na\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := PackMemberOf(member); got != packDir {
+		t.Fatalf("PackMemberOf(member) = %q, want %q", got, packDir)
+	}
+	if got := PackMemberOf(packDir); got != "" {
+		t.Fatalf("PackMemberOf(pack dir) = %q, want none", got)
+	}
+
+	// The pack's store knows c1 with two answers; the member's own pre-share
+	// file holds a stale fork of c1 and a unique c2.
+	pack, err := NewStoreIn(dir, packDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pack.RecordCorrect("c1")
+	pack.RecordCorrect("c1")
+	if err := pack.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	oldHash := deckHash(member)
+	old := &Store{
+		dir:     dir,
+		path:    filepath.Join(dir, oldHash+".json"),
+		logPath: filepath.Join(dir, oldHash+".log"),
+		data:    &DeckProgress{DeckPath: member, Cards: make(map[string]*CardProgress)},
+	}
+	for i := 0; i < 9; i++ {
+		old.RecordCorrect("c1")
+	}
+	old.RecordCorrect("c2")
+	if err := old.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := NewStoreIn(dir, member)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Get("c1").TimesCorrect; got != 2 {
+		t.Errorf("c1 TimesCorrect = %d, want the pack's 2 (pack entries win)", got)
+	}
+	if got := s.Get("c2").TimesCorrect; got != 1 {
+		t.Errorf("c2 TimesCorrect = %d, want the member's 1 (unique entries merge)", got)
+	}
+	if _, err := os.Stat(old.path); !os.IsNotExist(err) {
+		t.Errorf("old member file still in place after merge: %v", err)
+	}
+	if _, err := os.Stat(old.path + ".migrated"); err != nil {
+		t.Errorf("old member file not set aside: %v", err)
+	}
+
+	// The merge must be visible through the pack's own store too.
+	pack2, err := NewStoreIn(dir, packDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := pack2.Get("c2").TimesCorrect; got != 1 {
+		t.Errorf("pack store missing merged c2 (TimesCorrect = %d)", got)
+	}
+}
+
+// TestResetIDsScopes: ResetIDs deletes exactly the named entries, leaving
+// siblings in a shared pack store alone.
+func TestResetIDsScopes(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStoreIn(dir, "d.deck")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.RecordCorrect("mine")
+	s.RecordCorrect(ReverseID("mine"))
+	s.RecordCorrect("sibling")
+	s.ResetIDs([]string{"mine", ReverseID("mine")})
+	if s.Get("mine").TimesCorrect != 0 || s.Get(ReverseID("mine")).TimesCorrect != 0 {
+		t.Error("named entries survived ResetIDs")
+	}
+	if s.Get("sibling").TimesCorrect != 1 {
+		t.Error("sibling entry swept by ResetIDs")
+	}
+}

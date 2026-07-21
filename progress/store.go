@@ -147,11 +147,33 @@ func NewStore(deckPath string) (*Store, error) {
 	return NewStoreIn(dir, deckPath)
 }
 
+// PackMemberOf returns the pack directory that owns deckPath when it is a
+// *.deck file directly inside a *.deck directory, else "". Members study
+// into the pack's store — one shared history per pack, the way the web keeps
+// one store per group — so the pack row and its expanded members can never
+// disagree about the same cards.
+func PackMemberOf(deckPath string) string {
+	dir := filepath.Dir(deckPath)
+	if !strings.HasSuffix(deckPath, ".deck") || !strings.HasSuffix(dir, ".deck") {
+		return ""
+	}
+	if fi, err := os.Stat(deckPath); err != nil || fi.IsDir() {
+		return ""
+	}
+	return dir
+}
+
 // NewStoreIn creates a progress store for a given deck inside an explicit
 // directory. The web server keeps one directory per user this way; the file
-// layout inside is identical to the desktop default.
+// layout inside is identical to the desktop default. A pack member opens its
+// pack's store (see PackMemberOf), folding in any progress file the member
+// recorded under its own path before members shared.
 func NewStoreIn(dir, deckPath string) (*Store, error) {
-	hash := deckHash(deckPath)
+	keyPath := deckPath
+	if pack := PackMemberOf(deckPath); pack != "" {
+		keyPath = pack
+	}
+	hash := deckHash(keyPath)
 	path := filepath.Join(dir, hash+".json")
 
 	s := &Store{
@@ -177,12 +199,63 @@ func NewStoreIn(dir, deckPath string) (*Store, error) {
 		fallthrough
 	default:
 		s.data = &DeckProgress{
-			DeckPath: deckPath,
+			DeckPath: keyPath,
 			Cards:    make(map[string]*CardProgress),
 		}
 	}
-
+	if keyPath != deckPath {
+		s.adoptMemberFile(dir, deckPath)
+	}
 	return s, nil
+}
+
+// adoptMemberFile folds a member deck's pre-sharing progress file (recorded
+// under the member's own path before members shared the pack's store) into
+// this pack store, then sets the old file aside so the merge runs once.
+func (s *Store) adoptMemberFile(dir, deckPath string) {
+	hash := deckHash(deckPath)
+	old := filepath.Join(dir, hash+".json")
+	data, err := os.ReadFile(old)
+	if os.IsNotExist(err) {
+		return
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "study: reading old member progress %s: %v\n", old, err)
+		return
+	}
+	var dp DeckProgress
+	if err := json.Unmarshal(data, &dp); err != nil {
+		// Damaged orphan: set it aside like any corrupt file, don't merge.
+		os.Rename(old, old+".corrupt")
+		fmt.Fprintf(os.Stderr, "study: old member progress %s is unreadable (%v); set aside\n", old, err)
+		return
+	}
+	// Pack entries win: the shared store's history is the live one, the
+	// member file is the stale fork being retired.
+	for id, cp := range dp.Cards {
+		if _, exists := s.data.Cards[id]; !exists {
+			s.data.Cards[id] = cp
+		}
+	}
+	if err := s.Save(); err != nil {
+		fmt.Fprintf(os.Stderr, "study: saving merged member progress: %v\n", err)
+		return
+	}
+	// Only after the merge is durable does the old file leave its place; a
+	// crash between the two just re-runs the merge (pack entries win, so a
+	// re-merge changes nothing).
+	if err := os.Rename(old, old+".migrated"); err != nil {
+		fmt.Fprintf(os.Stderr, "study: setting aside merged member progress: %v\n", err)
+	}
+	// The member's review log lines belong to the pack's instrument now.
+	oldLog := filepath.Join(dir, hash+".log")
+	if lines, err := os.ReadFile(oldLog); err == nil {
+		if f, err := os.OpenFile(s.logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+			f.Write(lines)
+			f.Close()
+			os.Rename(oldLog, oldLog+".migrated")
+		}
+	}
 }
 
 // Get returns the progress for a specific card.
@@ -277,6 +350,19 @@ func (s *Store) Reset() {
 // reversePrefix namespaces the IDs of reversed cards (deck.Reversed) so a
 // card's forward and reverse recall accumulate progress independently.
 const reversePrefix = "r:"
+
+// ReverseID returns the storage ID of a card's reversed direction.
+func ReverseID(id string) string { return reversePrefix + id }
+
+// ResetIDs deletes exactly the given entries (IDs as stored, including any
+// direction prefix). Member decks share their pack's store, so a
+// member-scoped forget passes just its own cards' IDs rather than sweeping
+// the whole file the way Reset and ResetDirection do.
+func (s *Store) ResetIDs(ids []string) {
+	for _, id := range ids {
+		delete(s.data.Cards, id)
+	}
+}
 
 // ResetDirection clears progress for one direction of the deck only: the
 // reversed cards ("r:"-prefixed IDs) when reverse is true, the forward cards
