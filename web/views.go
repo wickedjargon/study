@@ -83,6 +83,11 @@ type quizView struct {
 	// Position is the desktop's [seen/total] session counter, formatted
 	// per screen exactly as gui does.
 	Position string
+	// Nonce identifies the serve this page was rendered against; every
+	// stepping form posts it back, and handleAction drops actions whose
+	// nonce is stale (another tab answered first, back button, recomposed
+	// session) instead of grading the wrong card.
+	Nonce string
 
 	// Header counters. Progress is the session's completion percentage:
 	// cards that have met their criterion over cards in play.
@@ -277,6 +282,7 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		Reviewing: sess.review,
 		Intros:    intros,
 		ModeLabel: effectiveMode(forced, info),
+		Nonce:     sess.nonce(),
 		Remaining: e.Remaining(),
 		Seen:      e.TotalSeen,
 		Correct:   e.TotalCorrect,

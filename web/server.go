@@ -137,6 +137,27 @@ type session struct {
 	last    *quiz.Result
 	review  bool // flip-through: answers visible, nothing recorded
 	touched time.Time
+	// token and step identify the serve every rendered form answers: token
+	// is minted per composition, step increments per applied action. A POST
+	// whose nonce doesn't match is a stale page — another tab already
+	// answered, the back button resurrected an old screen, or the session
+	// was recomposed — and grading it would score the wrong card.
+	token string
+	step  int
+}
+
+// nonce is the serve identifier rendered into the quiz forms; read and
+// compared under sess.mu.
+func (sess *session) nonce() string {
+	return sess.token + ":" + strconv.Itoa(sess.step)
+}
+
+// newSessionToken mints the per-composition half of the serve nonce, so a
+// recomposed session never matches a form rendered by its predecessor.
+func newSessionToken() string {
+	buf := make([]byte, 8)
+	rand.Read(buf)
+	return hex.EncodeToString(buf)
 }
 
 // sessionMode says what getSession should do with an existing session.
@@ -599,6 +620,21 @@ func (s *Server) visitorStore(visitor string, g *group) (*progress.Store, error)
 	return progress.NewStoreIn(filepath.Join(s.dataDir, "users", visitor), g.Path)
 }
 
+// sessionKey names a visitor's one session slot per group.
+func sessionKey(visitor string, g *group) string {
+	return visitor + "|" + g.Slug
+}
+
+// sessionLive reports whether sess still holds its slot. A handler that
+// fetched a session and then waited on its lock may hold an orphan — some
+// concurrent request recomposed the slot — and an orphan's saves would fight
+// the replacement's over the same progress file.
+func (s *Server) sessionLive(key string, sess *session) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.sessions[key] == sess
+}
+
 // getSession returns the visitor's live session for a deck, composing a
 // fresh one (from their saved group progress) if none is live or a different
 // topic of the group is. modeQuiz and modeReview recompose even when the
@@ -606,22 +642,24 @@ func (s *Server) visitorStore(visitor string, g *group) (*progress.Store, error)
 // is the deck in flip-through order: every card answer-visible, in authored
 // order, nothing recorded.
 func (s *Server) getSession(visitor string, g *group, info *deckInfo, mode sessionMode, intros bool, forced string) (*session, error) {
-	key := visitor + "|" + g.Slug
+	key := sessionKey(visitor, g)
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if sess, ok := s.sessions[key]; ok && sess.info == info && mode == modeKeep {
 		sess.touched = time.Now()
+		s.mu.Unlock()
 		return sess, nil
 	}
-
 	for k, sess := range s.sessions {
 		if time.Since(sess.touched) > sessionIdleLimit {
 			delete(s.sessions, k)
 		}
 	}
+	s.mu.Unlock()
 
+	// Compose without the lock: deck.Parse is the slow path, and holding
+	// s.mu through it would stall every other visitor's getSession behind
+	// one parse.
 	d, err := deck.Parse(info.Path)
 	if err != nil {
 		return nil, err
@@ -674,6 +712,20 @@ func (s *Server) getSession(visitor string, g *group, info *deckInfo, mode sessi
 		store:   store,
 		review:  review,
 		touched: time.Now(),
+		token:   newSessionToken(),
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// A concurrent request may have composed the same session while this one
+	// parsed. For a keep, theirs is as good as ours — and two engines over
+	// one progress file would race each other's saves, so share the one that
+	// won the slot.
+	if mode == modeKeep {
+		if live, ok := s.sessions[key]; ok && live.info == info {
+			live.touched = time.Now()
+			return live, nil
+		}
 	}
 	s.sessions[key] = sess
 	return sess, nil
@@ -742,7 +794,31 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	dest := "/q/" + g.Slug + "/" + info.Slug
+
 	sess.mu.Lock()
+	// Two gates before anything is applied. The session must still hold its
+	// slot (a concurrent topic switch or start-over may have orphaned it —
+	// an orphan's save would clobber the replacement's). And a stepping
+	// action must carry the nonce of the serve it was rendered against: a
+	// stale tab, the back button, or a form outliving an evicted session
+	// would otherwise grade whatever card the engine happens to hold now.
+	if !s.sessionLive(sessionKey(visitor, g), sess) {
+		sess.mu.Unlock()
+		http.Redirect(w, r, dest, http.StatusSeeOther)
+		return
+	}
+	switch action {
+	case "start", "review", "intros", "mode":
+		// Deliberate recompositions carry no nonce.
+	default:
+		if r.FormValue("serve") != sess.nonce() {
+			sess.mu.Unlock()
+			http.Redirect(w, r, dest, http.StatusSeeOther)
+			return
+		}
+	}
+
 	e := sess.engine
 	flash := ""
 	switch action {
@@ -813,9 +889,11 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	// The serve advanced (or at least may have): forms rendered before this
+	// point must not step the engine again.
+	sess.step++
 	sess.mu.Unlock()
 
-	dest := "/q/" + g.Slug + "/" + info.Slug
 	if flash != "" {
 		dest += "?f=" + flash
 	}

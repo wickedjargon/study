@@ -106,6 +106,7 @@
   </section>
   {{if .Choice}}
   <form method="post" action="{{.Base}}/answer" class="choices" id="answerform">
+    <input type="hidden" name="serve" value="{{.Nonce}}">
     {{range $i, $opt := .Options}}
     <button name="choice" value="{{$i}}" class="choice" dir="auto"><kbd>{{keynum $i}}</kbd><span dir="auto">{{$opt}}</span></button>
     {{end}}
@@ -130,20 +131,24 @@
   {{end}}
   {{if .SetFlash}}<p class="setflash">{{.SetFlash}}</p>{{end}}
   <form method="post" action="{{.Base}}/entry" class="typed" id="answerform">
+    <input type="hidden" name="serve" value="{{.Nonce}}">
     <input type="text" name="entry" dir="auto" autofocus autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="name one…">
     <button class="primary">check</button>
   </form>
   <form method="post" action="{{.Base}}/giveup" class="actions">
+    <input type="hidden" name="serve" value="{{.Nonce}}">
     <button class="quiet" title="end the card and reveal the full list">give up</button>
   </form>
   {{else}}
   <form method="post" action="{{.Base}}/answer" class="typed" id="answerform">
+    <input type="hidden" name="serve" value="{{.Nonce}}">
     <input type="text" name="answer" dir="auto" autofocus autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="type your answer…">
     <button class="primary">check</button>
   </form>
   {{end}}
   {{if .TimeLimit}}
   <form method="post" action="{{.Base}}/answer" id="timeoutform" hidden>
+    <input type="hidden" name="serve" value="{{.Nonce}}">
     <input type="hidden" name="timeout" value="1">
   </form>
   {{end}}
@@ -160,7 +165,7 @@
     {{if .Note}}<div class="cardnote">{{template "media" .Note}}</div>{{end}}
   </section>
   <div class="actions" id="primaryform">
-    <form method="post" action="{{.Base}}/preview"><button class="primary">{{if .FlipMode}}next →{{else}}got it: quiz me{{end}}</button></form>
+    <form method="post" action="{{.Base}}/preview"><input type="hidden" name="serve" value="{{.Nonce}}"><button class="primary">{{if .FlipMode}}next →{{else}}got it: quiz me{{end}}</button></form>
     {{if not .FlipMode}}
     <form method="post" action="{{.Base}}/intros"><button class="quiet" title="stop revealing answers on first view">skip intros</button></form>
     {{end}}
@@ -203,12 +208,14 @@
        debt is paid. The grade already landed; this is finger practice, and
        the engine refuses to advance until it's done. */}}
   <form method="post" action="{{.Base}}/practice" class="typed practice" id="answerform">
+    <input type="hidden" name="serve" value="{{.Nonce}}">
     <p class="practice-note">almost — type it {{.PracticeOwed}} more {{if eq .PracticeOwed 1}}time{{else}}times{{end}} to continue</p>
     <input type="text" name="practice" dir="auto" autofocus autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="{{.ResultAnswer}}">
     <button class="primary">check</button>
   </form>
   {{else}}
   <form method="post" action="{{.Base}}/next" class="actions" id="primaryform">
+    <input type="hidden" name="serve" value="{{.Nonce}}">
     <button class="primary" {{if .WrongPause}}data-pause="{{.WrongPause}}"{{end}}>next →</button>
   </form>
   {{end}}
@@ -221,7 +228,7 @@
     {{if .Remaining}}<p class="dim">Already studied today — {{.Remaining}} new cards are waiting for tomorrow's batch.</p>{{end}}
   </section>
   <div class="actions" id="primaryform">
-    <form method="post" action="{{.Base}}/continue"><button>keep studying anyway</button></form>
+    <form method="post" action="{{.Base}}/continue"><input type="hidden" name="serve" value="{{.Nonce}}"><button>keep studying anyway</button></form>
     <form method="post" action="{{.Base}}/review"><button>flip through instead</button></form>
   </div>
   <p class="center backlink"><a class="dim" href="{{.GroupURL}}">← back</a></p>
@@ -240,7 +247,7 @@
   </section>
   <div class="actions" id="primaryform">
     <form method="get" action="{{.GroupURL}}"><button class="primary">← back</button></form>
-    {{if .CanContinue}}<form method="post" action="{{.Base}}/continue"><button>keep studying anyway</button></form>{{end}}
+    {{if .CanContinue}}<form method="post" action="{{.Base}}/continue"><input type="hidden" name="serve" value="{{.Nonce}}"><button>keep studying anyway</button></form>{{end}}
   </div>
 {{end}}
 
