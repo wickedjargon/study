@@ -148,7 +148,11 @@ type Deck struct {
 	// refuses to advance, so a reflexive enter can't skip past the miss
 	// (default defaultWrongPause; 0 = no pause).
 	WrongPause int
-	Preview    bool    // reveal a never-studied card's answer once before quizzing it
+	Preview bool // reveal a never-studied card's answer once before quizzing it
+	// PreviewSet records that the deck header declared preview-new
+	// explicitly, so a frontend can tell the author's "off" from the absent
+	// default — the web seeds a guest's introduction preference from it.
+	PreviewSet bool
 	FontSize   int     // base font size in points (0 = use the app default)
 	Speed      float64 // audio playback speed multiplier (0 = use the app default of 1.0)
 	// ImgTint marks the deck's images as monochrome alpha masks ("# img-tint:
@@ -396,7 +400,8 @@ func parseDir(absDir string) (*Deck, error) {
 		}
 		if d.Mode != merged.Mode || d.CaseSensitive != merged.CaseSensitive ||
 			d.TimeLimit != merged.TimeLimit || d.Order != merged.Order ||
-			d.Preview != merged.Preview || d.NewPerSession != merged.NewPerSession ||
+			d.Preview != merged.Preview || d.PreviewSet != merged.PreviewSet ||
+			d.NewPerSession != merged.NewPerSession ||
 			d.WrongPause != merged.WrongPause || d.ImgTint != merged.ImgTint ||
 			d.Choices != merged.Choices || d.FontSize != merged.FontSize ||
 			d.Speed != merged.Speed {
@@ -553,8 +558,10 @@ func applyDeckMetadata(deck *Deck, block []string) {
 			switch strings.TrimSpace(after) {
 			case "on":
 				deck.Preview = true
+				deck.PreviewSet = true
 			case "off":
 				deck.Preview = false
+				deck.PreviewSet = true
 			default:
 				deck.warn("ignoring %q (# preview-new: must be on or off)", trimmed)
 			}

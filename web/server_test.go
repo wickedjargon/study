@@ -101,27 +101,34 @@ func newTestServer(t *testing.T, deckContent string) *testServer {
 	}
 }
 
-// client is one visitor: a cookie jar (so the minted guest identity sticks)
-// and no redirect following, so tests can assert the 303s themselves. The
-// intros preference is pre-set to off so new cards arrive as questions, not
-// answer-visible previews.
-func (srv *testServer) client() *http.Client {
+// bareClient is one genuinely fresh visitor: a cookie jar (so the minted
+// guest identity sticks) and no redirect following, so tests can assert the
+// 303s themselves.
+func (srv *testServer) bareClient() *http.Client {
 	srv.t.Helper()
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		srv.t.Fatal(err)
 	}
-	u, err := url.Parse(srv.ts.URL)
-	if err != nil {
-		srv.t.Fatal(err)
-	}
-	jar.SetCookies(u, []*http.Cookie{{Name: "intros", Value: "off"}})
 	return &http.Client{
 		Jar: jar,
 		CheckRedirect: func(*http.Request, []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
 	}
+}
+
+// client is bareClient with the intros preference pre-set to off, so new
+// cards arrive as questions, not answer-visible previews.
+func (srv *testServer) client() *http.Client {
+	srv.t.Helper()
+	c := srv.bareClient()
+	u, err := url.Parse(srv.ts.URL)
+	if err != nil {
+		srv.t.Fatal(err)
+	}
+	c.Jar.SetCookies(u, []*http.Cookie{{Name: "intros", Value: "off"}})
+	return c
 }
 
 // getPage GETs a path and returns the body, requiring 200.
@@ -411,5 +418,39 @@ func TestSetCardFlow(t *testing.T) {
 	}
 	if !strings.Contains(page, "named 1 of 2") {
 		t.Fatalf("give-up result lost the count:\n%s", page)
+	}
+}
+
+// TestIntrosSeededFromHeader: a guest who has never touched the
+// Introductions toggle starts from the deck's # preview-new: header — an
+// explicit off opens cold, silence teaches first — and flipping the toggle
+// overrides the header from then on. The pre-per-group site-wide cookie
+// still counts as a choice.
+func TestIntrosSeededFromHeader(t *testing.T) {
+	// Header off: a fresh guest gets the question, not the reveal.
+	srv := newTestServer(t, typedDeck)
+	c := srv.bareClient()
+	page := srv.getPage(c, srv.quiz)
+	if !strings.Contains(page, `name="answer"`) || strings.Contains(page, "quiz me") {
+		t.Fatal("header preview-new: off did not seed intros off for a fresh guest")
+	}
+
+	// The toggle beats the header once used.
+	srv.postForm(c, srv.quiz+"/intros", url.Values{}, nil)
+	page = srv.getPage(c, srv.quiz)
+	if !strings.Contains(page, "quiz me") {
+		t.Fatal("flipping the toggle did not override the header")
+	}
+
+	// No header: a fresh guest is taught first.
+	srv2 := newTestServer(t, "apple\n---\nfruit\n")
+	c2 := srv2.bareClient()
+	if page := srv2.getPage(c2, srv2.quiz); !strings.Contains(page, "quiz me") {
+		t.Fatal("headerless deck did not default a fresh guest to intros on")
+	}
+
+	// The legacy site-wide cookie still counts as a stated choice.
+	if page := srv2.getPage(srv2.client(), srv2.quiz); !strings.Contains(page, `name="answer"`) {
+		t.Fatal("legacy intros=off cookie no longer honored")
 	}
 }

@@ -116,11 +116,16 @@ func (g *group) single() bool {
 // The startup parse is kept for the picker pages and the media table;
 // sessions re-parse so each gets its own mutable card list.
 type deckInfo struct {
-	Slug  string
-	Name  string
-	Path  string
-	Mode  deck.QuizMode // the deck's authored answer mode
-	Cards []deck.Card
+	Slug string
+	Name string
+	Path string
+	Mode deck.QuizMode // the deck's authored answer mode
+	// Preview/PreviewSet carry the header's # preview-new: — the seed for
+	// a guest who has never touched the Introductions toggle, so a trivia
+	// deck can open cold while a vocabulary deck teaches first.
+	Preview    bool
+	PreviewSet bool
+	Cards      []deck.Card
 	// media maps a file's base name to its absolute path. Media URLs carry
 	// only the base name, so a request can never name a path outside the
 	// deck's own media set.
@@ -439,12 +444,14 @@ func newDeckInfo(d *deck.Deck, name, slug string, taken map[string]bool) *deckIn
 	taken[candidate] = true
 
 	info := &deckInfo{
-		Slug:  candidate,
-		Name:  name,
-		Path:  d.Path,
-		Mode:  d.Mode,
-		Cards: d.Cards,
-		media: make(map[string]string),
+		Slug:       candidate,
+		Name:       name,
+		Path:       d.Path,
+		Mode:       d.Mode,
+		Preview:    d.Preview,
+		PreviewSet: d.PreviewSet,
+		Cards:      d.Cards,
+		media:      make(map[string]string),
 	}
 	for _, c := range d.Cards {
 		for _, side := range [][]deck.Media{c.Question, c.Answer} {
@@ -601,23 +608,34 @@ func (s *Server) setForcedMode(w http.ResponseWriter, g *group, v string) {
 	})
 }
 
-// introsOn reports the guest's introduction preference: unseen cards are
-// shown answer-visible once before being quizzed. On unless opted out — a
-// guest who already knows a deck (say, after clearing cookies) can skip
-// straight to being tested.
-func introsOn(r *http.Request) bool {
-	c, err := r.Cookie("intros")
-	return err != nil || c.Value != "off"
+// introsOn reports whether introductions — unseen cards shown answer-visible
+// once before being quizzed — are on for this deck. The guest's per-group
+// choice wins when they've made one (the pre-per-group site-wide cookie
+// still counts as one); otherwise the author's # preview-new: header seeds
+// the default, so a trivia deck opens cold while a vocabulary deck teaches
+// first; a deck that says nothing teaches first.
+func introsOn(r *http.Request, g *group, info *deckInfo) bool {
+	if c, err := r.Cookie("intros-" + g.Slug); err == nil && (c.Value == "on" || c.Value == "off") {
+		return c.Value == "on"
+	}
+	if c, err := r.Cookie("intros"); err == nil && (c.Value == "on" || c.Value == "off") {
+		return c.Value == "on"
+	}
+	if info.PreviewSet {
+		return info.Preview
+	}
+	return true
 }
 
-// setIntros persists the introduction preference.
-func (s *Server) setIntros(w http.ResponseWriter, on bool) {
+// setIntros persists the guest's introduction choice for one group; from
+// then on it outranks the deck header there.
+func (s *Server) setIntros(w http.ResponseWriter, g *group, on bool) {
 	v := "on"
 	if !on {
 		v = "off"
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name:     "intros",
+		Name:     "intros-" + g.Slug,
 		Value:    v,
 		Path:     "/",
 		MaxAge:   10 * 365 * 24 * 60 * 60,
@@ -693,8 +711,9 @@ func (s *Server) getSession(visitor string, g *group, info *deckInfo, mode sessi
 	if review {
 		d.Order = deck.OrderFlipThrough
 	} else {
-		// The guest's introduction preference overrides the deck header in
-		// both directions: it is their call, not the author's.
+		// The intros value arrives seeded: the guest's choice when they've
+		// made one, else the deck header (see introsOn). It lands on the
+		// session deck here, so the engine never consults the header itself.
 		d.Preview = intros
 		// Forced answering mode outranks per-card directives and the
 		// distractor-implied choice inference, like the desktop's flag. The
@@ -777,7 +796,7 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 	}
 	visitor := s.visitorID(w, r)
 	action := r.PathValue("action")
-	intros := introsOn(r)
+	intros := introsOn(r, g, info)
 	forced := forcedMode(r, g)
 	mode := modeKeep
 	switch action {
@@ -788,7 +807,7 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 	case "intros":
 		// Flip the preference and recompose the quiz under it.
 		intros = !intros
-		s.setIntros(w, intros)
+		s.setIntros(w, g, intros)
 		mode = modeQuiz
 	case "mode":
 		// Flip between typed and choice — from whatever the session is

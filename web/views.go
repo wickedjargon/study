@@ -265,7 +265,7 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	visitor := s.visitorID(w, r)
-	intros := introsOn(r)
+	intros := introsOn(r, g, info)
 	forced := forcedMode(r, g)
 	sess, err := s.getSession(visitor, g, info, modeKeep, intros, forced)
 	if err != nil {

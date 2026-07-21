@@ -1317,3 +1317,29 @@ func TestNoteSurvivesReverse(t *testing.T) {
 		t.Errorf("reversed note = %+v, want the original note", rev.Cards[0].Note)
 	}
 }
+
+func TestPreviewSetTracksHeader(t *testing.T) {
+	// PreviewSet separates the author's explicit "off" from silence, so a
+	// frontend can seed its own default from the header.
+	d, err := Parse(writeTempDeck(t, "q\n---\na\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.PreviewSet {
+		t.Error("PreviewSet true with no # preview-new: header")
+	}
+	d, err = Parse(writeTempDeck(t, "# preview-new: off\n\nq\n---\na\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !d.PreviewSet || d.Preview {
+		t.Errorf("explicit off: PreviewSet=%v Preview=%v, want true/false", d.PreviewSet, d.Preview)
+	}
+	d, err = Parse(writeTempDeck(t, "# preview-new: on\n\nq\n---\na\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !d.PreviewSet || !d.Preview {
+		t.Errorf("explicit on: PreviewSet=%v Preview=%v, want true/true", d.PreviewSet, d.Preview)
+	}
+}
