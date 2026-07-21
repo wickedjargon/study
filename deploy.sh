@@ -24,7 +24,12 @@ distrobox enter archbox -- env CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 	go build -trimpath -ldflags "-s -w" -o study-web-linux ./cmd/study-web
 
 echo "== sync decks =="
-rsync -a --delete --exclude '__pycache__' --exclude '.git' --exclude '*.geojson' \
+# Staged through a directory of symlinks so one rsync source covers the whole
+# list: --delete can then prune decks dropped from it, which a multi-source
+# rsync never does (it only deletes inside each transferred tree).
+STAGE=$(mktemp -d)
+trap 'rm -rf "$STAGE"' EXIT
+for d in \
 	"$P/language-packs" \
 	"$P/study-mexican-spanish.deck" \
 	"$P/study-japanese-numbers.deck" \
@@ -49,8 +54,11 @@ rsync -a --delete --exclude '__pycache__' --exclude '.git' --exclude '*.geojson'
 	"$P/study-decks/study-waters.deck" \
 	"$P/study-decks/study-us-presidents.deck" \
 	"$P/study-decks/study-canada.deck" \
-	"$P/study-decks/study-comptia-aplus.deck" \
-	"$SERVER:/opt/study-web/decks/"
+	"$P/study-decks/study-comptia-aplus.deck"; do
+	ln -s "$d" "$STAGE/"
+done
+rsync -aL --delete --exclude '__pycache__' --exclude '.git' --exclude '*.geojson' \
+	"$STAGE/" "$SERVER:/opt/study-web/decks/"
 
 echo "== install binary & restart =="
 rsync -a study-web-linux "$SERVER:/opt/study-web/study-web"
@@ -58,4 +66,5 @@ rm study-web-linux
 ssh "$SERVER" 'sudo systemctl restart study-web && sleep 1 && sudo systemctl is-active study-web'
 
 echo "== verify =="
-curl -s -o /dev/null -w "https://study.fftp.io/ -> %{http_code}\n" https://study.fftp.io/
+# -f: a 5xx after the restart must fail the deploy, not print and exit 0.
+curl -fsS -o /dev/null -w "https://study.fftp.io/ -> %{http_code}\n" https://study.fftp.io/
