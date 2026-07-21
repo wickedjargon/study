@@ -90,7 +90,7 @@ type Card struct {
 	Choices   int      // per-card choice count (0 = use deck default)
 	TimeLimit int      // per-card time limit in seconds
 	// (0 = inherit deck default, -1 = explicitly unlimited)
-	Cloze bool // fill-in-the-blank card ({{...}} deletion, no separator)
+	Cloze bool // fill-in-the-blank card ({{...}} deletion in the question text)
 }
 
 // IsSet reports whether this is a set-answer card (an enumeration, not a
@@ -269,6 +269,11 @@ func (d *Deck) ForceAnswerMode(m QuizMode) {
 // sense), so it's rejected with a warning rather than honored.
 const maxTimeLimit = 3600
 
+// maxChoices caps a choice card's option count: options are picked with the
+// number keys, which run out at 9. A count above that leaves options no key
+// can reach, so it's rejected with a warning rather than honored.
+const maxChoices = 9
+
 // clozeBlank is what a {{...}} deletion is replaced with in the displayed
 // question text.
 const clozeBlank = "____"
@@ -326,7 +331,19 @@ func Parse(path string) (*Deck, error) {
 		applyDeckMetadata(deck, block)
 	}
 
+	header := true
 	for _, block := range blocks {
+		// A comment-only block past the header is just a comment, but a deck
+		// directive inside one is being silently ignored — say so.
+		if isCommentOnly(block) {
+			if !header {
+				for _, line := range block {
+					warnMisplacedDirective(strings.TrimSpace(line), false, deck.warn)
+				}
+			}
+			continue
+		}
+		header = false
 		card, err := parseCard(block, dir, deck.Mode, deck.ModeSet, deck.warn)
 		if err != nil {
 			return nil, err
@@ -380,7 +397,9 @@ func parseDir(absDir string) (*Deck, error) {
 		if d.Mode != merged.Mode || d.CaseSensitive != merged.CaseSensitive ||
 			d.TimeLimit != merged.TimeLimit || d.Order != merged.Order ||
 			d.Preview != merged.Preview || d.NewPerSession != merged.NewPerSession ||
-			d.WrongPause != merged.WrongPause || d.ImgTint != merged.ImgTint {
+			d.WrongPause != merged.WrongPause || d.ImgTint != merged.ImgTint ||
+			d.Choices != merged.Choices || d.FontSize != merged.FontSize ||
+			d.Speed != merged.Speed {
 			merged.warn("%s: header settings differ from %s; using the first file's",
 				filepath.Base(path), filepath.Base(entries[0]))
 		}
@@ -432,6 +451,38 @@ func warnLegacyDirective(line string, warn func(string, ...any)) {
 	}
 }
 
+// deckDirectives lists every deck-header directive, and perCardDirectives the
+// subset also honored inside a card's block. Used to warn when a directive
+// lands where it takes no effect — a correctly spelled directive in the wrong
+// place must not be quieter than a typo'd one.
+var deckDirectives = []string{
+	"choice-count", "answer-mode", "answer-case", "time-limit", "order",
+	"wrong-pause", "new-per-session", "preview-new", "font-size", "img-tint",
+	"audio-speed",
+}
+
+var perCardDirectives = map[string]bool{
+	"answer-mode":  true,
+	"choice-count": true,
+	"time-limit":   true,
+}
+
+// warnMisplacedDirective emits a warning if the line is a deck directive that
+// is being ignored: any of them in a comment block after the first card
+// (inCard=false), or a deck-only one inside a card's block (inCard=true).
+func warnMisplacedDirective(line string, inCard bool, warn func(string, ...any)) {
+	for _, name := range deckDirectives {
+		if _, ok := strings.CutPrefix(line, "# "+name+":"); !ok {
+			continue
+		}
+		if inCard && perCardDirectives[name] {
+			return
+		}
+		warn("ignoring %q (# %s: is a deck header directive; it belongs before the first card)", line, name)
+		return
+	}
+}
+
 // applyDeckMetadata reads deck-level directives from a comment-only block and
 // applies them to the deck.
 func applyDeckMetadata(deck *Deck, block []string) {
@@ -440,10 +491,10 @@ func applyDeckMetadata(deck *Deck, block []string) {
 		warnLegacyDirective(trimmed, deck.warn)
 		if after, ok := strings.CutPrefix(trimmed, "# choice-count:"); ok {
 			v := strings.TrimSpace(after)
-			if n, err := strconv.Atoi(v); err == nil && n >= 2 {
+			if n, err := strconv.Atoi(v); err == nil && n >= 2 && n <= maxChoices {
 				deck.Choices = n
 			} else {
-				deck.warn("ignoring %q (# choice-count: needs an integer >= 2)", trimmed)
+				deck.warn("ignoring %q (# choice-count: needs an integer 2-%d)", trimmed, maxChoices)
 			}
 		}
 		if after, ok := strings.CutPrefix(trimmed, "# answer-mode:"); ok {
@@ -579,6 +630,7 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, deckModeSet
 	for _, line := range block {
 		trimmed := strings.TrimSpace(line)
 		warnLegacyDirective(trimmed, warn)
+		warnMisplacedDirective(trimmed, true, warn)
 		if after, ok := strings.CutPrefix(trimmed, "# answer-mode:"); ok {
 			switch strings.TrimSpace(after) {
 			case "type":
@@ -592,10 +644,10 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, deckModeSet
 			}
 		}
 		if after, ok := strings.CutPrefix(trimmed, "# choice-count:"); ok {
-			if n, err := strconv.Atoi(strings.TrimSpace(after)); err == nil && n >= 2 {
+			if n, err := strconv.Atoi(strings.TrimSpace(after)); err == nil && n >= 2 && n <= maxChoices {
 				cardChoices = n
 			} else {
-				warn("ignoring %q (# choice-count: needs an integer >= 2)", trimmed)
+				warn("ignoring %q (# choice-count: needs an integer 2-%d)", trimmed, maxChoices)
 			}
 		}
 		if after, ok := strings.CutPrefix(trimmed, "# time-limit:"); ok {
@@ -770,6 +822,14 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, deckModeSet
 	// its display answer is the joined list (the reveal every answer-visible
 	// screen shows).
 	if len(setItems) > 0 {
+		// "+France" isn't an item ("+ " needs the space), so it fell into the
+		// answer lines — the mixed-card error below would fire, but pointing
+		// at the actual typo beats claiming the author mixed styles.
+		for _, line := range answerLines {
+			if t := strings.TrimSpace(line); strings.HasPrefix(t, "+") {
+				return nil, fmt.Errorf("set item %q needs a space after the +: %q", t, strings.Join(filtered, " / "))
+			}
+		}
 		if len(setItems) < 2 {
 			return nil, fmt.Errorf("set card needs at least two + items: %q", strings.Join(filtered, " / "))
 		}

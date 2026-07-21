@@ -646,6 +646,72 @@ func TestCardIDIgnoresTrailingWhitespace(t *testing.T) {
 	}
 }
 
+// hasWarning reports whether any deck warning contains the substring.
+func hasWarning(d *Deck, sub string) bool {
+	for _, w := range d.Warnings {
+		if strings.Contains(w, sub) {
+			return true
+		}
+	}
+	return false
+}
+
+func TestMisplacedDeckDirectiveWarns(t *testing.T) {
+	// A deck directive after the first card is silently ignored by the header
+	// scan; that must not be quieter than a typo'd directive.
+	d, err := Parse(writeTempDeck(t, "q\n---\na\n\n# order: sequential\n\nq2\n---\na2\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Order != OrderAdaptive {
+		t.Errorf("misplaced # order: took effect: %v", d.Order)
+	}
+	if !hasWarning(d, "deck header directive") {
+		t.Errorf("no warning for misplaced deck directive, got %v", d.Warnings)
+	}
+
+	// Inside a card's block, a deck-only directive warns too...
+	d, err = Parse(writeTempDeck(t, "# order: sequential\nq\n---\na\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasWarning(d, "deck header directive") {
+		t.Errorf("no warning for deck directive in a card block, got %v", d.Warnings)
+	}
+
+	// ...but the per-card trio stays warning-free.
+	d, err = Parse(writeTempDeck(t, "# time-limit: 5\n# answer-mode: type\nq\n---\na\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Warnings) != 0 {
+		t.Errorf("per-card directives warned: %v", d.Warnings)
+	}
+}
+
+func TestSetItemMissingSpaceHint(t *testing.T) {
+	// "+France" is an answer line, not an item; the error must point at the
+	// missing space, not at style mixing.
+	_, err := Parse(writeTempDeck(t, "name two\n---\n+ France\n+Spain\n"))
+	if err == nil || !strings.Contains(err.Error(), "space after the +") {
+		t.Errorf("expected missing-space hint, got %v", err)
+	}
+}
+
+func TestChoiceCountCapped(t *testing.T) {
+	// Options are answered with the number keys, which run out at 9.
+	d, err := Parse(writeTempDeck(t, "# choice-count: 12\n\nq\n---\na\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Choices != 4 {
+		t.Errorf("choice-count 12 honored (got %d), want default 4", d.Choices)
+	}
+	if !hasWarning(d, "choice-count") {
+		t.Errorf("no warning for out-of-range choice-count, got %v", d.Warnings)
+	}
+}
+
 func TestParseDirPack(t *testing.T) {
 	dir := t.TempDir()
 	a := "# answer-mode: type\n\nsalam\n---\nhello\n\nkhodahafez\n---\ngoodbye\n"
