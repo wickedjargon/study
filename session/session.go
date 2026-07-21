@@ -64,9 +64,9 @@ func Load(path string, reverse bool, warn io.Writer) (*deck.Deck, *progress.Stor
 		return nil, nil, fmt.Errorf("progress: %w", err)
 	}
 
-	// One-time migration: progress saved under a card's legacy ID (the old
-	// hash included @audio/@img lines, so renaming a media file orphaned the
-	// card's history) is moved to its current ID.
+	// One-time migration: progress saved under a card's legacy IDs (older
+	// hash generations included @audio/@img lines, then lacked line
+	// delimiters and whitespace trimming) is moved to its current ID.
 	if store.MigrateIDs(d.Cards) {
 		if err := store.Save(); err != nil {
 			return nil, nil, fmt.Errorf("saving migrated progress: %w", err)

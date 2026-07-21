@@ -135,7 +135,7 @@ func TestStoreMigrateIDs(t *testing.T) {
 	s.RecordWrong("r:old1")
 
 	cards := []deck.Card{
-		{ID: "new1", LegacyID: "old1"},
+		{ID: "new1", LegacyIDs: []string{"old1"}},
 		{ID: "new2"}, // no legacy — untouched
 	}
 	if !s.MigrateIDs(cards) {
@@ -165,7 +165,7 @@ func TestStoreMigrateIDsKeepsNewerEntry(t *testing.T) {
 	s.RecordCorrect("new1")
 	s.RecordCorrect("new1") // real progress already under the new ID
 
-	s.MigrateIDs([]deck.Card{{ID: "new1", LegacyID: "old1"}})
+	s.MigrateIDs([]deck.Card{{ID: "new1", LegacyIDs: []string{"old1"}}})
 
 	cp := s.Get("new1")
 	if cp.TimesCorrect != 2 || cp.TimesWrong != 0 {

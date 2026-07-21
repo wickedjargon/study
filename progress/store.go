@@ -273,30 +273,30 @@ func (s *Store) ResetDirection(reverse bool) {
 	}
 }
 
-// MigrateIDs moves progress saved under each card's legacy ID (see
-// deck.Card.LegacyID: the old hash included media lines, so renaming an audio
-// file re-keyed the card) to its current ID, in both the forward and reverse
-// namespaces. An entry already present under the new ID wins — real progress
-// isn't overwritten by stale history. Reports whether anything moved, so the
-// caller knows to save.
+// MigrateIDs moves progress saved under each card's legacy IDs (see
+// deck.Card.LegacyIDs: older hashes included media lines, then lacked line
+// delimiters and whitespace trimming) to its current ID, in both the forward
+// and reverse namespaces. An entry already present under the new ID wins —
+// real progress isn't overwritten by stale history — and among legacy
+// entries the newest hash generation wins the same way. Reports whether
+// anything moved, so the caller knows to save.
 func (s *Store) MigrateIDs(cards []deck.Card) bool {
 	moved := false
 	for i := range cards {
 		c := &cards[i]
-		if c.LegacyID == "" {
-			continue
-		}
-		for _, pre := range []string{"", reversePrefix} {
-			from, to := pre+c.LegacyID, pre+c.ID
-			cp, ok := s.data.Cards[from]
-			if !ok {
-				continue
+		for _, legacy := range c.LegacyIDs {
+			for _, pre := range []string{"", reversePrefix} {
+				from, to := pre+legacy, pre+c.ID
+				cp, ok := s.data.Cards[from]
+				if !ok {
+					continue
+				}
+				if _, exists := s.data.Cards[to]; !exists {
+					s.data.Cards[to] = cp
+				}
+				delete(s.data.Cards, from)
+				moved = true
 			}
-			if _, exists := s.data.Cards[to]; !exists {
-				s.data.Cards[to] = cp
-			}
-			delete(s.data.Cards, from)
-			moved = true
 		}
 	}
 	return moved

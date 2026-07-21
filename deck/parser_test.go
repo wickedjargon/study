@@ -600,11 +600,11 @@ func TestCardIDIgnoresMediaLines(t *testing.T) {
 		t.Errorf("IDs differ with/without media line: %q vs %q",
 			withAudio.Cards[0].ID, textOnly.Cards[0].ID)
 	}
-	if withAudio.Cards[0].LegacyID == "" {
-		t.Error("card with media has no LegacyID for migration")
+	if len(withAudio.Cards[0].LegacyIDs) != 2 {
+		t.Errorf("card with media has legacy IDs %v, want the undelimited text hash and the media-inclusive hash", withAudio.Cards[0].LegacyIDs)
 	}
-	if textOnly.Cards[0].LegacyID != "" {
-		t.Errorf("text-only card has LegacyID %q, want none (ID never changed)", textOnly.Cards[0].LegacyID)
+	if len(textOnly.Cards[0].LegacyIDs) != 1 {
+		t.Errorf("text-only card has legacy IDs %v, want just the undelimited hash", textOnly.Cards[0].LegacyIDs)
 	}
 }
 
@@ -616,8 +616,33 @@ func TestCardIDMediaOnlyQuestionStillUnique(t *testing.T) {
 	if id1 == id2 {
 		t.Error("two different media-only questions share an ID")
 	}
-	if legacy1 != "" {
-		t.Errorf("media-only question has LegacyID %q, want none (hash unchanged)", legacy1)
+	if len(legacy1) != 1 {
+		t.Errorf("media-only question has legacy IDs %v, want just the undelimited hash", legacy1)
+	}
+}
+
+func TestCardIDDelimitsLines(t *testing.T) {
+	// ["ab","c"] and ["a","bc"] concatenate identically; without a delimiter
+	// they'd share one ID, one history, and parseDir would drop one of the
+	// cards as a duplicate.
+	id1, _ := stableCardID([]string{"ab", "c"})
+	id2, _ := stableCardID([]string{"a", "bc"})
+	if id1 == id2 {
+		t.Error("line-merge collision: two different questions share an ID")
+	}
+}
+
+func TestCardIDIgnoresTrailingWhitespace(t *testing.T) {
+	// An editor stripping trailing whitespace on save must not orphan the
+	// card's progress.
+	id1, _ := stableCardID([]string{"salam "})
+	id2, legacy2 := stableCardID([]string{"salam"})
+	if id1 != id2 {
+		t.Errorf("trailing whitespace re-keys the card: %q vs %q", id1, id2)
+	}
+	// The whitespace-free line still carries its undelimited hash as legacy.
+	if len(legacy2) != 1 {
+		t.Errorf("legacy IDs = %v, want the undelimited hash", legacy2)
 	}
 }
 

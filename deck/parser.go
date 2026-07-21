@@ -51,11 +51,12 @@ type SetItem struct {
 // Card represents a single question/answer pair.
 type Card struct {
 	ID string // stable hash of the question's text lines
-	// LegacyID is the hash an older version of the parser produced for this
-	// card (it included @img/@audio lines, so renaming a media file re-keyed
-	// the card and orphaned its progress). Set only when it differs from ID;
-	// used once at load time to migrate saved progress, never for new writes.
-	LegacyID   string
+	// LegacyIDs are the hashes older versions of the parser produced for this
+	// card, newest first (the undelimited text-line hash, and before that the
+	// hash that included @img/@audio lines). Only hashes that differ from ID
+	// are kept; used once at load time to migrate saved progress, never for
+	// new writes.
+	LegacyIDs  []string
 	Question   []Media  // question side elements
 	Answer     []Media  // answer side elements
 	AnswerText string   // plain text of the answer (for choice generation)
@@ -835,10 +836,10 @@ func parseCard(block []string, baseDir string, defaultMode QuizMode, deckModeSet
 		}
 	}
 
-	id, legacyID := stableCardID(questionLines)
+	id, legacyIDs := stableCardID(questionLines)
 	card := &Card{
 		ID:             id,
-		LegacyID:       legacyID,
+		LegacyIDs:      legacyIDs,
 		Question:       question,
 		Answer:         answer,
 		Note:           note,
@@ -915,10 +916,10 @@ func parseClozeCard(filtered []string, baseDir string, mode QuizMode, choices, t
 	}
 
 	// Hash the authored text (with braces), so edits re-key the card.
-	id, legacyID := stableCardID(textLines)
+	id, legacyIDs := stableCardID(textLines)
 	return &Card{
 		ID:          id,
-		LegacyID:    legacyID,
+		LegacyIDs:   legacyIDs,
 		Question:    question,
 		Answer:      []Media{{Type: Text, Content: answerText}},
 		AnswerText:  answerText,
@@ -1101,31 +1102,48 @@ func resolvePath(path, baseDir string) string {
 	return filepath.Join(baseDir, path)
 }
 
-// cardID generates a stable ID from question content.
+// cardID generates a stable ID from question content. Lines are delimited in
+// the hash — ["ab","c"] must not collide with ["a","bc"], or the two cards
+// would share one progress history and parseDir would drop one as a duplicate
+// — and trailing whitespace is dropped, so an editor stripping it on save
+// doesn't re-key every card it touches.
 func cardID(questionLines []string) string {
 	h := sha256.New()
 	for _, line := range questionLines {
+		h.Write([]byte(strings.TrimRight(line, " \t")))
+		h.Write([]byte{0})
+	}
+	return fmt.Sprintf("%x", h.Sum(nil))[:12]
+}
+
+// legacyCardID is the hash every older parser produced: raw lines, no
+// delimiter, whitespace and all.
+func legacyCardID(lines []string) string {
+	h := sha256.New()
+	for _, line := range lines {
 		h.Write([]byte(line))
 	}
 	return fmt.Sprintf("%x", h.Sum(nil))[:12]
 }
 
-// stableCardID returns the card's ID and, when it differs, the legacy ID an
-// older parser produced. The ID hashes only the question's text lines, so
-// renaming a media file no longer re-keys the card (and thus no longer orphans
-// its saved progress). A card whose question is media-only has no text to hash,
-// so it keeps hashing the media lines — that's also exactly what the old parser
-// did, hence no legacy ID either.
-func stableCardID(questionLines []string) (id, legacyID string) {
+// stableCardID returns the card's ID and the IDs older parsers produced for
+// it, newest first: the undelimited hash of the text lines, then the
+// undelimited hash of every question line including media. The ID itself
+// hashes only the question's text lines, so renaming a media file doesn't
+// re-key the card. A card whose question is media-only has no text to hash,
+// so it hashes the media lines instead, exactly as before.
+func stableCardID(questionLines []string) (id string, legacyIDs []string) {
 	texts := textOnlyLines(questionLines)
 	if len(texts) == 0 {
-		return cardID(questionLines), ""
+		texts = questionLines
 	}
 	id = cardID(texts)
-	if legacy := cardID(questionLines); legacy != id {
-		legacyID = legacy
+	for _, legacy := range []string{legacyCardID(texts), legacyCardID(questionLines)} {
+		if legacy != id && (len(legacyIDs) == 0 || legacyIDs[len(legacyIDs)-1] != legacy) {
+			legacyIDs = append(legacyIDs, legacy)
+		}
 	}
-	return id, legacyID
+	return id, legacyIDs
 }
 
 // textOnlyLines filters out @img/@audio directive lines, leaving the lines

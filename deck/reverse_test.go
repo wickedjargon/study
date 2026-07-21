@@ -135,13 +135,13 @@ func TestReverseCardNonLatinAnswerIsSkipped(t *testing.T) {
 
 func TestReverseCardPropagatesLegacyID(t *testing.T) {
 	fwd := scriptCard()
-	fwd.LegacyID = "old999"
+	fwd.LegacyIDs = []string{"old999"}
 	c, ok := reverseCard(fwd)
 	if !ok {
 		t.Fatal("reverseCard returned ok=false")
 	}
-	if c.LegacyID != "r:old999" {
-		t.Errorf("legacy id = %q, want %q", c.LegacyID, "r:old999")
+	if len(c.LegacyIDs) == 0 || c.LegacyIDs[0] != "r:old999" {
+		t.Errorf("legacy ids = %v, want r:old999 first", c.LegacyIDs)
 	}
 }
 

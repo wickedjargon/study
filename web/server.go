@@ -630,6 +630,13 @@ func (s *Server) getSession(visitor string, g *group, info *deckInfo, mode sessi
 	if err != nil {
 		return nil, err
 	}
+	// One-time migration of progress saved under older card-ID hash
+	// generations, exactly as session.Load does for the desktop.
+	if store.MigrateIDs(d.Cards) {
+		if err := store.Save(); err != nil {
+			return nil, err
+		}
+	}
 	review := mode == modeReview
 	pool := info.Cards
 	if review {

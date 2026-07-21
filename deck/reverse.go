@@ -112,8 +112,8 @@ func reverseCard(c *Card) (Card, bool) {
 		Mode:      ModeType,
 		TimeLimit: c.TimeLimit,
 	}
-	if c.LegacyID != "" {
-		rc.LegacyID = "r:" + c.LegacyID
+	for _, legacy := range c.LegacyIDs {
+		rc.LegacyIDs = append(rc.LegacyIDs, "r:"+legacy)
 	}
 	return rc, true
 }
