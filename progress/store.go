@@ -53,6 +53,11 @@ func (s *Store) Schedule(cardID string, lapsed bool) {
 	} else if cp.Level < len(reviewLadder) {
 		cp.Level++
 	}
+	// Progress files are hand-editable JSON: a Level beyond the ladder (or a
+	// shorter ladder in a future version) must clamp, not index out of range.
+	if cp.Level > len(reviewLadder) {
+		cp.Level = len(reviewLadder)
+	}
 	days := reviewLadder[cp.Level-1]
 	cp.Due = time.Now().Add(time.Duration(days) * 24 * time.Hour)
 }
@@ -155,10 +160,22 @@ func NewStoreIn(dir, deckPath string) (*Store, error) {
 		logPath: filepath.Join(dir, hash+".log"),
 	}
 
-	// Try to load existing progress.
-	if data, err := s.load(); err == nil {
+	// Try to load existing progress. A missing file is a fresh start; a
+	// present-but-unreadable one is not — silently starting fresh would let
+	// the very next Save overwrite the whole history with an empty one. The
+	// damaged file is set aside for recovery and the loss said out loud.
+	data, err := s.load()
+	switch {
+	case err == nil:
 		s.data = data
-	} else {
+	case !os.IsNotExist(err):
+		aside := s.path + ".corrupt"
+		if renameErr := os.Rename(s.path, aside); renameErr != nil {
+			return nil, fmt.Errorf("progress file %s is unreadable (%v) and can't be set aside: %w", s.path, err, renameErr)
+		}
+		fmt.Fprintf(os.Stderr, "study: progress file %s is unreadable (%v); set aside as %s, starting fresh\n", s.path, err, aside)
+		fallthrough
+	default:
 		s.data = &DeckProgress{
 			DeckPath: deckPath,
 			Cards:    make(map[string]*CardProgress),

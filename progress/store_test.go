@@ -1,8 +1,10 @@
 package progress
 
 import (
-	"study/deck"
+	"os"
 	"testing"
+
+	"study/deck"
 )
 
 func TestStoreRecordAndGet(t *testing.T) {
@@ -245,3 +247,63 @@ func TestAccuracy(t *testing.T) {
 		t.Error("expected 0% for unseen card")
 	}
 }
+
+// TestCorruptProgressFileSetAside: a present-but-unreadable progress file must
+// not silently become a fresh empty history that the next Save writes over.
+// The damaged file is moved aside and a fresh store starts.
+func TestCorruptProgressFileSetAside(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStoreIn(dir, "d.deck")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.RecordCorrect("c1")
+	if err := s.Save(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Corrupt the file in place, as a torn write or disk fault would.
+	if err := os.WriteFile(s.path, []byte("{garbage"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s2, err := NewStoreIn(dir, "d.deck")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := s2.Get("c1").TimesCorrect; got != 0 {
+		t.Errorf("fresh store after corruption has TimesCorrect=%d, want 0", got)
+	}
+	corrupt, err := os.ReadFile(s2.path + ".corrupt")
+	if err != nil {
+		t.Fatalf("damaged file was not set aside: %v", err)
+	}
+	if string(corrupt) != "{garbage" {
+		t.Errorf("set-aside file content %q, want the damaged bytes", corrupt)
+	}
+	// A save from the fresh store must not touch the set-aside evidence.
+	s2.RecordCorrect("c2")
+	if err := s2.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(s2.path + ".corrupt"); err != nil {
+		t.Errorf("set-aside file gone after save: %v", err)
+	}
+}
+
+// TestScheduleClampsLevel: a Level beyond the ladder (hand-edited file or a
+// future version's longer ladder) clamps instead of indexing out of range.
+func TestScheduleClampsLevel(t *testing.T) {
+	dir := t.TempDir()
+	s, err := NewStoreIn(dir, "d.deck")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cp := s.ensure("c1")
+	cp.Level = 99
+	s.Schedule("c1", false)
+	if got := s.Get("c1").Level; got != len(reviewLadder) {
+		t.Errorf("Level = %d, want clamped to %d", got, len(reviewLadder))
+	}
+}
+
