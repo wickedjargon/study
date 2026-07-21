@@ -1005,6 +1005,73 @@ func TestParseClozeEmptyDeletionErrors(t *testing.T) {
 	}
 }
 
+func TestParseClozeMixedEmptyDeletionErrors(t *testing.T) {
+	// One good deletion doesn't excuse an empty one — two blanks with one
+	// answer would quiz on a blank that has none.
+	if _, err := Parse(writeTempDeck(t, "{{a}} and {{}}\n")); err == nil {
+		t.Fatal("expected error for the empty {{}} deletion")
+	}
+}
+
+func TestParseClozeWithNote(t *testing.T) {
+	// cloze --- note: the deletions are the answer, so a single second section
+	// can only be the note.
+	d, err := Parse(writeTempDeck(t, "The capital of France is {{Paris}}.\n---\nOn the Seine.\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	c := d.Cards[0]
+	if !c.Cloze {
+		t.Fatal("expected Cloze flag on a cloze --- note card")
+	}
+	if c.AnswerText != "Paris" {
+		t.Errorf("expected answer %q, got %q", "Paris", c.AnswerText)
+	}
+	if got := questionText(&c); got != "The capital of France is ____." {
+		t.Errorf("expected blanked question, got %q", got)
+	}
+	if len(c.Note) != 1 || c.Note[0].Content != "On the Seine." {
+		t.Errorf("expected note %q, got %v", "On the Seine.", c.Note)
+	}
+
+	// The note must not change the card's identity: progress recorded on the
+	// bare cloze (including cards mis-authored before cloze --- note existed)
+	// follows when a note is added.
+	bare, err := Parse(writeTempDeck(t, "The capital of France is {{Paris}}.\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if bare.Cards[0].ID != c.ID {
+		t.Errorf("note changed the card ID: bare %s vs noted %s", bare.Cards[0].ID, c.ID)
+	}
+}
+
+func TestParseClozeNoteWithDistractorsImpliesChoice(t *testing.T) {
+	d, err := Parse(writeTempDeck(t, "Water is H2{{O}}.\n~ hydrogen\n~ helium\n---\nThe O is oxygen.\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if d.Cards[0].Mode != ModeChoice {
+		t.Errorf("expected distractors to imply choice mode, got %v", d.Cards[0].Mode)
+	}
+	if len(d.Cards[0].Note) == 0 {
+		t.Error("expected the note to survive alongside distractors")
+	}
+}
+
+func TestParseClozeThreeSectionsError(t *testing.T) {
+	// A cloze has no answer section, so cloze --- x --- y can't mean anything.
+	if _, err := Parse(writeTempDeck(t, "fill {{this}}\n---\nnote\n---\nmore\n")); err == nil {
+		t.Fatal("expected error for cloze with three sections")
+	}
+}
+
+func TestParseClozeEmptyNoteError(t *testing.T) {
+	if _, err := Parse(writeTempDeck(t, "fill {{this}}\n---\n")); err == nil {
+		t.Fatal("expected error for cloze with an empty note section")
+	}
+}
+
 func TestParseClozeStillRequiresSeparatorWhenNoBraces(t *testing.T) {
 	// Without braces, a separator-less card is still the existing error, not a
 	// silently-accepted cloze.

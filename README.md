@@ -214,11 +214,14 @@ How do you say "hello"?
 
 ## Cloze
 
-A card with no separator and a `{{...}}` deletion blanks the braced text
-(`____`) and makes it the answer. Multiple deletions join in order:
+A card with a `{{...}}` deletion blanks the braced text (`____`) and makes
+it the answer. Multiple deletions join in order. No separator is needed. A
+single separator may follow, making the second section the card's note:
 
 ```
 The capital of France is {{Paris}}.
+---
+Nicknamed the City of Light.
 ```
 
 ## Set answers
