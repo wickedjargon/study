@@ -55,6 +55,7 @@ func NewViewer() *Viewer {
 // given speed multiplier (1.0 = normal); images ignore it.
 // Returns an error if a required viewer is not available.
 func (v *Viewer) ShowMedia(media []deck.Media, speed float64) error {
+	var clips []string
 	for _, m := range media {
 		switch m.Type {
 		case deck.Image:
@@ -68,10 +69,14 @@ func (v *Viewer) ShowMedia(media []deck.Media, speed float64) error {
 			if v.audioCmd == "" {
 				return fmt.Errorf("no audio player found (install mpv or aplay)")
 			}
-			if err := v.playAudio(m.Content, speed); err != nil {
-				return err
-			}
+			clips = append(clips, m.Content)
 		}
+	}
+	// One player invocation for the whole side: a launch per clip would stop
+	// the previous one (playAudio kills in-flight audio), leaving only the
+	// last clip audible.
+	if len(clips) > 0 {
+		return v.playAudio(clips, speed)
 	}
 	return nil
 }
@@ -112,16 +117,18 @@ func (v *Viewer) showImage(path string) error {
 	return nil
 }
 
-// playAudio launches the audio player as a subprocess. Any clip already
-// playing is stopped first, so a replay restarts cleanly rather than overlapping.
+// playAudio launches the audio player as a single subprocess over all clips —
+// both mpv and aplay play their file arguments back to back, so every clip on
+// a side is heard in order. Any clip already playing is stopped first, so a
+// replay restarts cleanly rather than overlapping.
 //
 // speed is a playback multiplier (1.0 = normal). It is honoured only by mpv,
 // via --speed with pitch correction so slowed-down speech stays intelligible;
-// aplay has no speed control, so the clip plays at normal speed there.
-func (v *Viewer) playAudio(path string, speed float64) error {
+// aplay has no speed control, so the clips play at normal speed there.
+func (v *Viewer) playAudio(paths []string, speed float64) error {
 	v.StopAudio()
 
-	cmd := exec.Command(v.audioCmd, audioArgs(v.audioCmd, path, speed)...)
+	cmd := exec.Command(v.audioCmd, audioArgs(v.audioCmd, paths, speed)...)
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	if err := cmd.Start(); err != nil {
@@ -132,11 +139,11 @@ func (v *Viewer) playAudio(path string, speed float64) error {
 }
 
 // audioArgs builds the argument list (excluding the command name itself) for
-// playing path on audioCmd at the given speed multiplier. The player's fixed
-// flags come first; then, for mpv only and a non-default speed, --speed with
-// pitch correction so slowed speech stays intelligible. aplay has no speed
-// control, so speed is ignored there. The file path is always last.
-func audioArgs(audioCmd, path string, speed float64) []string {
+// playing paths, in order, on audioCmd at the given speed multiplier. The
+// player's fixed flags come first; then, for mpv only and a non-default speed,
+// --speed with pitch correction so slowed speech stays intelligible. aplay has
+// no speed control, so speed is ignored there. The file paths are always last.
+func audioArgs(audioCmd string, paths []string, speed float64) []string {
 	var args []string
 	for _, p := range audioPlayers {
 		if p.cmd == audioCmd {
@@ -147,5 +154,5 @@ func audioArgs(audioCmd, path string, speed float64) []string {
 	if audioCmd == "mpv" && speed > 0 && speed != 1.0 {
 		args = append(args, fmt.Sprintf("--speed=%g", speed), "--audio-pitch-correction=yes")
 	}
-	return append(args, path)
+	return append(args, paths...)
 }
