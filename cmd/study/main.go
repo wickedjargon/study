@@ -132,6 +132,16 @@ func main() {
 	// keystroke from a session. With nothing watched yet there is no library
 	// to show; print the help with a pointer at --watch instead.
 	if flag.NArg() == 0 {
+		// A deck-scoped flag with no deck to act on is a mistake, not a
+		// request for the library; refuse it rather than silently ignore it.
+		var set []string
+		flag.Visit(func(f *flag.Flag) { set = append(set, f.Name) })
+		if stray := strayDeckFlags(set); len(stray) > 0 {
+			for _, name := range stray {
+				fmt.Fprintf(os.Stderr, "✗ --%s needs a deck argument\n", name)
+			}
+			os.Exit(1)
+		}
 		reg := openRegistry()
 		if reg.Empty() {
 			fmt.Println(helpText)
@@ -310,6 +320,38 @@ func main() {
 		fmt.Fprintf(os.Stderr, "✗ %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// deckScopedFlags names every flag that configures or acts on a single deck
+// and so is meaningless without a deck argument. The rest — library
+// maintenance and --help — stand alone. Kept in sync with the definitions in
+// main.
+var deckScopedFlags = map[string]bool{
+	"reverse":         true,
+	"order":           true,
+	"answer-mode":     true,
+	"ahead":           true,
+	"time-limit":      true,
+	"wrong-pause":     true,
+	"preview-new":     true,
+	"new-per-session": true,
+	"font-size":       true,
+	"audio-speed":     true,
+	"stats":           true,
+	"forget":          true,
+}
+
+// strayDeckFlags filters the flag names actually set on the command line down
+// to the deck-scoped ones — the flags that need a deck argument to mean
+// anything.
+func strayDeckFlags(set []string) []string {
+	var stray []string
+	for _, name := range set {
+		if deckScopedFlags[name] {
+			stray = append(stray, name)
+		}
+	}
+	return stray
 }
 
 // openRegistry loads the library registry from the study data directory,
