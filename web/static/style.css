@@ -126,8 +126,10 @@ body {
   right: 0;
   top: 1.7rem;
   z-index: 10;
-  width: max-content;
-  max-width: min(19rem, 88vw);
+  /* Wide enough for the settings rows' label + toggle at Firefox's font
+     metrics — a cap below the width just reintroduces the overflow. */
+  width: min(21rem, 88vw);
+  max-width: 88vw; /* the account menu is max-content; a long email still caps */
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -136,7 +138,6 @@ body {
   display: grid;
   gap: 0.1rem;
 }
-.menuitems { width: 21rem; }
 .mact {
   width: 100%;
   text-align: left;
@@ -155,6 +156,9 @@ body {
 .mset { padding: 0.5rem 0.8rem; }
 .mset-head {
   display: flex;
+  /* On a viewport too narrow even for 88vw to hold the row, the toggle
+     wraps under its label rather than spilling past the panel edge. */
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: 0.8rem;
