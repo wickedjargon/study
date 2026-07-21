@@ -29,6 +29,9 @@ echo "== sync decks =="
 # rsync never does (it only deletes inside each transferred tree).
 STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
+# mktemp makes the dir 0700 and rsync -a would stamp that onto the server's
+# decks/ itself, locking the service user out of every pack.
+chmod 755 "$STAGE"
 for d in \
 	"$P/language-packs" \
 	"$P/study-mexican-spanish.deck" \
