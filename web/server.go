@@ -70,7 +70,9 @@ type Server struct {
 	sessions map[string]*session
 
 	mailMu   sync.Mutex
-	lastMail map[string]time.Time
+	lastMail map[string]time.Time   // per-address cooldown reservations
+	mailByIP map[string][]time.Time // send times per client IP, last hour
+	mailAll  []time.Time            // all send times, last hour
 }
 
 // group is one catalog entry on the home page: a language or subject whose
@@ -204,6 +206,7 @@ func New(deckPaths []string, dataDir, baseURL string, mailer Mailer) (*Server, e
 		secure:   strings.HasPrefix(baseURL, "https://"),
 		sessions: make(map[string]*session),
 		lastMail: make(map[string]time.Time),
+		mailByIP: make(map[string][]time.Time),
 	}
 
 	var nested [][3]string
@@ -534,6 +537,7 @@ func (s *Server) guestID(w http.ResponseWriter, r *http.Request) string {
 		Path:     "/",
 		MaxAge:   10 * 365 * 24 * 60 * 60,
 		HttpOnly: true,
+		Secure:   s.secure,
 		SameSite: http.SameSiteLaxMode,
 	})
 	return id
@@ -578,13 +582,14 @@ func effectiveMode(forced string, info *deckInfo) string {
 }
 
 // setForcedMode persists the answering-mode override for a group; "" clears.
-func setForcedMode(w http.ResponseWriter, g *group, v string) {
+func (s *Server) setForcedMode(w http.ResponseWriter, g *group, v string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "mode-" + g.Slug,
 		Value:    v,
 		Path:     "/",
 		MaxAge:   10 * 365 * 24 * 60 * 60,
 		HttpOnly: true,
+		Secure:   s.secure,
 		SameSite: http.SameSiteLaxMode,
 	})
 }
@@ -599,7 +604,7 @@ func introsOn(r *http.Request) bool {
 }
 
 // setIntros persists the introduction preference.
-func setIntros(w http.ResponseWriter, on bool) {
+func (s *Server) setIntros(w http.ResponseWriter, on bool) {
 	v := "on"
 	if !on {
 		v = "off"
@@ -610,6 +615,7 @@ func setIntros(w http.ResponseWriter, on bool) {
 		Path:     "/",
 		MaxAge:   10 * 365 * 24 * 60 * 60,
 		HttpOnly: true,
+		Secure:   s.secure,
 		SameSite: http.SameSiteLaxMode,
 	})
 }
@@ -775,7 +781,7 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 	case "intros":
 		// Flip the preference and recompose the quiz under it.
 		intros = !intros
-		setIntros(w, intros)
+		s.setIntros(w, intros)
 		mode = modeQuiz
 	case "mode":
 		// Flip between typed and choice — from whatever the session is
@@ -785,7 +791,7 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 		} else {
 			forced = "type"
 		}
-		setForcedMode(w, g, forced)
+		s.setForcedMode(w, g, forced)
 		mode = modeQuiz
 	}
 	sess, err := s.getSession(visitor, g, info, mode, intros, forced)

@@ -137,10 +137,16 @@ func (ids *identity) findOrCreateUser(email string) (id string, isNew bool, err 
 }
 
 // createSession logs a user in on one device, returning the cookie value.
+// Expired sessions are swept here, the way createToken sweeps tokens — the
+// only place the table grows.
 func (ids *identity) createSession(userID string) (string, error) {
 	secret, hash := newSecret()
+	now := time.Now()
+	if _, err := ids.db.Exec(`DELETE FROM sessions WHERE expires < ?`, now.Unix()); err != nil {
+		return "", err
+	}
 	_, err := ids.db.Exec(`INSERT INTO sessions (hash, user, expires) VALUES (?, ?, ?)`,
-		hash, userID, time.Now().Add(sessionLife).Unix())
+		hash, userID, now.Add(sessionLife).Unix())
 	if err != nil {
 		return "", err
 	}

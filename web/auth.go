@@ -10,6 +10,7 @@ package web
 
 import (
 	"log"
+	"net"
 	"net/http"
 	"net/mail"
 	"os"
@@ -21,6 +22,30 @@ import (
 // mailCooldown is the least time between two login emails to one address —
 // a typo'd resubmit works a minute later, a loop can't drain the send quota.
 const mailCooldown = time.Minute
+
+// mailPerIPHourly and mailGlobalHourly cap outbound login email beyond the
+// per-address cooldown: the endpoint is unauthenticated, so without these an
+// address-spraying loop could drain the send quota (and the domain's
+// reputation) while honoring every per-address cooldown.
+const (
+	mailPerIPHourly  = 5
+	mailGlobalHourly = 30
+)
+
+// sameSitePOST reports whether a state-changing POST came from this site's
+// own pages. The auth POSTs can't lean on cookies for it — redeeming a login
+// link needs none — so without this a cross-site form could log a victim
+// into the attacker's account. Requests that declare themselves cross-site
+// are refused; absent headers (curl, old browsers) pass.
+func (s *Server) sameSitePOST(r *http.Request) bool {
+	if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+		return false
+	}
+	if origin := r.Header.Get("Origin"); origin != "" && origin != "null" && origin != s.baseURL {
+		return false
+	}
+	return true
+}
 
 // loginView drives the login template through its stages: the form ("form"),
 // the check-your-inbox page ("sent"), and the expired-link page ("gone").
@@ -74,6 +99,10 @@ func (s *Server) handleLoginSend(w http.ResponseWriter, r *http.Request) {
 	if s.localGuard(w, r) {
 		return
 	}
+	if !s.sameSitePOST(r) {
+		http.Error(w, "cross-site request refused", http.StatusForbidden)
+		return
+	}
 	addr, err := mail.ParseAddress(strings.TrimSpace(r.FormValue("email")))
 	if err != nil || len(addr.Address) > 254 {
 		s.render(w, "login", loginView{Stage: "form", Error: "That doesn't look like an email address"})
@@ -81,8 +110,9 @@ func (s *Server) handleLoginSend(w http.ResponseWriter, r *http.Request) {
 	}
 	email := strings.ToLower(addr.Address)
 
-	if !s.mayMail(email) {
-		// Recently sent: point at the inbox again rather than re-emailing.
+	if !s.mayMail(email, clientIP(r)) {
+		// Recently sent (or over a cap): point at the inbox again rather
+		// than re-emailing.
 		s.render(w, "login", loginView{Stage: "sent", Email: email})
 		return
 	}
@@ -92,14 +122,34 @@ func (s *Server) handleLoginSend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.mailer.SendLogin(email, s.baseURL+"/auth/"+token); err != nil {
+		// The email never left: clear the address cooldown so an immediate
+		// retry isn't told to check an inbox holding nothing. The IP and
+		// global counts stand — failures spend quota too.
+		s.unrecordMail(email)
 		s.fail(w, err)
 		return
 	}
 	s.render(w, "login", loginView{Stage: "sent", Email: email})
 }
 
-// mayMail enforces the per-address cooldown.
-func (s *Server) mayMail(email string) bool {
+// clientIP is the sending host for the per-IP mail cap: the proxy's
+// forwarded address when present (nginx fronts the deploy), else the peer.
+// Spoofable when reached directly — the global ceiling is the backstop.
+func clientIP(r *http.Request) string {
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		return strings.TrimSpace(strings.Split(fwd, ",")[0])
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+// mayMail reserves the right to send one login email: the per-address
+// cooldown plus per-IP and global hourly ceilings. Reserving (rather than
+// recording after the send) keeps two racing submits from both mailing.
+func (s *Server) mayMail(email, ip string) bool {
 	s.mailMu.Lock()
 	defer s.mailMu.Unlock()
 	now := time.Now()
@@ -108,11 +158,38 @@ func (s *Server) mayMail(email string) bool {
 			delete(s.lastMail, e)
 		}
 	}
+	prune := func(times []time.Time) []time.Time {
+		kept := times[:0]
+		for _, t := range times {
+			if now.Sub(t) <= time.Hour {
+				kept = append(kept, t)
+			}
+		}
+		return kept
+	}
+	s.mailAll = prune(s.mailAll)
+	s.mailByIP[ip] = prune(s.mailByIP[ip])
+	if len(s.mailByIP[ip]) == 0 {
+		delete(s.mailByIP, ip)
+	}
+
 	if _, recent := s.lastMail[email]; recent {
 		return false
 	}
+	if len(s.mailByIP[ip]) >= mailPerIPHourly || len(s.mailAll) >= mailGlobalHourly {
+		return false
+	}
 	s.lastMail[email] = now
+	s.mailByIP[ip] = append(s.mailByIP[ip], now)
+	s.mailAll = append(s.mailAll, now)
 	return true
+}
+
+// unrecordMail releases a failed send's address cooldown.
+func (s *Server) unrecordMail(email string) {
+	s.mailMu.Lock()
+	defer s.mailMu.Unlock()
+	delete(s.lastMail, email)
 }
 
 func (s *Server) handleAuthPage(w http.ResponseWriter, r *http.Request) {
@@ -127,6 +204,10 @@ func (s *Server) handleAuthPage(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleAuthRedeem(w http.ResponseWriter, r *http.Request) {
 	if s.localGuard(w, r) {
+		return
+	}
+	if !s.sameSitePOST(r) {
+		http.Error(w, "cross-site request refused", http.StatusForbidden)
 		return
 	}
 	email, guest, err := s.ids.redeemToken(r.PathValue("token"))
