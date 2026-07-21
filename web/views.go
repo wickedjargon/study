@@ -101,9 +101,13 @@ type quizView struct {
 	// answer is visible (result, preview, flip-through) — never with an
 	// unanswered question.
 	Note []mediaView
-	Choice     bool
-	Options    []string
-	TimeLimit  int
+	Choice  bool
+	Options []string
+	// TimeLimit marks a timed card; TimeRemaining is what the countdown
+	// starts from — the serve's clock keeps running across refreshes and a
+	// set card's entry round-trips.
+	TimeLimit     int
+	TimeRemaining int
 	AudioSpeed float64
 	IsNew      bool
 	IsLearning bool
@@ -317,6 +321,7 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		view.Choice = card.Mode == deck.ModeChoice
 		view.Options = e.Options()
 		view.TimeLimit = e.TimeLimit()
+		view.TimeRemaining = e.TimeRemaining()
 		view.IsNew = e.CurrentIsNew()
 		view.IsLearning = e.CurrentIsLearning()
 		view.IsRetry = e.IsRetry()
@@ -363,10 +368,12 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		view.Screen = "result"
 		view.Position = fmt.Sprintf("[%d/%d]", e.TotalSeen, e.TotalSeen+e.Remaining())
 		if res == nil {
-			// A session composed fresh can't be in ShowResult without a
-			// result; guard anyway rather than render a hole.
-			view.Screen = "question"
-			break
+			// A session can't reach ShowResult without composing the result
+			// itself; if the invariant ever breaks, advance and re-render
+			// rather than serve a dead screen whose forms only loop back.
+			e.Next()
+			http.Redirect(w, r, quizURL(g, info), http.StatusSeeOther)
+			return
 		}
 		view.Question = mediaViews(mediaBase, sess.deck.ImgTint, res.Card.Question)
 		view.AnswerSide = mediaViews(mediaBase, sess.deck.ImgTint, res.Card.Answer)
@@ -376,6 +383,11 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		view.ResultNoIdea = res.NoIdea
 		view.ResultTyped = res.Typed
 		view.ResultAnswer = res.Answer
+		// A wrong pick shows what was picked, the way a wrong typed answer
+		// shows what was typed; the engine still holds the serve's options.
+		if opts := e.Options(); res.Chosen >= 0 && res.Chosen < len(opts) && view.ResultTyped == "" {
+			view.ResultTyped = opts[res.Chosen]
+		}
 		if res.ConfusedWith != nil {
 			view.Confused = mediaViews(mediaBase, sess.deck.ImgTint, res.ConfusedWith.Question)
 		}

@@ -100,7 +100,7 @@
       {{else if .IsNew}}<span class="badge new">new</span>
       {{else if .IsLearning}}<span class="badge learning">learning</span>
       {{else if .IsAhead}}<span class="badge ahead">ahead</span>{{end}}
-      {{if .TimeLimit}}<span class="badge timer" id="timer" data-limit="{{.TimeLimit}}">{{.TimeLimit}}s</span>{{end}}
+      {{if .TimeLimit}}<span class="badge timer" id="timer" data-limit="{{.TimeRemaining}}">{{.TimeRemaining}}s</span>{{end}}
     </div>
     {{template "media" .Question}}
   </section>

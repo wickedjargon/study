@@ -74,7 +74,11 @@
   }
 
   document.addEventListener("keydown", function (ev) {
-    if (ev.target.tagName === "INPUT" || ev.ctrlKey || ev.altKey || ev.metaKey) return;
+    // A focused control keeps its native activation: enter on "flip through
+    // instead" must not fire the primary button instead.
+    var tag = ev.target.tagName;
+    if (tag === "INPUT" || tag === "BUTTON" || tag === "A" || tag === "SELECT" || tag === "TEXTAREA") return;
+    if (ev.ctrlKey || ev.altKey || ev.metaKey) return;
 
     // 1-9 pick a choice; 0 declines instead of guessing blind.
     var choices = document.querySelectorAll(".choices .choice");

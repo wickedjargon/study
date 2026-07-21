@@ -450,7 +450,14 @@ func newDeckInfo(d *deck.Deck, name, slug string, taken map[string]bool) *deckIn
 		for _, side := range [][]deck.Media{c.Question, c.Answer} {
 			for _, m := range side {
 				if m.Type == deck.Image || m.Type == deck.Audio {
-					info.media[filepath.Base(m.Content)] = m.Content
+					base := filepath.Base(m.Content)
+					if prev, ok := info.media[base]; ok && prev != m.Content {
+						// Same base name, different files: the table serves
+						// one of them for both cards. Say so instead of
+						// silently showing the wrong image.
+						log.Printf("%s: media name collision, %s shadows %s", name, m.Content, prev)
+					}
+					info.media[base] = m.Content
 				}
 			}
 		}

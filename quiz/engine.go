@@ -931,6 +931,23 @@ func (e *Engine) TimeLimit() int {
 	return e.current.EffectiveTimeLimit(e.deck.TimeLimit)
 }
 
+// TimeRemaining returns how many whole seconds of the current card's limit
+// are left (floored at zero), or 0 when the card has no limit. The web
+// renders this instead of the full limit so a page refresh or a set card's
+// entry round-trips can't restart the clock; the GUI keeps its own deadline
+// from the same serve. Display and timeout only — elapsed time never feeds
+// the scheduler.
+func (e *Engine) TimeRemaining() int {
+	limit := e.TimeLimit()
+	if limit == 0 || e.servedAt.IsZero() {
+		return limit
+	}
+	if left := limit - int(time.Since(e.servedAt).Seconds()); left > 0 {
+		return left
+	}
+	return 0
+}
+
 // AnswerTimeout records the current card as wrong because its time limit
 // expired before the user answered. Transitions to ShowResult.
 func (e *Engine) AnswerTimeout() *Result {
