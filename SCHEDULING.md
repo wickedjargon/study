@@ -61,6 +61,10 @@ from 86 to 94) and its load balancer picks the least-loaded day inside
 the fuzz range. Fuzz alone is a few lines in `Schedule`. Balancing needs
 a due-count-per-day query on the store and is optional on top.
 
+**Landed 2026-07-23** (fuzz only): graduated Anki-band fuzz in
+`fuzzDays` — 3→2-4, 7→6-8, 14→13-15, 30→28-32, 60→56-64, 120→113-127;
+the 1-day rung stays exact. Load balancing remains open.
+
 ### 3. Day-anchored due dates
 
 `Due = now + days * 24h` means a card studied at 21:00 is not due at

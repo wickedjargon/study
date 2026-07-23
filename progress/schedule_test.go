@@ -5,6 +5,35 @@ import (
 	"time"
 )
 
+// fuzzBands pins the documented fuzz range of each ladder interval: the
+// bounds fuzzDays may return, inclusive.
+var fuzzBands = map[int][2]int{
+	1: {1, 1}, 3: {2, 4}, 7: {6, 8}, 14: {13, 15},
+	30: {28, 32}, 60: {56, 64}, 120: {113, 127},
+}
+
+// TestFuzzDays: every draw stays inside the rung's documented band, the
+// 1-day rung never fuzzes, and longer rungs actually vary.
+func TestFuzzDays(t *testing.T) {
+	for _, days := range reviewLadder {
+		band := fuzzBands[days]
+		seen := map[int]bool{}
+		for i := 0; i < 200; i++ {
+			got := fuzzDays(days)
+			if got < band[0] || got > band[1] {
+				t.Fatalf("fuzzDays(%d) = %d, want within [%d, %d]", days, got, band[0], band[1])
+			}
+			seen[got] = true
+		}
+		if days >= 3 && len(seen) < 2 {
+			t.Errorf("fuzzDays(%d) returned only %v over 200 draws; want spread", days, seen)
+		}
+		if days == 1 && len(seen) != 1 {
+			t.Errorf("fuzzDays(1) varied: %v; the 1-day rung must stay exact", seen)
+		}
+	}
+}
+
 func newTestStore(t *testing.T) *Store {
 	t.Helper()
 	s, err := NewStore(t.TempDir() + "/d.deck")
@@ -19,16 +48,17 @@ func TestScheduleClimbsLadder(t *testing.T) {
 	now := time.Now()
 
 	// Each clean session climbs one rung: 1, 3, 7, ... days. Due lands at
-	// the start of the local day the interval reaches, not N*24h out.
+	// the start of a local day inside the rung's fuzz band, not N*24h out.
 	for i, days := range reviewLadder {
 		s.Schedule("c", false)
 		cp := s.Get("c")
 		if cp.Level != i+1 {
 			t.Fatalf("session %d: Level = %d, want %d", i+1, cp.Level, i+1)
 		}
-		want := dayStart(now.AddDate(0, 0, days))
-		if !cp.Due.Equal(want) {
-			t.Fatalf("session %d: Due = %v, want %v", i+1, cp.Due, want)
+		band := fuzzBands[days]
+		lo, hi := dayStart(now.AddDate(0, 0, band[0])), dayStart(now.AddDate(0, 0, band[1]))
+		if cp.Due.Before(lo) || cp.Due.After(hi) {
+			t.Fatalf("session %d: Due = %v, want a day start in [%v, %v]", i+1, cp.Due, lo, hi)
 		}
 	}
 
@@ -61,9 +91,11 @@ func TestScheduleLapseHalvesLevel(t *testing.T) {
 		if cp.Level != tc.want {
 			t.Errorf("Level after lapse at %d = %d, want %d", tc.level, cp.Level, tc.want)
 		}
-		want := dayStart(time.Now().AddDate(0, 0, reviewLadder[tc.want-1]))
-		if !cp.Due.Equal(want) {
-			t.Errorf("Due after lapse at %d = %v, want %v", tc.level, cp.Due, want)
+		band := fuzzBands[reviewLadder[tc.want-1]]
+		now := time.Now()
+		lo, hi := dayStart(now.AddDate(0, 0, band[0])), dayStart(now.AddDate(0, 0, band[1]))
+		if cp.Due.Before(lo) || cp.Due.After(hi) {
+			t.Errorf("Due after lapse at %d = %v, want a day start in [%v, %v]", tc.level, cp.Due, lo, hi)
 		}
 	}
 }

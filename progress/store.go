@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"math"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"sort"
@@ -76,7 +78,7 @@ func (s *Store) Schedule(cardID string, lapsed bool) {
 	if cp.Level > len(reviewLadder) {
 		cp.Level = len(reviewLadder)
 	}
-	days := reviewLadder[cp.Level-1]
+	days := fuzzDays(reviewLadder[cp.Level-1])
 	// Due anchors to the start of the local day the interval lands on: an
 	// interval means "N days later", not "N*24h after the moment studied". A
 	// clock-based due time made a card studied at 21:00 not yet due at 20:00
@@ -90,6 +92,35 @@ func (s *Store) Schedule(cardID string, lapsed bool) {
 func dayStart(t time.Time) time.Time {
 	y, m, d := t.Local().Date()
 	return time.Date(y, m, d, 0, 0, 0, 0, time.Local)
+}
+
+// fuzzDays spreads an interval by a graduated random fuzz: Anki's bands —
+// 15% of the span beyond 2.5 days, plus 10% beyond 7, plus 5% beyond 20 —
+// rounded and at least ±1 day once fuzz applies at all; 1-day intervals
+// stay exact. On this ladder: 3→2-4, 7→6-8, 14→13-15, 30→28-32, 60→56-64,
+// 120→113-127. Deterministic intervals kept same-day cohorts in lockstep
+// forever: identical due dates, spiky review days, and the deck returning
+// in a recognizable order, letting group context prime answers. The credit
+// computation above reads the unfuzzed rung as the scheduled interval, so
+// survival estimates are off by at most the fuzz — noise the whole-rung
+// granularity absorbs.
+func fuzzDays(days int) int {
+	d := float64(days)
+	if d < 2.5 {
+		return days
+	}
+	delta := 0.15 * (math.Min(d, 7) - 2.5)
+	if d > 7 {
+		delta += 0.10 * (math.Min(d, 20) - 7)
+	}
+	if d > 20 {
+		delta += 0.05 * (d - 20)
+	}
+	f := int(math.Round(delta))
+	if f < 1 {
+		f = 1
+	}
+	return days - f + rand.Intn(2*f+1)
 }
 
 // DueNow reports whether the card should be reviewed now. Cards with no
