@@ -78,8 +78,15 @@ type quizView struct {
 	Hue       int
 	Reviewing bool
 	Email     string // logged-in address, "" for a guest
-	Intros    bool   // the guest's introduction preference
-	ModeLabel string // the session's answering mode: "type" or "choice"
+	Intros    bool   // the effective introduction preference
+	// The kebab settings rows, study decks only. Each row is three segments —
+	// the guest's override or "deck" — and the deck segment's resolution is
+	// spelled out beside the row so it isn't a mystery box.
+	Trivia        bool   // trivia decks carry no settings rows
+	ModeSetting   string // selected Answering segment: "deck", "type", "choice"
+	ModeDesc      string // what "deck" answers as: "typed in", "multiple choice", "mixed"
+	IntrosSetting string // selected Introductions segment: "deck", "on", "off"
+	DeckIntros    string // what "deck" resolves to: "on" or "off"
 	// Position is the desktop's [seen/total] session counter, formatted
 	// per screen exactly as gui does.
 	Position string
@@ -265,8 +272,8 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	visitor := s.visitorID(w, r)
-	intros := introsOn(r, g, info)
-	forced := forcedMode(r, g)
+	introsSetting, intros := introsState(r, g, info)
+	forced := forcedMode(r, g, info)
 	sess, err := s.getSession(visitor, g, info, modeKeep, intros, forced)
 	if err != nil {
 		s.fail(w, err)
@@ -284,9 +291,13 @@ func (s *Server) handleQuiz(w http.ResponseWriter, r *http.Request) {
 		DeckName:  info.Name,
 		Hue:       g.Hue,
 		Reviewing: sess.review,
-		Intros:    intros,
-		ModeLabel: effectiveMode(forced, info),
-		Nonce:     sess.nonce(),
+		Intros:        intros,
+		Trivia:        info.Kind == deck.KindTrivia,
+		ModeSetting:   modeSetting(forced),
+		ModeDesc:      info.ModeDesc,
+		IntrosSetting: introsSetting,
+		DeckIntros:    onOff(headerIntros(info)),
+		Nonce:         sess.nonce(),
 		Remaining: e.Remaining(),
 		Seen:      e.TotalSeen,
 		Correct:   e.TotalCorrect,

@@ -421,6 +421,35 @@ func TestSetCardFlow(t *testing.T) {
 	}
 }
 
+// TestTriviaDeckHasNoSettings: a # kind: trivia deck offers no session
+// settings — no Answering or Introductions rows in the menu — and a crafted
+// POST to the settings actions is a no-op: the designer's presentation is
+// the game, and leftover override cookies are ignored.
+func TestTriviaDeckHasNoSettings(t *testing.T) {
+	srv := newTestServer(t, "# kind: trivia\n\nA or B?\n---\nA\n~ B\n")
+	c := srv.bareClient()
+
+	page := srv.getPage(c, srv.quiz)
+	if strings.Contains(page, "Answering") || strings.Contains(page, "Introductions") {
+		t.Fatal("trivia deck renders settings rows")
+	}
+	// Trivia opens cold (kind bundles preview-new off) as a choice card.
+	if !strings.Contains(page, `name="choice"`) {
+		t.Fatal("trivia card did not render its choice form")
+	}
+
+	// A crafted force-typed POST must not change the served mode.
+	srv.postForm(c, srv.quiz+"/mode", url.Values{"v": {"type"}}, nil)
+	if page := srv.getPage(c, srv.quiz); !strings.Contains(page, `name="choice"`) {
+		t.Fatal("crafted mode POST forced a trivia deck out of its authored mode")
+	}
+	// A crafted intros POST must not turn introductions on.
+	srv.postForm(c, srv.quiz+"/intros", url.Values{"v": {"on"}}, nil)
+	if page := srv.getPage(c, srv.quiz); strings.Contains(page, "quiz me") {
+		t.Fatal("crafted intros POST turned introductions on for a trivia deck")
+	}
+}
+
 // TestIntrosSeededFromHeader: a guest who has never touched the
 // Introductions toggle starts from the deck's # preview-new: header — an
 // explicit off opens cold, silence teaches first — and flipping the toggle
@@ -435,11 +464,18 @@ func TestIntrosSeededFromHeader(t *testing.T) {
 		t.Fatal("header preview-new: off did not seed intros off for a fresh guest")
 	}
 
-	// The toggle beats the header once used.
-	srv.postForm(c, srv.quiz+"/intros", url.Values{}, nil)
+	// The "on" segment beats the header once picked.
+	srv.postForm(c, srv.quiz+"/intros", url.Values{"v": {"on"}}, nil)
 	page = srv.getPage(c, srv.quiz)
 	if !strings.Contains(page, "quiz me") {
-		t.Fatal("flipping the toggle did not override the header")
+		t.Fatal("picking the on segment did not override the header")
+	}
+
+	// The "deck" segment returns to the header default.
+	srv.postForm(c, srv.quiz+"/intros", url.Values{"v": {"deck"}}, nil)
+	page = srv.getPage(c, srv.quiz)
+	if !strings.Contains(page, `name="answer"`) || strings.Contains(page, "quiz me") {
+		t.Fatal("picking the deck segment did not return to the header default")
 	}
 
 	// No header: a fresh guest is taught first.
@@ -449,8 +485,16 @@ func TestIntrosSeededFromHeader(t *testing.T) {
 		t.Fatal("headerless deck did not default a fresh guest to intros on")
 	}
 
-	// The legacy site-wide cookie still counts as a stated choice.
+	// The legacy site-wide cookie still counts as a stated choice…
 	if page := srv2.getPage(srv2.client(), srv2.quiz); !strings.Contains(page, `name="answer"`) {
 		t.Fatal("legacy intros=off cookie no longer honored")
+	}
+
+	// …but the per-group "deck" sentinel shadows it: choosing to follow the
+	// deck must not resurface a pre-per-group site-wide override.
+	c3 := srv2.client()
+	srv2.postForm(c3, srv2.quiz+"/intros", url.Values{"v": {"deck"}}, nil)
+	if page := srv2.getPage(c3, srv2.quiz); !strings.Contains(page, "quiz me") {
+		t.Fatal("deck sentinel did not shadow the legacy site-wide cookie")
 	}
 }

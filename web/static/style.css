@@ -126,9 +126,10 @@ body {
   right: 0;
   top: 1.7rem;
   z-index: 10;
-  /* Wide enough for the settings rows' label + toggle at Firefox's font
-     metrics — a cap below the width just reintroduces the overflow. */
-  width: min(21rem, 88vw);
+  /* Wide enough for the settings rows' label + three-segment toggle
+     (deck / typed in / multiple choice) at Firefox's font metrics — a cap
+     below the width just reintroduces the overflow. */
+  width: min(22.5rem, 88vw);
   max-width: 88vw; /* the account menu is max-content; a long email still caps */
   background: var(--card);
   border: 1px solid var(--line);
@@ -152,7 +153,8 @@ body {
 .mi-title { display: block; font-size: 0.9rem; font-weight: 600; }
 .mi-desc { display: block; font-size: 0.78rem; color: var(--dim); margin-top: 0.1rem; }
 
-/* settings rows: a label, a two-segment toggle, and an explanation */
+/* settings rows: a label, a three-segment toggle (the deck's own setting
+   plus the two overrides), and an explanation */
 .mset { padding: 0.5rem 0.8rem; }
 .mset-head {
   display: flex;

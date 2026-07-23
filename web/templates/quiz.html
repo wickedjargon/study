@@ -26,37 +26,55 @@
           <span class="mi-desc">ready to be quizzed</span>
         </button></form>
         {{else}}
+        {{if not .Trivia}}
         <div class="mset">
           <div class="mset-head">
             <span class="mi-title">Answering</span>
             <span class="seg">
-              {{if eq .ModeLabel "type"}}
-              <span class="seg-on">typed in</span>
-              <form method="post" action="{{.Base}}/mode"><button class="seg-off">multiple choice</button></form>
+              {{if eq .ModeSetting "deck"}}
+              <span class="seg-on">deck</span>
               {{else}}
-              <form method="post" action="{{.Base}}/mode"><button class="seg-off">typed in</button></form>
+              <form method="post" action="{{.Base}}/mode"><button class="seg-off" name="v" value="deck">deck</button></form>
+              {{end}}
+              {{if eq .ModeSetting "type"}}
+              <span class="seg-on">typed in</span>
+              {{else}}
+              <form method="post" action="{{.Base}}/mode"><button class="seg-off" name="v" value="type">typed in</button></form>
+              {{end}}
+              {{if eq .ModeSetting "choice"}}
               <span class="seg-on">multiple choice</span>
+              {{else}}
+              <form method="post" action="{{.Base}}/mode"><button class="seg-off" name="v" value="choice">multiple choice</button></form>
               {{end}}
             </span>
           </div>
-          <span class="mi-desc">how answers are entered</span>
+          <span class="mi-desc">how answers are entered · deck: {{.ModeDesc}}</span>
         </div>
         <div class="mset">
           <div class="mset-head">
             <span class="mi-title">Introductions</span>
             <span class="seg">
-              {{if .Intros}}
-              <span class="seg-on">on</span>
-              <form method="post" action="{{.Base}}/intros"><button class="seg-off">off</button></form>
+              {{if eq .IntrosSetting "deck"}}
+              <span class="seg-on">deck</span>
               {{else}}
-              <form method="post" action="{{.Base}}/intros"><button class="seg-off">on</button></form>
+              <form method="post" action="{{.Base}}/intros"><button class="seg-off" name="v" value="deck">deck</button></form>
+              {{end}}
+              {{if eq .IntrosSetting "on"}}
+              <span class="seg-on">on</span>
+              {{else}}
+              <form method="post" action="{{.Base}}/intros"><button class="seg-off" name="v" value="on">on</button></form>
+              {{end}}
+              {{if eq .IntrosSetting "off"}}
               <span class="seg-on">off</span>
+              {{else}}
+              <form method="post" action="{{.Base}}/intros"><button class="seg-off" name="v" value="off">off</button></form>
               {{end}}
             </span>
           </div>
-          <span class="mi-desc">reveal answers for new cards on first view</span>
+          <span class="mi-desc">reveal answers for new cards on first view · deck: {{.DeckIntros}}</span>
         </div>
         <hr class="menusep">
+        {{end}}
         <form method="post" action="{{.Base}}/review"><button class="mact">
           <span class="mi-title">Review this deck</span>
           <span class="mi-desc">review cards with answers revealed</span>
@@ -167,7 +185,7 @@
   <div class="actions" id="primaryform">
     <form method="post" action="{{.Base}}/preview"><input type="hidden" name="serve" value="{{.Nonce}}"><button class="primary">{{if .FlipMode}}next →{{else}}got it: quiz me{{end}}</button></form>
     {{if not .FlipMode}}
-    <form method="post" action="{{.Base}}/intros"><button class="quiet" title="stop revealing answers on first view">skip intros</button></form>
+    <form method="post" action="{{.Base}}/intros"><button class="quiet" name="v" value="off" title="stop revealing answers on first view">skip intros</button></form>
     {{end}}
   </div>
 

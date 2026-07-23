@@ -120,6 +120,14 @@ type deckInfo struct {
 	Name string
 	Path string
 	Mode deck.QuizMode // the deck's authored answer mode
+	// Kind separates study decks from trivia. Trivia decks carry no session
+	// settings — the designer's presentation is the game — and ignore any
+	// leftover override cookies.
+	Kind deck.DeckKind
+	// ModeDesc names the deck's authored answering across its cards — "typed
+	// in", "multiple choice", or "mixed" — shown on the Answering row so the
+	// "deck" segment isn't a mystery box.
+	ModeDesc string
 	// Preview/PreviewSet carry the header's # preview-new: — the seed for
 	// a guest who has never touched the Introductions toggle, so a trivia
 	// deck can open cold while a vocabulary deck teaches first.
@@ -434,6 +442,28 @@ func parseDeck(path string) *deck.Deck {
 	return d
 }
 
+// modeDesc names the authored answering across a card list. Per-card modes
+// (distractor-implied choice, per-card directives) make the deck level alone
+// a lie — a typed deck of choice cards would read "typed in".
+func modeDesc(cards []deck.Card) string {
+	typed, choice := false, false
+	for _, c := range cards {
+		if c.Mode == deck.ModeChoice {
+			choice = true
+		} else {
+			typed = true
+		}
+	}
+	switch {
+	case typed && choice:
+		return "mixed"
+	case choice:
+		return "multiple choice"
+	default:
+		return "typed in"
+	}
+}
+
 // newDeckInfo builds a catalog deck from a parse, claiming a unique slug
 // from taken.
 func newDeckInfo(d *deck.Deck, name, slug string, taken map[string]bool) *deckInfo {
@@ -448,6 +478,8 @@ func newDeckInfo(d *deck.Deck, name, slug string, taken map[string]bool) *deckIn
 		Name:       name,
 		Path:       d.Path,
 		Mode:       d.Mode,
+		Kind:       d.Kind,
+		ModeDesc:   modeDesc(d.Cards),
 		Preview:    d.Preview,
 		PreviewSet: d.PreviewSet,
 		Cards:      d.Cards,
@@ -566,11 +598,16 @@ func validGuestID(v string) bool {
 }
 
 // forcedMode reports the guest's answering-mode override for a group:
-// "type" or "choice" force every card, "" (or anything else) leaves the deck
+// "type" or "choice" force every card, anything else leaves the deck
 // author's per-card modes alone. The web's equivalent of the desktop's
 // --answer-mode flag, kept per group so drilling one deck as production
-// doesn't flip every other deck too.
-func forcedMode(r *http.Request, g *group) string {
+// doesn't flip every other deck too. A trivia deck takes no override —
+// the designer's presentation is the game — so a leftover cookie from a
+// study deck sharing the group is ignored there.
+func forcedMode(r *http.Request, g *group, info *deckInfo) string {
+	if info.Kind == deck.KindTrivia {
+		return ""
+	}
 	c, err := r.Cookie("mode-" + g.Slug)
 	if err != nil || (c.Value != "type" && c.Value != "choice") {
 		return ""
@@ -578,26 +615,11 @@ func forcedMode(r *http.Request, g *group) string {
 	return c.Value
 }
 
-// modeName renders a quiz mode for the toggle label.
-func modeName(m deck.QuizMode) string {
-	if m == deck.ModeChoice {
-		return "choice"
-	}
-	return "type"
-}
-
-// effectiveMode is what the toggle shows and flips from: the forced override
-// when set, else the deck's authored mode.
-func effectiveMode(forced string, info *deckInfo) string {
-	if forced != "" {
-		return forced
-	}
-	return modeName(info.Mode)
-}
-
-// setForcedMode persists the answering-mode override for a group; "" clears.
+// setForcedMode persists the answering-mode override for a group. "deck"
+// deletes the cookie: with no site-wide legacy fallback to shadow, absence
+// already means "follow the deck".
 func (s *Server) setForcedMode(w http.ResponseWriter, g *group, v string) {
-	http.SetCookie(w, &http.Cookie{
+	c := &http.Cookie{
 		Name:     "mode-" + g.Slug,
 		Value:    v,
 		Path:     "/",
@@ -605,35 +627,67 @@ func (s *Server) setForcedMode(w http.ResponseWriter, g *group, v string) {
 		HttpOnly: true,
 		Secure:   s.secure,
 		SameSite: http.SameSiteLaxMode,
-	})
+	}
+	if v == "deck" {
+		c.Value = ""
+		c.MaxAge = -1
+	}
+	http.SetCookie(w, c)
 }
 
-// introsOn reports whether introductions — unseen cards shown answer-visible
-// once before being quizzed — are on for this deck. The guest's per-group
-// choice wins when they've made one (the pre-per-group site-wide cookie
-// still counts as one); otherwise the author's # preview-new: header seeds
-// the default, so a trivia deck opens cold while a vocabulary deck teaches
-// first; a deck that says nothing teaches first.
-func introsOn(r *http.Request, g *group, info *deckInfo) bool {
-	if c, err := r.Cookie("intros-" + g.Slug); err == nil && (c.Value == "on" || c.Value == "off") {
-		return c.Value == "on"
+// modeSetting is the Answering row's selected segment: the forced override,
+// else "deck".
+func modeSetting(forced string) string {
+	if forced == "" {
+		return "deck"
 	}
-	if c, err := r.Cookie("intros"); err == nil && (c.Value == "on" || c.Value == "off") {
-		return c.Value == "on"
+	return forced
+}
+
+// onOff renders a boolean the way the segments spell it.
+func onOff(v bool) string {
+	if v {
+		return "on"
 	}
+	return "off"
+}
+
+// headerIntros resolves the deck author's introduction default: the
+// # preview-new: header, or on when the deck says nothing.
+func headerIntros(info *deckInfo) bool {
 	if info.PreviewSet {
 		return info.Preview
 	}
 	return true
 }
 
-// setIntros persists the guest's introduction choice for one group; from
-// then on it outranks the deck header there.
-func (s *Server) setIntros(w http.ResponseWriter, g *group, on bool) {
-	v := "on"
-	if !on {
-		v = "off"
+// introsState reports the Introductions setting for this deck: the selected
+// segment ("deck", "on", or "off") and the effective value. The guest's
+// per-group choice wins when they've made one (the pre-per-group site-wide
+// cookie still counts as one); the "deck" sentinel — stored, not deleted,
+// so the legacy cookie can't resurface — and silence both follow the
+// author's # preview-new: header. Trivia decks always follow the header.
+func introsState(r *http.Request, g *group, info *deckInfo) (string, bool) {
+	if info.Kind == deck.KindTrivia {
+		return "deck", headerIntros(info)
 	}
+	if c, err := r.Cookie("intros-" + g.Slug); err == nil {
+		switch c.Value {
+		case "on", "off":
+			return c.Value, c.Value == "on"
+		case "deck":
+			return "deck", headerIntros(info)
+		}
+	}
+	if c, err := r.Cookie("intros"); err == nil && (c.Value == "on" || c.Value == "off") {
+		return c.Value, c.Value == "on"
+	}
+	return "deck", headerIntros(info)
+}
+
+// setIntros persists the guest's introduction segment for one group:
+// "on"/"off" outrank the deck header there, "deck" explicitly follows it.
+func (s *Server) setIntros(w http.ResponseWriter, g *group, v string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "intros-" + g.Slug,
 		Value:    v,
@@ -791,8 +845,8 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 	}
 	visitor := s.visitorID(w, r)
 	action := r.PathValue("action")
-	intros := introsOn(r, g, info)
-	forced := forcedMode(r, g)
+	_, intros := introsState(r, g, info)
+	forced := forcedMode(r, g, info)
 	mode := modeKeep
 	switch action {
 	case "start":
@@ -800,20 +854,33 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 	case "review":
 		mode = modeReview
 	case "intros":
-		// Flip the preference and recompose the quiz under it.
-		intros = !intros
-		s.setIntros(w, g, intros)
-		mode = modeQuiz
-	case "mode":
-		// Flip between typed and choice — from whatever the session is
-		// currently doing, the deck's authored mode being the start.
-		if effectiveMode(forced, info) == "type" {
-			forced = "choice"
-		} else {
-			forced = "type"
+		// The guest picked a segment — on, off, or the deck's own default —
+		// and the quiz recomposes under it. Trivia decks have no settings;
+		// a crafted POST is a no-op redirect. So is an unknown value.
+		if info.Kind == deck.KindTrivia {
+			break
 		}
-		s.setForcedMode(w, g, forced)
-		mode = modeQuiz
+		switch v := r.FormValue("v"); v {
+		case "on", "off", "deck":
+			s.setIntros(w, g, v)
+			intros = v == "on" || (v == "deck" && headerIntros(info))
+			mode = modeQuiz
+		}
+	case "mode":
+		// Same shape for the Answering segments: typed, choice, or the
+		// deck's authored per-card modes.
+		if info.Kind == deck.KindTrivia {
+			break
+		}
+		switch v := r.FormValue("v"); v {
+		case "type", "choice", "deck":
+			s.setForcedMode(w, g, v)
+			forced = v
+			if v == "deck" {
+				forced = ""
+			}
+			mode = modeQuiz
+		}
 	}
 	sess, err := s.getSession(visitor, g, info, mode, intros, forced)
 	if err != nil {
