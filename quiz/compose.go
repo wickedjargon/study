@@ -1,6 +1,7 @@
 package quiz
 
 import (
+	"math"
 	"math/rand"
 	"sort"
 	"time"
@@ -64,11 +65,12 @@ func rotateAfterLastSeen(cards []deck.Card, store *progress.Store) {
 }
 
 // SplitDue partitions deck cards for an adaptive session: reviews are studied
-// cards due now, sorted most overdue first (so an interrupted session spends
-// its time where forgetting is most advanced); fresh are never-studied cards,
-// shuffled; future are studied cards scheduled past now, sorted soonest-due
-// first — normally excluded from the session, --ahead pulls them in. nextDue
-// reports the earliest future review time (zero when none are scheduled).
+// cards due now, sorted most relatively overdue first (so an interrupted
+// session spends its time where forgetting is most advanced); fresh are
+// never-studied cards, shuffled; future are studied cards scheduled past now,
+// sorted soonest-due first — normally excluded from the session, --ahead
+// pulls them in. nextDue reports the earliest future review time (zero when
+// none are scheduled).
 func SplitDue(cards []deck.Card, store *progress.Store, now time.Time) (reviews, fresh, future []deck.Card, nextDue time.Time) {
 	for _, c := range cards {
 		cp := store.Get(c.ID)
@@ -85,13 +87,32 @@ func SplitDue(cards []deck.Card, store *progress.Store, now time.Time) (reviews,
 		}
 	}
 	sort.SliceStable(reviews, func(i, j int) bool {
-		return store.Get(reviews[i].ID).Due.Before(store.Get(reviews[j].ID).Due)
+		return relativeOverdue(store.Get(reviews[i].ID), now) > relativeOverdue(store.Get(reviews[j].ID), now)
 	})
 	sort.SliceStable(future, func(i, j int) bool {
 		return store.Get(future[i].ID).Due.Before(store.Get(future[j].ID).Due)
 	})
 	shuffleCards(fresh)
 	return reviews, fresh, future, nextDue
+}
+
+// relativeOverdue returns how overdue a card is in units of its own
+// scheduled interval: overdue days divided by interval days. Absolute
+// overdueness triages a backlog backwards — a card 5 days late on a 3-day
+// interval is in far more danger than one 10 days late on a 120-day
+// interval — so reviews are served by this ratio instead, the model-free
+// version of descending retrievability. Progress from before the scheduler
+// (a Due with no rung) counts its interval as one day; a card with no Due
+// at all sorts first, having waited the longest.
+func relativeOverdue(cp *progress.CardProgress, now time.Time) float64 {
+	if cp.Due.IsZero() {
+		return math.Inf(1)
+	}
+	iv := cp.IntervalDays()
+	if iv < 1 {
+		iv = 1
+	}
+	return now.Sub(cp.Due).Hours() / 24 / float64(iv)
 }
 
 // shuffleCards randomizes card order in place.

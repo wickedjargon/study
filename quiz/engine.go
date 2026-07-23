@@ -423,7 +423,7 @@ func (e *Engine) ContinueAll() {
 		}
 	}
 	sort.SliceStable(reviews, func(i, j int) bool {
-		return e.store.Get(reviews[i].ID).Due.Before(e.store.Get(reviews[j].ID).Due)
+		return relativeOverdue(e.store.Get(reviews[i].ID), now) > relativeOverdue(e.store.Get(reviews[j].ID), now)
 	})
 	sort.SliceStable(future, func(i, j int) bool {
 		return e.store.Get(future[i].ID).Due.Before(e.store.Get(future[j].ID).Due)

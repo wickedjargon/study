@@ -120,3 +120,8 @@ func LadderDays(rung int) int {
 	}
 	return reviewLadder[rung-1]
 }
+
+// IntervalDays returns the card's scheduled between-session interval in days
+// (its rung's span, before fuzz), or 0 for a card the ladder hasn't
+// scheduled.
+func (cp *CardProgress) IntervalDays() int { return LadderDays(cp.Level) }

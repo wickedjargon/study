@@ -37,6 +37,30 @@ func TestSplitDue(t *testing.T) {
 	}
 }
 
+// TestSplitDueRelativeOverdueness: reviews are served by overdue-days over
+// interval, not absolute lateness. A short-interval card a few days late is
+// closer to slipping away than a long-interval card more days late, so it
+// comes first even though the other has waited longer on the clock.
+func TestSplitDueRelativeOverdueness(t *testing.T) {
+	store := newTestStore(t)
+	now := time.Now()
+	cards := []deck.Card{{ID: "longlate"}, {ID: "shortlate"}}
+
+	// shortlate: 3-day interval (rung 2), 5 days late — ratio ~1.7.
+	store.RecordCorrect("shortlate")
+	store.Get("shortlate").Level = 2
+	store.Get("shortlate").Due = now.Add(-5 * 24 * time.Hour)
+	// longlate: 120-day interval (rung 7), 10 days late — ratio ~0.08.
+	store.RecordCorrect("longlate")
+	store.Get("longlate").Level = 7
+	store.Get("longlate").Due = now.Add(-10 * 24 * time.Hour)
+
+	reviews, _, _, _ := SplitDue(cards, store, now)
+	if len(reviews) != 2 || reviews[0].ID != "shortlate" || reviews[1].ID != "longlate" {
+		t.Errorf("reviews = %v, want [shortlate longlate]", reviews)
+	}
+}
+
 func TestComposeAdaptive(t *testing.T) {
 	store := newTestStore(t)
 	now := time.Now()

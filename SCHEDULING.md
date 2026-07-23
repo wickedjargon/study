@@ -89,6 +89,9 @@ ecosystem's simulations went further and made descending retrievability
 the default ordering, but that refinement needs item 8. The ratio is the
 model-free version of the same idea.
 
+**Landed 2026-07-23**: both review orderings (`SplitDue` and
+`ContinueAll`) serve by overdue-days over rung interval, descending.
+
 ### 5. Disperse forward and reverse siblings
 
 Reversed cards (`r:` IDs) schedule independently, so both directions of
