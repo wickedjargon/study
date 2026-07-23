@@ -725,15 +725,10 @@ func (s *Server) getSession(visitor string, g *group, info *deckInfo, mode sessi
 			if forced == "choice" {
 				m = deck.ModeChoice
 			}
-			d.Mode = m
-			for i := range d.Cards {
-				d.Cards[i].Mode = m
-			}
+			d.ForceAnswerMode(m)
 			pool = make([]deck.Card, len(info.Cards))
 			copy(pool, info.Cards)
-			for i := range pool {
-				pool[i].Mode = m
-			}
+			deck.ForceCardsMode(pool, m)
 		}
 	}
 	quiz.Compose(d, store, time.Now())

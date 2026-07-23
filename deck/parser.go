@@ -290,13 +290,21 @@ func (d *Deck) warn(format string, args ...any) {
 // which is the price of forcing.
 func (d *Deck) ForceAnswerMode(m QuizMode) {
 	d.Mode = m
-	for i := range d.Cards {
+	ForceCardsMode(d.Cards, m)
+}
+
+// ForceCardsMode applies a forced answering mode to a bare card slice — the
+// slice-level half of ForceAnswerMode, for callers holding cards outside a
+// Deck (the web forces its engine pool copy too, so ContinueAll's re-seed
+// can't quietly revert the session).
+func ForceCardsMode(cards []Card, m QuizMode) {
+	for i := range cards {
 		// Set cards have no choice presentation; they stay typed even when
 		// the session forces choice.
-		if m == ModeChoice && d.Cards[i].IsSet() {
+		if m == ModeChoice && cards[i].IsSet() {
 			continue
 		}
-		d.Cards[i].Mode = m
+		cards[i].Mode = m
 	}
 }
 
