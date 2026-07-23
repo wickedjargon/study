@@ -3,7 +3,7 @@
 <header class="bar" style="--h: {{.Hue}}">
   <span class="barleft">
     <a class="brand" href="/">study</a>
-    <span class="grouptitle"><span class="roundel">{{.Initial}}</span> {{.Name}}</span>
+    <span class="bartitle">{{.Name}}</span>
   </span>
   <span class="barright">{{if not local}}{{template "authmenu" .Email}}{{end}}</span>
 </header>

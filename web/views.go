@@ -61,7 +61,6 @@ type groupDeck struct {
 
 type groupView struct {
 	Name    string
-	Initial string
 	Hue     int
 	Decks   []groupDeck
 	Email   string // logged-in address, "" for a guest
@@ -234,9 +233,8 @@ func (s *Server) handleGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	view := groupView{
-		Name:    g.Name,
-		Initial: string([]rune(g.Name)[:1]),
-		Hue:     g.Hue,
+		Name: g.Name,
+		Hue:  g.Hue,
 	}
 	_, view.Email = s.currentUser(r)
 	store, err := s.visitorStore(visitor, g)

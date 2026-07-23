@@ -85,14 +85,6 @@ body {
 }
 .crumb { color: var(--dim); font-weight: 500; text-decoration: none; }
 .crumb:hover { color: var(--fg); }
-.grouptitle {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 1.15rem;
-  font-weight: 700;
-}
-.grouptitle .roundel { width: 1.7rem; height: 1.7rem; font-size: 0.8rem; }
 .barleft {
   flex: 1;
   min-width: 0;
