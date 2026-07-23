@@ -276,6 +276,7 @@ What is 1 + 1?
 
 | Header | Flag | Values | Default |
 |--------|------|--------|---------|
+| `# kind:` | file-only | `study`, `trivia` | `study` |
 | `# answer-mode:` | file-only | `choice`, `type` | `type` |
 | `# choice-count:` | file-only | integer ≥ 2 | `4` |
 | `# answer-case:` | file-only | `sensitive`, `insensitive` | `insensitive` |
@@ -289,6 +290,12 @@ What is 1 + 1?
 | `# img-tint:` | file-only | `fg`, `off` | `off` |
 
 - A flag overrides its deck-header setting equivalent
+- `# kind: trivia` marks a guessing game rather than material to learn. It
+  defaults the bundle — `# order: sequential`, `# preview-new: off`,
+  `# wrong-pause: 0` — and each of those still yields to its own explicit
+  directive. Trivia decks are never evidence-scheduled (`# order: adaptive`
+  is refused with a warning), and the web offers no session settings for
+  them: the designer's presentation is the game.
 - `# img-tint: fg` marks the deck's images as monochrome alpha masks. Both
   frontends recolor them to the theme's foreground, so one image set works in
   light and dark mode alike.

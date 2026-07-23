@@ -1318,6 +1318,80 @@ func TestNoteSurvivesReverse(t *testing.T) {
 	}
 }
 
+// TestKindTriviaBundle: "# kind: trivia" defaults the whole game bundle —
+// sequential order, no introductions, no wrong-answer pause.
+func TestKindTriviaBundle(t *testing.T) {
+	d, err := Parse(writeTempDeck(t, "# kind: trivia\n\nq\n---\na\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Kind != KindTrivia {
+		t.Fatalf("Kind = %v, want trivia", d.Kind)
+	}
+	if d.Order != OrderSequential {
+		t.Errorf("Order = %v, want sequential", d.Order)
+	}
+	if !d.PreviewSet || d.Preview {
+		t.Errorf("PreviewSet=%v Preview=%v, want true/false", d.PreviewSet, d.Preview)
+	}
+	if d.WrongPause != 0 {
+		t.Errorf("WrongPause = %d, want 0", d.WrongPause)
+	}
+	if len(d.Warnings) != 0 {
+		t.Errorf("unexpected warnings: %v", d.Warnings)
+	}
+}
+
+// TestKindTriviaExplicitOverrides: each bundle default yields to the
+// author's own directive, in either header order.
+func TestKindTriviaExplicitOverrides(t *testing.T) {
+	d, err := Parse(writeTempDeck(t,
+		"# wrong-pause: 5\n# kind: trivia\n# order: weak-only\n# preview-new: on\n\nq\n---\na\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Order != OrderWeakOnly {
+		t.Errorf("Order = %v, want the explicit weak-only", d.Order)
+	}
+	if !d.Preview {
+		t.Error("Preview = false, want the explicit on")
+	}
+	if d.WrongPause != 5 {
+		t.Errorf("WrongPause = %d, want the explicit 5", d.WrongPause)
+	}
+}
+
+// TestKindTriviaRefusesAdaptive: kind decides scheduling — a trivia deck
+// laps and is never evidence-scheduled, so adaptive order is refused with a
+// warning instead of honored.
+func TestKindTriviaRefusesAdaptive(t *testing.T) {
+	d, err := Parse(writeTempDeck(t, "# kind: trivia\n# order: adaptive\n\nq\n---\na\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Order != OrderSequential {
+		t.Errorf("Order = %v, want sequential after refusing adaptive", d.Order)
+	}
+	if len(d.Warnings) != 1 || !strings.Contains(d.Warnings[0], "not scheduled") {
+		t.Errorf("expected one not-scheduled warning, got %v", d.Warnings)
+	}
+}
+
+// TestKindUnknownValueWarns: a typo'd kind is a warning, not a silent study
+// deck.
+func TestKindUnknownValueWarns(t *testing.T) {
+	d, err := Parse(writeTempDeck(t, "# kind: quiz\n\nq\n---\na\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Kind != KindStudy {
+		t.Errorf("Kind = %v, want the study default", d.Kind)
+	}
+	if len(d.Warnings) != 1 || !strings.Contains(d.Warnings[0], "must be study or trivia") {
+		t.Errorf("expected one kind warning, got %v", d.Warnings)
+	}
+}
+
 func TestPreviewSetTracksHeader(t *testing.T) {
 	// PreviewSet separates the author's explicit "off" from silence, so a
 	// frontend can seed its own default from the header.

@@ -126,10 +126,36 @@ const (
 	ModeType                   // user types the answer (default)
 )
 
+// DeckKind separates decks that study (evidence-scheduled, progress-tracked)
+// from decks that play (trivia: lapped guessing games with designer-fixed
+// presentation). Kind decides scheduling and which settings frontends offer;
+// order decides presentation sequence only.
+type DeckKind int
+
+const (
+	// KindStudy is the default: the deck is learned — adaptive scheduling,
+	// introductions, user-adjustable session settings.
+	KindStudy DeckKind = iota
+	// KindTrivia is a guessing game. "# kind: trivia" defaults the header
+	// bundle — sequential order, no introductions, no wrong-answer pause —
+	// each still overridable by its own explicit directive, and tells
+	// frontends the designer's presentation is not user-adjustable.
+	KindTrivia
+)
+
+// String returns the kind's user-facing name — the word "# kind:" accepts.
+func (k DeckKind) String() string {
+	if k == KindTrivia {
+		return "trivia"
+	}
+	return "study"
+}
+
 // Deck represents a parsed deck file.
 type Deck struct {
 	Name          string
 	Path          string    // absolute path to deck file
+	Kind          DeckKind  // study (default) or trivia ("# kind:")
 	Choices       int       // number of answer choices (default 4)
 	Mode          QuizMode  // choice or type
 	// ModeSet records that the deck header declared its answer-mode
@@ -168,6 +194,12 @@ type Deck struct {
 	// so a typo'd directive isn't silently dropped. (A fatal problem, e.g. a
 	// card with no answer, is returned as an error instead.)
 	Warnings []string
+
+	// orderSet/wrongPauseSet record that the header set the value explicitly,
+	// so the "# kind: trivia" bundle defaults don't override an author's own
+	// directive (the same absent-vs-authored distinction PreviewSet makes).
+	orderSet      bool
+	wrongPauseSet bool
 }
 
 // OrderMode selects what a session serves and how it schedules the cards.
@@ -334,6 +366,7 @@ func Parse(path string) (*Deck, error) {
 		}
 		applyDeckMetadata(deck, block)
 	}
+	applyKindDefaults(deck)
 
 	header := true
 	for _, block := range blocks {
@@ -398,7 +431,7 @@ func parseDir(absDir string) (*Deck, error) {
 			}
 			continue
 		}
-		if d.Mode != merged.Mode || d.CaseSensitive != merged.CaseSensitive ||
+		if d.Kind != merged.Kind || d.Mode != merged.Mode || d.CaseSensitive != merged.CaseSensitive ||
 			d.TimeLimit != merged.TimeLimit || d.Order != merged.Order ||
 			d.Preview != merged.Preview || d.PreviewSet != merged.PreviewSet ||
 			d.NewPerSession != merged.NewPerSession ||
@@ -461,7 +494,7 @@ func warnLegacyDirective(line string, warn func(string, ...any)) {
 // lands where it takes no effect — a correctly spelled directive in the wrong
 // place must not be quieter than a typo'd one.
 var deckDirectives = []string{
-	"choice-count", "answer-mode", "answer-case", "time-limit", "order",
+	"kind", "choice-count", "answer-mode", "answer-case", "time-limit", "order",
 	"wrong-pause", "new-per-session", "preview-new", "font-size", "img-tint",
 	"audio-speed",
 }
@@ -494,6 +527,16 @@ func applyDeckMetadata(deck *Deck, block []string) {
 	for _, line := range block {
 		trimmed := strings.TrimSpace(line)
 		warnLegacyDirective(trimmed, deck.warn)
+		if after, ok := strings.CutPrefix(trimmed, "# kind:"); ok {
+			switch strings.TrimSpace(after) {
+			case "study":
+				deck.Kind = KindStudy
+			case "trivia":
+				deck.Kind = KindTrivia
+			default:
+				deck.warn("ignoring %q (# kind: must be study or trivia)", trimmed)
+			}
+		}
 		if after, ok := strings.CutPrefix(trimmed, "# choice-count:"); ok {
 			v := strings.TrimSpace(after)
 			if n, err := strconv.Atoi(v); err == nil && n >= 2 && n <= maxChoices {
@@ -536,6 +579,7 @@ func applyDeckMetadata(deck *Deck, block []string) {
 		if after, ok := strings.CutPrefix(trimmed, "# order:"); ok {
 			if m, ok := ParseOrderMode(strings.TrimSpace(after)); ok {
 				deck.Order = m
+				deck.orderSet = true
 			} else {
 				deck.warn("ignoring %q (# order: must be adaptive, sequential, flip-through, or weak-only)", trimmed)
 			}
@@ -543,6 +587,7 @@ func applyDeckMetadata(deck *Deck, block []string) {
 		if after, ok := strings.CutPrefix(trimmed, "# wrong-pause:"); ok {
 			if n, ok := ParseTimeLimit(after); ok {
 				deck.WrongPause = n
+				deck.wrongPauseSet = true
 			} else {
 				deck.warn("ignoring %q (# wrong-pause: needs 0-%d seconds, or none)", trimmed, maxTimeLimit)
 			}
@@ -590,6 +635,33 @@ func applyDeckMetadata(deck *Deck, block []string) {
 				deck.warn("ignoring %q (# audio-speed: needs 0.25-4.0)", trimmed)
 			}
 		}
+	}
+}
+
+// applyKindDefaults applies the "# kind: trivia" header bundle once the whole
+// header has been read: sequential order, no introductions, no wrong-answer
+// pause — each only where the author didn't set the directive explicitly.
+// Kind decides scheduling, so adaptive order is refused outright: a trivia
+// deck laps, it is never evidence-scheduled.
+func applyKindDefaults(deck *Deck) {
+	if deck.Kind != KindTrivia {
+		return
+	}
+	if deck.orderSet && deck.Order == OrderAdaptive {
+		deck.warn("trivia decks are not scheduled; ignoring # order: adaptive")
+		deck.orderSet = false
+	}
+	if !deck.orderSet {
+		deck.Order = OrderSequential
+		deck.orderSet = true
+	}
+	if !deck.PreviewSet {
+		deck.Preview = false
+		deck.PreviewSet = true
+	}
+	if !deck.wrongPauseSet {
+		deck.WrongPause = 0
+		deck.wrongPauseSet = true
 	}
 }
 
