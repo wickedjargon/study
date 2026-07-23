@@ -18,16 +18,17 @@ func TestScheduleClimbsLadder(t *testing.T) {
 	s := newTestStore(t)
 	now := time.Now()
 
-	// Each clean session climbs one rung: 1, 3, 7, ... days.
+	// Each clean session climbs one rung: 1, 3, 7, ... days. Due lands at
+	// the start of the local day the interval reaches, not N*24h out.
 	for i, days := range reviewLadder {
 		s.Schedule("c", false)
 		cp := s.Get("c")
 		if cp.Level != i+1 {
 			t.Fatalf("session %d: Level = %d, want %d", i+1, cp.Level, i+1)
 		}
-		want := now.Add(time.Duration(days) * 24 * time.Hour)
-		if d := cp.Due.Sub(want); d < -time.Minute || d > time.Minute {
-			t.Fatalf("session %d: Due = %v, want ~%v", i+1, cp.Due, want)
+		want := dayStart(now.AddDate(0, 0, days))
+		if !cp.Due.Equal(want) {
+			t.Fatalf("session %d: Due = %v, want %v", i+1, cp.Due, want)
 		}
 	}
 
@@ -60,9 +61,9 @@ func TestScheduleLapseHalvesLevel(t *testing.T) {
 		if cp.Level != tc.want {
 			t.Errorf("Level after lapse at %d = %d, want %d", tc.level, cp.Level, tc.want)
 		}
-		want := time.Now().Add(time.Duration(reviewLadder[tc.want-1]) * 24 * time.Hour)
-		if d := cp.Due.Sub(want); d < -time.Minute || d > time.Minute {
-			t.Errorf("Due after lapse at %d = %v, want ~%v", tc.level, cp.Due, want)
+		want := dayStart(time.Now().AddDate(0, 0, reviewLadder[tc.want-1]))
+		if !cp.Due.Equal(want) {
+			t.Errorf("Due after lapse at %d = %v, want %v", tc.level, cp.Due, want)
 		}
 	}
 }

@@ -70,10 +70,12 @@ func TestAheadLapsedReviewReschedules(t *testing.T) {
 	if cp.Level != 2 { // lapse halves level 4 → 2
 		t.Errorf("Level after lapsed ahead review = %d, want 2", cp.Level)
 	}
-	// Rescheduled onto the halved rung: 3 days out (ladder level 2).
-	want := time.Now().Add(3 * 24 * time.Hour)
-	if d := cp.Due.Sub(want); d < -time.Minute || d > time.Minute {
-		t.Errorf("Due after lapsed ahead review = %v, want ~%v", cp.Due, want)
+	// Rescheduled onto the halved rung: 3 days out (ladder level 2),
+	// anchored to the start of that local day.
+	y, m, day := time.Now().AddDate(0, 0, 3).Date()
+	want := time.Date(y, m, day, 0, 0, 0, 0, time.Local)
+	if !cp.Due.Equal(want) {
+		t.Errorf("Due after lapsed ahead review = %v, want %v", cp.Due, want)
 	}
 }
 

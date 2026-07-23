@@ -77,7 +77,19 @@ func (s *Store) Schedule(cardID string, lapsed bool) {
 		cp.Level = len(reviewLadder)
 	}
 	days := reviewLadder[cp.Level-1]
-	cp.Due = time.Now().Add(time.Duration(days) * 24 * time.Hour)
+	// Due anchors to the start of the local day the interval lands on: an
+	// interval means "N days later", not "N*24h after the moment studied". A
+	// clock-based due time made a card studied at 21:00 not yet due at 20:00
+	// the next evening, so study time could only ratchet later, and it
+	// disagreed with the session layer's same-day launch gate, which compares
+	// calendar days. Whole-day scheduling is how Anki treats intervals too.
+	cp.Due = dayStart(time.Now().AddDate(0, 0, days))
+}
+
+// dayStart returns the start of t's local calendar day.
+func dayStart(t time.Time) time.Time {
+	y, m, d := t.Local().Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, time.Local)
 }
 
 // DueNow reports whether the card should be reviewed now. Cards with no

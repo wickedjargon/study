@@ -71,6 +71,10 @@ interval, the way Anki schedules whole days with a rollover hour. Small
 correctness fix, best done together with item 2 since both touch
 `Schedule`.
 
+**Landed 2026-07-23**: Due anchors to local midnight of the target day.
+No rollover hour — midnight is what the same-day gate already compares
+against; a rollover hour would need both moved together.
+
 ### 4. Relative overdueness ordering
 
 `SplitDue` serves the most overdue card first in absolute days. A card 5
