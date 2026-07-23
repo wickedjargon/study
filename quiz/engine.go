@@ -1233,6 +1233,12 @@ func (e *Engine) requeueTail(card *deck.Card) {
 // its "=" variants, e.g. "you are welcome" next to "you're welcome" — is
 // excluded, whether it comes from the card's own distractors or another
 // card's answer.
+//
+// A card with authored "~" distractors gets exactly those options: the
+// author designed the question, and "A or B?" must stay binary even inside
+// a merged pack whose sibling decks could supply filler. Pool fill from
+// other cards' answers only serves choice cards with no authored wrong
+// answers.
 func (e *Engine) generateChoices(card *deck.Card) ([]string, int) {
 	numChoices := e.choices
 	if card.Choices > 0 {
@@ -1254,8 +1260,9 @@ func (e *Engine) generateChoices(card *deck.Card) ([]string, int) {
 		}
 	}
 
-	// Fill remaining from other cards' answers.
-	if len(choices) < numChoices {
+	// Fill remaining from other cards' answers — only when the card authored
+	// no distractors of its own.
+	if len(card.Distractors) == 0 && len(choices) < numChoices {
 		// Build pool of other answers, shuffled.
 		pool := make([]string, 0)
 		for _, c := range e.allCards {

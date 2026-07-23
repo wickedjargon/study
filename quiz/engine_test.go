@@ -376,6 +376,65 @@ func TestEngineCustomDistractors(t *testing.T) {
 	}
 }
 
+// TestAuthoredDistractorsAreWholeOptionSet locks in that a card with "~"
+// distractors is never padded from other cards' answers: a binary "A or B?"
+// card serves exactly two options even when the deck default asks for four
+// and sibling cards could supply filler.
+func TestAuthoredDistractorsAreWholeOptionSet(t *testing.T) {
+	d := &deck.Deck{
+		Name:    "test",
+		Choices: 4,
+		Cards: []deck.Card{
+			{
+				ID:          "binary",
+				Question:    []deck.Media{{Type: deck.Text, Content: "A or B?"}},
+				Answer:      []deck.Media{{Type: deck.Text, Content: "A"}},
+				AnswerText:  "A",
+				Distractors: []string{"B"},
+				Mode:        deck.ModeChoice,
+			},
+			{
+				ID:         "filler1",
+				Question:   []deck.Media{{Type: deck.Text, Content: "Q2"}},
+				Answer:     []deck.Media{{Type: deck.Text, Content: "C"}},
+				AnswerText: "C",
+				Mode:       deck.ModeChoice,
+			},
+			{
+				ID:         "filler2",
+				Question:   []deck.Media{{Type: deck.Text, Content: "Q3"}},
+				Answer:     []deck.Media{{Type: deck.Text, Content: "D"}},
+				AnswerText: "D",
+				Mode:       deck.ModeChoice,
+			},
+		},
+	}
+
+	e := NewEngine(d, nil, nil)
+	opts := e.Options()
+	if len(opts) != 2 {
+		t.Fatalf("binary card should serve exactly 2 options, got %d: %v", len(opts), opts)
+	}
+	seen := map[string]bool{opts[0]: true, opts[1]: true}
+	if !seen["A"] || !seen["B"] {
+		t.Errorf("options should be exactly A and B, got %v", opts)
+	}
+}
+
+// TestPoolFillWithoutAuthoredDistractors locks in the counterpart: a choice
+// card with no "~" lines still fills its options from other cards' answers.
+func TestPoolFillWithoutAuthoredDistractors(t *testing.T) {
+	d := testDeck(4)
+	d.Choices = 4
+	for i := range d.Cards {
+		d.Cards[i].Mode = deck.ModeChoice
+	}
+	e := NewEngine(d, nil, nil)
+	if got := len(e.Options()); got != 4 {
+		t.Fatalf("expected 4 pool-filled options, got %d", got)
+	}
+}
+
 // TestSequentialStats locks in sequential mode's stats contract: every
 // graded answer, hit or miss, lands in persisted stats — a sequential miss
 // requeues the card at the lap's tail rather than entering a massed drill,
