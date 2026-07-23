@@ -47,6 +47,10 @@ The early-review side stays as is. Holding the rung on a clean ahead
 completion is the honest binary approximation, and partial credit for
 early reviews needs a real memory model (item 8) to do properly.
 
+**Landed 2026-07-23** in `progress.Schedule`: a clean success advances to
+at least the first rung covering scheduled + overdue days, whole days
+only. Lapses and early reviews are unchanged.
+
 ### 2. Interval fuzz, then load balancing
 
 Deterministic intervals keep same-day cohorts in lockstep: identical due

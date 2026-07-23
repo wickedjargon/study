@@ -50,8 +50,26 @@ func (s *Store) Schedule(cardID string, lapsed bool) {
 		if cp.Level < 1 {
 			cp.Level = 1
 		}
-	} else if cp.Level < len(reviewLadder) {
-		cp.Level++
+	} else {
+		// A card answered late just demonstrated more retention than its rung
+		// records: surviving its scheduled days plus the overdue days is the
+		// evidence, so advance to at least the first rung covering that whole
+		// interval. This is the ladder-native form of FSRS's rule that the
+		// lower the predicted recall at a success, the larger the stability
+		// gain. Reviewed on time, survival equals the rung just climbed and
+		// the extra loop is a no-op. Partial days don't count as survived.
+		survived := 0
+		if cp.Level >= 1 && cp.Level <= len(reviewLadder) && !cp.Due.IsZero() {
+			if over := int(time.Since(cp.Due).Hours() / 24); over > 0 {
+				survived = reviewLadder[cp.Level-1] + over
+			}
+		}
+		if cp.Level < len(reviewLadder) {
+			cp.Level++
+		}
+		for cp.Level < len(reviewLadder) && reviewLadder[cp.Level-1] < survived {
+			cp.Level++
+		}
 	}
 	// Progress files are hand-editable JSON: a Level beyond the ladder (or a
 	// shorter ladder in a future version) must clamp, not index out of range.
