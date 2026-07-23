@@ -30,7 +30,7 @@ _study() {
     esac
 
     if [[ "$cur" == -* ]]; then
-        COMPREPLY=( $(compgen -W "--reverse --order --answer-mode --ahead --time-limit --wrong-pause --preview-new --new-per-session --font-size --audio-speed --stats --forget --watch --unwatch --library --help" -- "$cur") )
+        COMPREPLY=( $(compgen -W "--reverse --order --answer-mode --ahead --time-limit --wrong-pause --preview-new --new-per-session --font-size --audio-speed --stats --calibrate --forget --watch --unwatch --library --help" -- "$cur") )
         return
     fi
 

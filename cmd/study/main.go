@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -52,6 +53,8 @@ flags (each overrides the deck header's setting for this session):
   --font-size <N>       base font size (8-48, or small/medium/large/x-large)
   --audio-speed <X>     audio playback speed (0.25-4.0)
   --stats               print saved progress summary for the deck and exit
+  --calibrate           print measured recall rates from the review log (by
+                        ladder rung, card state, and answer mode) and exit
   --forget              clear saved progress for this deck (this direction
                         only; combine with --reverse to clear reverse progress)
   --help                show this help
@@ -101,6 +104,7 @@ func main() {
 	fontSizeFlag := flag.String("font-size", "", "override the base font size (8-48, or small/medium/large/x-large)")
 	audioSpeedFlag := flag.String("audio-speed", "", "override audio playback speed (0.25-4.0)")
 	stats := flag.Bool("stats", false, "print saved progress summary for the deck and exit")
+	calibrate := flag.Bool("calibrate", false, "print recall rates by rung, state, and answer mode from the review log and exit")
 	forget := flag.Bool("forget", false, "clear saved progress for this deck")
 	watch := flag.String("watch", "", "add a directory of decks to the library")
 	unwatch := flag.String("unwatch", "", "remove a watched directory from the library")
@@ -256,6 +260,14 @@ func main() {
 		os.Exit(0)
 	}
 
+	// --calibrate: aggregate the review log into recall rates and exit. This
+	// is the ladder's report card — per-rung recall is its measured forgetting
+	// curve — and the adjudicator for any future scheduler change.
+	if *calibrate {
+		printCalibrate(d, store)
+		os.Exit(0)
+	}
+
 	// --forget clears saved progress and exits without launching the quiz,
 	// mirroring --stats. It's a maintenance action, not the start of a study
 	// session. Only the direction being studied is cleared: plain --forget
@@ -338,6 +350,7 @@ var deckScopedFlags = map[string]bool{
 	"font-size":       true,
 	"audio-speed":     true,
 	"stats":           true,
+	"calibrate":       true,
 	"forget":          true,
 }
 
@@ -509,5 +522,61 @@ func printStats(d *deck.Deck, store *progress.Store) {
 	fmt.Printf("\n  Weak cards\n")
 	for _, r := range info.Weakest {
 		fmt.Printf("    %3.0f%% acc  conf %3.0f   %s\n", r.Accuracy, r.Confidence, r.Label)
+	}
+}
+
+// printCalibrate writes the review log's recall rates for the deck (in the
+// direction being studied) to stdout: per-rung recall is the review ladder's
+// measured forgetting curve. A rung recalling above ~95% is scheduled too
+// short, below ~80% too long — the bands SCHEDULING.md item 9 set out.
+func printCalibrate(d *deck.Deck, store *progress.Store) {
+	events, err := store.ReadLog()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "✗ reading review log: %v\n", err)
+		os.Exit(1)
+	}
+	ids := make(map[string]bool, len(d.Cards))
+	for i := range d.Cards {
+		ids[d.Cards[i].ID] = true
+	}
+	cal := progress.Calibrate(events, ids)
+
+	fmt.Printf("study — %s (calibration)\n\n", d.Name)
+	if cal.Events == 0 {
+		fmt.Println("  No logged answers yet for this deck.")
+		return
+	}
+	fmt.Printf("  Logged answers   %d\n", cal.Events)
+	fmt.Printf("  Review asks      %d  (first ask of a due card in a session)\n", cal.Reviews)
+
+	if cal.Reviews > 0 {
+		fmt.Printf("\n  Recall by rung — the ladder's measured forgetting curve\n")
+		fmt.Printf("    rung  interval  asks  recall\n")
+		rungs := make([]int, 0, len(cal.Rungs))
+		for r := range cal.Rungs {
+			rungs = append(rungs, r)
+		}
+		sort.Ints(rungs)
+		for _, r := range rungs {
+			b := cal.Rungs[r]
+			fmt.Printf("    %4d  %7s  %4d  %5.0f%%\n", r, fmt.Sprintf("%dd", progress.LadderDays(r)), b.Asks, b.Recall())
+		}
+		fmt.Println("    above ~95%: the rung is too short; below ~80%: too long")
+	}
+
+	fmt.Printf("\n  Recall by state — every graded answer\n")
+	for _, s := range []string{"new", "learning", "retry", "review", "ahead"} {
+		if b := cal.States[s]; b != nil {
+			fmt.Printf("    %-9s %4d  %5.0f%%\n", s, b.Asks, b.Recall())
+		}
+	}
+
+	if len(cal.Modes) > 0 {
+		fmt.Printf("\n  Recall by answer mode — review asks only\n")
+		for _, m := range []string{"type", "choice"} {
+			if b := cal.Modes[m]; b != nil {
+				fmt.Printf("    %-9s %4d  %5.0f%%\n", m, b.Asks, b.Recall())
+			}
+		}
 	}
 }

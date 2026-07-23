@@ -142,6 +142,10 @@ too short, below ~80 percent too long. Add a small report (extend
 and by answer mode. This turns items 1 through 7 from taste into
 measurement and is the prerequisite for fitting item 8.
 
+**Landed 2026-07-23** as `--calibrate` (`progress.Calibrate`): recall by
+rung, by state, and by answer mode, scoped to the deck and direction like
+`--stats`.
+
 ## Settled refusals
 
 - **Response latency as evidence.** AFK is indistinguishable from
