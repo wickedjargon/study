@@ -57,7 +57,8 @@ for d in \
 	"$P/study-decks/study-waters.deck" \
 	"$P/study-decks/study-us-presidents.deck" \
 	"$P/study-decks/study-canada.deck" \
-	"$P/study-decks/study-comptia-aplus.deck"; do
+	"$P/study-decks/study-comptia-aplus.deck" \
+	"$P/study-decks/study-aws-ccp.deck"; do
 	ln -s "$d" "$STAGE/"
 done
 rsync -aL --delete --exclude '__pycache__' --exclude '.git' --exclude '*.geojson' \
