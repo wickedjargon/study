@@ -154,6 +154,7 @@ SectionGroup "More"
   !insertmacro DeckPack "US Presidents" "study-us-presidents.deck"
   !insertmacro DeckPack "Dog Breeds" "study-dog-breeds.deck"
   !insertmacro DeckPack "Animal Tracks" "study-animal-tracks.deck"
+  !insertmacro DeckPack "CompTIA A+" "study-comptia-aplus.deck"
 SectionGroupEnd
 SectionGroupEnd
 

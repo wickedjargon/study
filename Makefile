@@ -42,7 +42,8 @@ WIN_DECK_SRC = \
 	$(HOME)/d/projects/study-decks/study-borders.deck \
 	$(HOME)/d/projects/study-decks/study-waters.deck \
 	$(HOME)/d/projects/study-decks/study-us-presidents.deck \
-	$(HOME)/d/projects/study-decks/study-canada.deck
+	$(HOME)/d/projects/study-decks/study-canada.deck \
+	$(HOME)/d/projects/study-decks/study-comptia-aplus.deck
 
 win-decks:
 	rsync -a --delete --exclude '__pycache__' --exclude '.git' --exclude '*.geojson' \
