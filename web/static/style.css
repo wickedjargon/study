@@ -220,11 +220,11 @@ body {
 .cardstatus .tally { display: inline-flex; gap: 0.9rem; }
 
 /* session progress: a hairline under the header, filled in the deck's hue */
+/* Full-bleed: the fill starts at the screen's left edge and a finished
+   session reaches its right edge. */
 .progress {
-  width: min(42rem, 100%);
-  margin: 0 auto;
+  width: 100%;
   height: 3px;
-  padding: 0 1.25rem;
 }
 .progress i {
   display: block;
@@ -300,7 +300,10 @@ main.list { padding-top: 2.5rem; }
 /* The tighter bottom padding is for the keyboard case: main's default
    2.5rem is dead space between the check button and the keyboard there,
    paid for by the status strip at the top of the squeezed column. */
-main.quiz { min-height: 0; padding-bottom: 0.5rem; }
+main.quiz { min-height: 0; padding-bottom: 0.5rem; padding-left: 0; padding-right: 0; }
+/* With the gutter gone the status text needs its own small inset so the
+   counter doesn't sit against the physical screen edge. */
+main.quiz .cardstatus { padding: 0 0.5rem; }
 main.quiz > * { flex-shrink: 0; }
 main.quiz > .card { flex-shrink: 1; }
 .card:not(.standalone) { display: flex; flex-direction: column; min-height: 0; }
