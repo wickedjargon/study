@@ -36,12 +36,11 @@ for d in \
 	"$P/language-packs" \
 	"$P/study-mexican-spanish.deck" \
 	"$P/study-japanese-numbers.deck" \
-	"$P/study-mahjong.deck" \
 	"$P/study-farsi-numbers.deck" \
 	"$P/study-chinese-numbers.deck" \
-	"$P/study-chinese-mahjong-terms.deck" \
-	"$P/study-chinese-mahjong-tiles.deck" \
 	"$P/study-dog-breeds.deck" \
+	"$P/study-decks/study-mahjong-japanese.deck" \
+	"$P/study-decks/study-mahjong-mandarin.deck" \
 	"$P/study-decks/study-bc-driving.deck" \
 	"$P/study-decks/study-world-flags.deck" \
 	"$P/study-decks/study-country-silhouettes.deck" \
