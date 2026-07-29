@@ -282,7 +282,7 @@ main.list { padding-top: 2.5rem; }
 .cardimg {
   display: block;
   max-width: 100%;
-  max-height: calc(var(--vvh) * 0.40);
+  max-height: calc(var(--vvh) * 0.34);
   margin: 0.9rem auto;
   border-radius: 10px;
 }
@@ -322,26 +322,9 @@ main.quiz > .card { flex-shrink: 1; }
 /* On a keyboard-short viewport the header bar yields its height to the
    card: while typing, the screen is status strip, card, and answer box
    only. A device tall enough to keep the bar comfortably (over 30rem
-   visible with the keyboard up) never hides it. The rest of the block
-   trims chrome for the same reason — with the keyboard up the squeeze,
-   not the height cap, is what limits the image, so every spared pixel
-   of padding, margin, and font goes straight to the tile. */
+   visible with the keyboard up) never hides it. */
 @media (max-height: 30rem) {
   .page:has(> main.quiz) > .bar { display: none; }
-  main.quiz { padding-top: 0.3rem; }
-  .card:not(.standalone) { padding: 0.8rem 1.2rem 0.9rem; margin-bottom: 0.5rem; }
-  /* The state chip floats over the card's top-left corner instead of
-     reserving a text row of its own. */
-  .card:not(.standalone) > .badges {
-    position: absolute;
-    top: 0.5rem;
-    left: 0.6rem;
-    margin: 0;
-    min-height: 0;
-    z-index: 1;
-  }
-  .cardimg { margin: 0.3rem auto; }
-  .cardtext.primary { font-size: 1.6rem; }
 }
 
 /* On a viewport too short even for shrunken images and bare text (a phone
