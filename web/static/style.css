@@ -300,15 +300,6 @@ main.list { padding-top: 2.5rem; }
 main.quiz { min-height: 0; }
 main.quiz > * { flex-shrink: 0; }
 main.quiz > .card { flex-shrink: 1; }
-/* The quiz page itself never exceeds the visible height. Chromium already
-   guarantees that through the viewport meta; on WebKit the keyboard only
-   pans, so without this cap the status strip pans off the top. Older
-   browsers without :has() keep the scrolling behavior. */
-.page:has(> main.quiz) { max-height: var(--vvh); }
-/* Status strip against the top, answer controls against the bottom, the
-   card centered as the stage in between. The auto margins yield to zero
-   exactly when the screen is tight. */
-main.quiz > .card { margin-top: auto; margin-bottom: auto; }
 .card:not(.standalone) { display: flex; flex-direction: column; min-height: 0; }
 .card:not(.standalone) > * { flex-shrink: 0; }
 /* The media wrappers dissolve so each of their images is its own flex item
@@ -323,12 +314,10 @@ main.quiz > .card { margin-top: auto; margin-bottom: auto; }
    width-capped image. */
 .card .cardimg { flex-shrink: 1; min-height: 3.5rem; object-fit: contain; }
 /* On a viewport too short even for shrunken images and bare text (a phone
-   in landscape — the aspect guard keeps a portrait phone with the keyboard
-   up, which does fit, on the squeezing path), squeezing further would
-   overlap content: give the height back and let the page scroll instead. */
-@media (max-height: 30rem) and (min-aspect-ratio: 3/2) {
+   in landscape), squeezing further would overlap content: give the height
+   back and let the page scroll to the button instead. */
+@media (max-height: 30rem) {
   main.quiz { min-height: auto; }
-  .page:has(> main.quiz) { max-height: none; }
 }
 
 /* ---- custom audio player: a quiet outline button, not a billboard ---- */
