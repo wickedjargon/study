@@ -316,6 +316,14 @@ main.quiz > .card { flex-shrink: 1; }
    object-fit keeps the bitmap's ratio when flex forces a height on a
    width-capped image. */
 .card .cardimg { flex-shrink: 1; min-height: 3.5rem; object-fit: contain; }
+/* On a keyboard-short viewport the header bar yields its height to the
+   card: while typing, the screen is status strip, card, and answer box
+   only. A device tall enough to keep the bar comfortably (over 30rem
+   visible with the keyboard up) never hides it. */
+@media (max-height: 30rem) {
+  .page:has(> main.quiz) > .bar { display: none; }
+}
+
 /* On a viewport too short even for shrunken images and bare text (a phone
    in landscape — the aspect guard keeps a portrait phone with the keyboard
    up, which does fit, on the squeezing path), squeezing further would
