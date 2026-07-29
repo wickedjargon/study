@@ -288,6 +288,38 @@ main.list { padding-top: 2.5rem; }
 }
 .divider { border: 0; border-top: 1px solid var(--line); margin: 1.1rem 0 0.9rem; }
 
+/* Quiz screens absorb a height shortfall inside the card: main.quiz stops
+   growing past the page, the card is the only child allowed to give way,
+   and inside the card only images shrink — text, controls, and the next
+   button keep their size and stay on screen. This bites exactly when the
+   stack would overflow (a result revealing a second card's image, a small
+   screen); with room to spare the caps above rule and nothing changes.
+   The min-height: 0 on the card and the image wrappers is load-bearing: a
+   flex item's automatic minimum is content-based (images count at their
+   cap, not their floor), so without it nothing ever shrinks. */
+main.quiz { min-height: 0; }
+main.quiz > * { flex-shrink: 0; }
+main.quiz > .card { flex-shrink: 1; }
+.card:not(.standalone) { display: flex; flex-direction: column; min-height: 0; }
+.card:not(.standalone) > * { flex-shrink: 0; }
+/* The media wrappers dissolve so each of their images is its own flex item
+   with its own floor. A wrapper kept as a box would be a single shrink unit
+   with min-height: 0 and could be crushed below its inner floors while a
+   sibling image still had slack, spilling its text over the button. Their
+   box margins move onto inner elements below. */
+.card > .answerside, .card > .cardnote, .card > .confused { display: contents; }
+.answerside > *, .cardnote > *, .confused > * { flex-shrink: 0; }
+/* Last: this flex-shrink must win over the shrink: 0 catch-alls above.
+   object-fit keeps the bitmap's ratio when flex forces a height on a
+   width-capped image. */
+.card .cardimg { flex-shrink: 1; min-height: 3.5rem; object-fit: contain; }
+/* On a viewport too short even for shrunken images and bare text (a phone
+   in landscape), squeezing further would overlap content: give the height
+   back and let the page scroll to the button instead. */
+@media (max-height: 30rem) {
+  main.quiz { min-height: auto; }
+}
+
 /* ---- custom audio player: a quiet outline button, not a billboard ---- */
 .player { margin: 0.7rem 0 0.3rem; }
 .play {
@@ -491,13 +523,14 @@ button.quiet:hover { color: var(--fg); }
 /* the card's own explanation, third deck section — answer-visible screens
    only. Secondary information (dim), distinct from the confusion contrast
    below, which reproduces another card. */
-.cardnote { margin-top: 0.9rem; }
+/* margin lives on the first child: the wrapper itself is display: contents */
+.cardnote > :first-child { margin-top: 0.9rem; }
 .cardnote .cardtext { color: var(--dim); font-size: 0.95rem; }
 .cardnote .cardtext.primary { font-size: 0.95rem; font-weight: 400; }
 .cardnote .cardimg { max-height: calc(var(--vvh) * 0.18); }
 
-.confused { margin-top: 1rem; }
-.confused-note { color: var(--dim); font-size: 0.95rem; margin: 0 0 0.2rem; }
+/* the note carries the block's top margin: .confused is display: contents */
+.confused-note { color: var(--dim); font-size: 0.95rem; margin: 1rem 0 0.2rem; }
 .confused .cardimg { max-height: calc(var(--vvh) * 0.14); }
 .confused .cardtext.primary { font-size: 1.15rem; }
 .confused .cardtext { font-size: 0.9rem; }
