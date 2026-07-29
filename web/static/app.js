@@ -4,6 +4,21 @@
 (function () {
   "use strict";
 
+  // --vvh mirrors the height actually visible to the user (see style.css).
+  // Chromium honors interactive-widget=resizes-content, so dvh already
+  // shrinks with the virtual keyboard; WebKit ignores the meta key and only
+  // shrinks visualViewport, so track it by hand. Scale folds pinch-zoom back
+  // out — zooming must not resize the card image.
+  if (window.visualViewport) {
+    var vv = window.visualViewport;
+    var setVVH = function () {
+      document.documentElement.style.setProperty(
+        "--vvh", Math.round(vv.height * vv.scale) + "px");
+    };
+    vv.addEventListener("resize", setVVH);
+    setVVH();
+  }
+
   // The session menu closes when clicking anywhere outside it.
   var menu = document.querySelector("details.menu");
   if (menu) {

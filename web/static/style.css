@@ -50,6 +50,13 @@
 }
 
 * { box-sizing: border-box; }
+/* --vvh is the height actually visible to the user. The viewport meta's
+   interactive-widget=resizes-content keeps dvh honest when the virtual
+   keyboard opens; on WebKit, which ignores that key, app.js overwrites
+   --vvh from visualViewport instead. Card images size against it so the
+   whole card stays on screen while typing. */
+:root { --vvh: 100vh; }
+@supports (height: 100dvh) { :root { --vvh: 100dvh; } }
 html, body { height: 100%; }
 body {
   margin: 0;
@@ -275,7 +282,7 @@ main.list { padding-top: 2.5rem; }
 .cardimg {
   display: block;
   max-width: 100%;
-  max-height: 34vh;
+  max-height: calc(var(--vvh) * 0.34);
   margin: 0.9rem auto;
   border-radius: 10px;
 }
@@ -487,11 +494,11 @@ button.quiet:hover { color: var(--fg); }
 .cardnote { margin-top: 0.9rem; }
 .cardnote .cardtext { color: var(--dim); font-size: 0.95rem; }
 .cardnote .cardtext.primary { font-size: 0.95rem; font-weight: 400; }
-.cardnote .cardimg { max-height: 18vh; }
+.cardnote .cardimg { max-height: calc(var(--vvh) * 0.18); }
 
 .confused { margin-top: 1rem; }
 .confused-note { color: var(--dim); font-size: 0.95rem; margin: 0 0 0.2rem; }
-.confused .cardimg { max-height: 14vh; }
+.confused .cardimg { max-height: calc(var(--vvh) * 0.14); }
 .confused .cardtext.primary { font-size: 1.15rem; }
 .confused .cardtext { font-size: 0.9rem; }
 
