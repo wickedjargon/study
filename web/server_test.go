@@ -452,9 +452,9 @@ func TestTriviaDeckHasNoSettings(t *testing.T) {
 
 // TestIntrosSeededFromHeader: a guest who has never touched the
 // Introductions toggle starts from the deck's # preview-new: header — an
-// explicit off opens cold, silence teaches first — and flipping the toggle
-// overrides the header from then on. The pre-per-group site-wide cookie
-// still counts as a choice.
+// explicit on teaches first, silence opens cold like the desktop — and
+// flipping the toggle overrides the header from then on. The pre-per-group
+// site-wide cookie still counts as a choice.
 func TestIntrosSeededFromHeader(t *testing.T) {
 	// Header off: a fresh guest gets the question, not the reveal.
 	srv := newTestServer(t, typedDeck)
@@ -478,23 +478,29 @@ func TestIntrosSeededFromHeader(t *testing.T) {
 		t.Fatal("picking the deck segment did not return to the header default")
 	}
 
-	// No header: a fresh guest is taught first.
+	// No header: a fresh guest opens cold, the same default as the desktop.
 	srv2 := newTestServer(t, "apple\n---\nfruit\n")
 	c2 := srv2.bareClient()
-	if page := srv2.getPage(c2, srv2.quiz); !strings.Contains(page, "quiz me") {
-		t.Fatal("headerless deck did not default a fresh guest to intros on")
+	if page := srv2.getPage(c2, srv2.quiz); !strings.Contains(page, `name="answer"`) || strings.Contains(page, "quiz me") {
+		t.Fatal("headerless deck did not default a fresh guest to intros off")
+	}
+
+	// Header on: a fresh guest is taught first.
+	srv3 := newTestServer(t, "# preview-new: on\n\napple\n---\nfruit\n")
+	if page := srv3.getPage(srv3.bareClient(), srv3.quiz); !strings.Contains(page, "quiz me") {
+		t.Fatal("header preview-new: on did not seed intros on for a fresh guest")
 	}
 
 	// The legacy site-wide cookie still counts as a stated choice…
-	if page := srv2.getPage(srv2.client(), srv2.quiz); !strings.Contains(page, `name="answer"`) {
+	if page := srv3.getPage(srv3.client(), srv3.quiz); !strings.Contains(page, `name="answer"`) {
 		t.Fatal("legacy intros=off cookie no longer honored")
 	}
 
 	// …but the per-group "deck" sentinel shadows it: choosing to follow the
 	// deck must not resurface a pre-per-group site-wide override.
-	c3 := srv2.client()
-	srv2.postForm(c3, srv2.quiz+"/intros", url.Values{"v": {"deck"}}, nil)
-	if page := srv2.getPage(c3, srv2.quiz); !strings.Contains(page, "quiz me") {
+	c3 := srv3.client()
+	srv3.postForm(c3, srv3.quiz+"/intros", url.Values{"v": {"deck"}}, nil)
+	if page := srv3.getPage(c3, srv3.quiz); !strings.Contains(page, "quiz me") {
 		t.Fatal("deck sentinel did not shadow the legacy site-wide cookie")
 	}
 }

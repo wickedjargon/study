@@ -128,12 +128,11 @@ type deckInfo struct {
 	// in", "multiple choice", or "mixed" — shown on the Answering row so the
 	// "deck" segment isn't a mystery box.
 	ModeDesc string
-	// Preview/PreviewSet carry the header's # preview-new: — the seed for
-	// a guest who has never touched the Introductions toggle, so a trivia
-	// deck can open cold while a vocabulary deck teaches first.
-	Preview    bool
-	PreviewSet bool
-	Cards      []deck.Card
+	// Preview carries the header's # preview-new: — the seed for a guest
+	// who has never touched the Introductions toggle. Silence means off,
+	// the same default the desktop applies.
+	Preview bool
+	Cards   []deck.Card
 	// media maps a file's base name to its absolute path. Media URLs carry
 	// only the base name, so a request can never name a path outside the
 	// deck's own media set.
@@ -481,7 +480,6 @@ func newDeckInfo(d *deck.Deck, name, slug string, taken map[string]bool) *deckIn
 		Kind:       d.Kind,
 		ModeDesc:   modeDesc(d.Cards),
 		Preview:    d.Preview,
-		PreviewSet: d.PreviewSet,
 		Cards:      d.Cards,
 		media:      make(map[string]string),
 	}
@@ -653,12 +651,10 @@ func onOff(v bool) string {
 }
 
 // headerIntros resolves the deck author's introduction default: the
-// # preview-new: header, or on when the deck says nothing.
+// # preview-new: header, or off when the deck says nothing — the same
+// silence-means-off the desktop applies.
 func headerIntros(info *deckInfo) bool {
-	if info.PreviewSet {
-		return info.Preview
-	}
-	return true
+	return info.Preview
 }
 
 // introsState reports the Introductions setting for this deck: the selected
