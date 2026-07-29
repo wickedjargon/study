@@ -297,7 +297,10 @@ main.list { padding-top: 2.5rem; }
    The min-height: 0 on the card and the image wrappers is load-bearing: a
    flex item's automatic minimum is content-based (images count at their
    cap, not their floor), so without it nothing ever shrinks. */
-main.quiz { min-height: 0; }
+/* The tighter bottom padding is for the keyboard case: main's default
+   2.5rem is dead space between the check button and the keyboard there,
+   paid for by the status strip at the top of the squeezed column. */
+main.quiz { min-height: 0; padding-bottom: 0.5rem; }
 main.quiz > * { flex-shrink: 0; }
 main.quiz > .card { flex-shrink: 1; }
 .card:not(.standalone) { display: flex; flex-direction: column; min-height: 0; }
@@ -314,9 +317,10 @@ main.quiz > .card { flex-shrink: 1; }
    width-capped image. */
 .card .cardimg { flex-shrink: 1; min-height: 3.5rem; object-fit: contain; }
 /* On a viewport too short even for shrunken images and bare text (a phone
-   in landscape), squeezing further would overlap content: give the height
-   back and let the page scroll to the button instead. */
-@media (max-height: 30rem) {
+   in landscape — the aspect guard keeps a portrait phone with the keyboard
+   up, which does fit, on the squeezing path), squeezing further would
+   overlap content: give the height back and let the page scroll instead. */
+@media (max-height: 30rem) and (min-aspect-ratio: 3/2) {
   main.quiz { min-height: auto; }
 }
 
