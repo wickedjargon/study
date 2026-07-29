@@ -50,7 +50,6 @@ for d in \
 	"$P/study-decks/study-speed-trivia.deck" \
 	"$P/study-decks/study-which-is-bigger.deck" \
 	"$P/study-decks/study-world-landmarks.deck" \
-	"$P/study-decks/study-locator-maps.deck" \
 	"$P/study-decks/study-flags-by-region.deck" \
 	"$P/study-decks/study-borders.deck" \
 	"$P/study-decks/study-waters.deck" \
