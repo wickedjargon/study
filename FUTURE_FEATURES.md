@@ -1,0 +1,1 @@
+- how does web identify `trivia`? is there a top level dec for this? if so, there should be a web toggle for it. maybe even a desktop toggle
